@@ -5,6 +5,6 @@ if [ -f /config/cron ]; then
 fi
 
 if [ ! -f /config/cron ]; then
-   echo "* * * * *   echo "Hello $(date)" >>/config/cron.log 2>&1">/config/cron
+   echo '* * * * *   echo "run: $(date)" >>/config/cron.log 2>&1'>/config/crontest
    crontab /config/cron
 fi
