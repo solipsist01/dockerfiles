@@ -1,4 +1,4 @@
-# flexget-dockerfile
+# flexget
 Flexget Dockerfile for automated Docker builds
 
 How to use this image:
@@ -53,7 +53,7 @@ docker run
 -v <Your config folder>:/flexget 
 -v <Your temporary folder>:/input 
 -v <Your download folder>:/output 
-solipsist01/flexget-dockerfile-downloadnpo
+solipsist01/flexget
 ```
 
 This image checks npo.nl every 1 hour. When you launch the container, you have to wait for an hour before it starts downloading.
