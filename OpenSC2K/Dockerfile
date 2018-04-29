@@ -10,7 +10,7 @@ RUN apk update \
   && curl -o- -L https://yarnpkg.com/install.sh | bash \
   && git clone https://github.com/rage8885/OpenSC2K \
   && cd OpenSC2K \
-  && yarn install \
+  && yarn --ignore-engines install \
   && apk del git curl tar binutils
   
 EXPOSE 3000
