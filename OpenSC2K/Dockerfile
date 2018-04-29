@@ -17,4 +17,4 @@ RUN apk update \
   
 EXPOSE 3000
 
-CMD ["/run.sh"]
+ENTRYPOINT [ "/run.sh" ]
