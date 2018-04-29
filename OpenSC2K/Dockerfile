@@ -11,8 +11,10 @@ RUN apk update \
   && git clone https://github.com/rage8885/OpenSC2K \
   && cd OpenSC2K \
   && yarn --ignore-engines install \
+  && echo 'cd /OpenSC2K && yarn run start' >/run.sh \
+  && chmod +x /run.sh \
   && apk del git curl tar binutils
   
 EXPOSE 3000
 
-CMD ["yarn start"]
+CMD ["/run.sh"]
