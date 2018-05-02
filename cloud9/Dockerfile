@@ -9,7 +9,7 @@ RUN buildDeps='make build-essential g++ gcc python2.7' && softDeps="tmux git" \
  && apt-get purge -y --auto-remove $buildDeps \
  && apt-get install -y python-dev python3-dev python-setuptools python3-setuptools mc locales libav-tools \
  && easy_install pip \
- && pip install requests youtube-dl \
+ && pip install requests youtube-dl flask \
  && apt-get autoremove -y && apt-get autoclean -y && apt-get clean -y \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
  && npm cache clean --force \
