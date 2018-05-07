@@ -1,6 +1,15 @@
 # desktop
 
-Desktop enviornment in a docker container.
+Desktop environment in a docker container.
+
+Contains:
+```
+MKVToolnix
+Handbrake
+GemistDownloader
+Gnome Commander
+```
+
 
 run like this:
 
