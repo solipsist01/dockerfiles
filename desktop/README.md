@@ -11,7 +11,7 @@ Gnome Commander
 ```
 
 
-run like this:
+# Docker Runn
 
 ```
 docker run \
