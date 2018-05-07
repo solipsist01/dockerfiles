@@ -4,7 +4,7 @@ RUN apt-get update && \
 
 RUN git clone https://github.com/Th3-822/rapidleech.git ./
 
-ADD https://raw.githubusercontent.com/solipsist01/docker-rapidleech/master/config.php configs/ 
+ADD https://raw.githubusercontent.com/solipsist01/dockerfiles/rapidleech/config.php configs/
 
 RUN docker-php-ext-install mcrypt && \
     chmod 777 -R files && \
