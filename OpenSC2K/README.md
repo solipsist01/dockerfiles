@@ -8,4 +8,4 @@ Along with implementing the original functionality and features, I plan to add a
 
 I've only tested using Chrome 64 on macOS, but it should run fairly well on any modern browser/platform that supports WebGL. Performance should be acceptable but there is still a LOT of room for optimizations and improvements.
 
-![Screenshot](/screenshots/1.png)
+![Screenshot](/dockerfiles/OpenSC2K/screenshots/1.png)
