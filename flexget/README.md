@@ -1,5 +1,5 @@
 # flexget
-Flexget Dockerfile for automated Docker builds
+Flexget Dockerfile for automated Docker build
 
 How to use this image:
 
