@@ -1,6 +1,6 @@
 FROM alpine
 
-RUN apk add --no-cache bash nginx php7-fpm php7-cli php7-json php7-soap git \
+RUN apk add --no-cache bash nginx php7-fpm php7-json php7-soap git \
     && apk add --no-cache --virtual build-dependencies wget unzip \
     && git clone https://github.com/phpvirtualbox/phpvirtualbox -b develop \
     && mkdir -p /var/www \
