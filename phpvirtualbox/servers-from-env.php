@@ -7,7 +7,7 @@ $config_overrides = array();
 foreach ($_SERVER as $key => $value) {
     preg_match('/(.*?)(?:_ENV_|_)?CONF_(.+)/', $key, $matches);
     if ($matches) {
-        $value= (strpos($value, ',')) ? split(',',$value) : $value;
+        $value= (strpos($value, ',')) ? explode(',',$value) : $value;
         $config_overrides[$matches[1]] = array($matches[2] => $value);
     }
 }
