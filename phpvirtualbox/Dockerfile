@@ -1,6 +1,6 @@
 FROM alpine
 
-RUN apk add --no-cache bash nginx php7-fpm php7-json php7-soap git \
+RUN apk add --no-cache bash nginx php7-fpm php7-json php7-soap php7-opcache php7-xdebug php7-phar git \
     && apk add --no-cache --virtual build-dependencies wget unzip \
     && git clone https://github.com/phpvirtualbox/phpvirtualbox -b develop \
     && mkdir -p /var/www \
@@ -17,4 +17,4 @@ COPY servers-from-env.php /servers-from-env.php
 
 EXPOSE 80
 
-CMD php7 /servers-from-env.php && php-fpm7 && nginx
+CMD php /servers-from-env.php && php-fpm7 && nginx
