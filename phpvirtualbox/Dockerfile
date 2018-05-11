@@ -1,6 +1,6 @@
 FROM alpine
 
-RUN apk add --no-cache bash nginx php5-fpm php5-cli php5-json php5-soap \
+RUN apk add --no-cache bash nginx php5-fpm php5-cli php5-json php5-soap git \
     && apk add --no-cache --virtual build-dependencies wget unzip \
     && git clone https://github.com/phpvirtualbox/phpvirtualbox -b develop \
     && mkdir -p /var/www \
