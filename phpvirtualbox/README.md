@@ -28,7 +28,7 @@ apt install virtualbox-5.2
 ```
 # Create vbox user on host:
 ```
-sudo useradd -d /home/vbox -m -g vboxusers -s /bin/bash vbox
+useradd -d /home/vbox -m -g vboxusers -s /bin/bash vbox
 ```
 
 # if user alerady exists, and you don't know the password
