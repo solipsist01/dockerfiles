@@ -9,7 +9,7 @@ RUN apk add --no-cache bash nginx php5-fpm php5-cli php5-json php5-soap \
     && apk del build-dependencies \
     && echo "<?php return array(); ?>" > /var/www/config-servers.php \
     && echo "<?php return array(); ?>" > /var/www/config-override.php \
-    && chown nobody:nobody -R /var/www \
+    && chown nobody:nobody -R /var/www 
 
 # config files
 COPY config.php /var/www/config.php
