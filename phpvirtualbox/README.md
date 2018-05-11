@@ -55,6 +55,13 @@ docker run --name vbox_http --restart=always \
     -d solipsist01/phpvirtualbox
 ```
 
+#Default Login and Password
+```
+login = admin
+password = admin
+```
+
+
 # parameter breakdown
 
 * `-p {OutsidePort}:80` - will bind the webserver to the given host port
