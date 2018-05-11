@@ -1,8 +1,9 @@
-# docker-phpvirtualbox
+# phpvirtualbox 5.2 Docker image
 
-This is a fork of [clue/phpvirtualbox](https://hub.docker.com/r/clue/phpvirtualbox/), because it is not very up to date and there are no further configuration options.
+This is a fork of [jazzdd/phpvirtualbox](https://hub.docker.com/r/jazzdd/phpvirtualbox/) which is a fork of [clue/phpvirtualbox](https://hub.docker.com/r/clue/phpvirtualbox/). This is an update to the latest PHP virtualbox version for virtualbox 5.2
 
-## phpVirtualBox
+
+## phpVirtualBox 5.2
 
 [phpVirtualBox](http://sourceforge.net/projects/phpvirtualbox/) is a modern web interface that allows you to control remote VirtualBox instances - mirroring the VirtualBox GUI.
 
@@ -15,6 +16,34 @@ Internally, the phpVirtualBox web interface communicates with each VirtualBox in
 
 The container is started with following command:
 
+# Install Virtualbox on your host machine
+```
+add-apt-repository \
+   "http://download.virtualbox.org/virtualbox/debian \
+   $(lsb_release -cs) \
+   contrib"
+wget https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | apt-key add -
+apt update
+apt install virtualbox-5.2
+```
+# Create vbox user on host:
+```
+sudo useradd -d /home/vbox -m -g vboxusers -s /bin/bash vbox
+```
+
+# if user alerady exists, and you don't know the password
+```
+passwd vbox
+```
+
+# Create vboxwebservice on host:
+```
+echo 'VBOXWEB_USER=vbox' | tee -a /etc/default/virtualbox
+echo 'VBOXWEB_HOST=127.0.0.1' | tee -a /etc/default/virtualbox
+systemctl enable vboxweb-service
+systemctl start vboxweb-service
+```
+# Run the docker container:
 ```
 docker run --name vbox_http --restart=always \
     -p 80:80 \
@@ -23,11 +52,13 @@ docker run --name vbox_http --restart=always \
     -e ID_USER=vboxUser \
     -e ID_PW='vboxUserPassword' \
     -e CONF_browserRestrictFolders="/data,/home" \
-    -d jazzdd/phpvirtualbox
+    -d solipsist01/phpvirtualbox
 ```
 
+# parameter breakdown
+
 * `-p {OutsidePort}:80` - will bind the webserver to the given host port
-* `-d jazzdd/phpvirtualbox` - the name of this docker image
+* `-d solipsist01/phpvirtualbox` - the name of this docker image
 * `-e ID_NAME` - name of the vbox server
 * `-e ID_PORT_18083_TCP` - ip/hostname and port of the vbox server
 * `-e ID_USER` - user name of the user in the vbox group
@@ -41,40 +72,6 @@ An example would look as follows:
 docker run --name vbox_http --restart=always -p 80:80 \
     -e SRV1_PORT_18083_TCP=192.168.1.1:18083 -e SRV1_NAME=Server1 -e SRV1_USER=user1 -e SRV1_PW='test' \
     -e SRV2_PORT_18083_TCP=192.168.1.2:18083 -e SRV2_NAME=Server2 -e SRV2_USER=user2 -e SRV2_PW='test' \
-    -d jazzdd/phpvirtualbox
+    -d solipsist01/phpvirtualbox
 ```
 
-## Running vboxwebsrv as a container
-Instead of using environment variables to configure the server connection, the [jazzdd86/vboxwebsrv](https://github.com/jazzdd86/vboxwebsrv) image could be used to establish a secure ssh connection to the server and start the vboxwebsrv service on demand.
-
-See [jazzdd86/vboxwebsrv](https://github.com/jazzdd86/vboxwebsrv) for more information on how to start the vboxwebsrv service via docker image.
-
-Example:
-```bash
-$ docker run -it --name=vbox_websrv_1 --restart=always jazzdd/vboxwebsrv vbox@10.1.2.3
-```
-
-To run phpVirtualbox with the vboxwebsrv container use following command:
-
-```bash
-$ docker run --name vbox_http --restart=always -p 80:80 --link vbox_websrv_1:MyComputer -d jazzdd/phpvirtualbox
-```
-
-## Configurations
-As mentioned before `-e CONF_varName` can override default config values of varName. This configuration options can be used in various ways:
-
-```bash
-$ docker run -it --name=vbox_websrv_1 --restart=always -e CONF_browserRestrictFolders="/data,/home" jazzdd/vboxwebsrv vbox@10.1.2.3
-$ docker run --name vbox_http --restart=always \
-    -e SRV1_PORT_18083_TCP=192.168.1.1:18083 -e SRV1_NAME=Server1 -e SRV1_USER=user1 -e SRV1_PW='test' \
-    -e SRV2_PORT_18083_TCP=192.168.1.2:18083 -e SRV2_NAME=Server2 -e SRV2_USER=user2 -e SRV2_PW='test' \
-    -e SRV1_CONF_browserRestrictFolders="/data,/home" \
-    -e CONF_browserRestrictFolders="/data," \
-    -d jazzdd/phpvirtualbox
-```
-
-* 1. config for specific server with usage of vboxwebsrv image
-* 2. `-e SRV1_CONF_browserRestrictFolders="/data,/home"` - config for specific server with usage of environment variables
-* 3. `-e CONF_browserRestrictFolders="/data,"` - global configuration - valid for all servers without local configuration parameter
-
-If an option requires an array but only one parameter is given enter a comma after the option, because an array is generated if there is an , character (see option 3).
