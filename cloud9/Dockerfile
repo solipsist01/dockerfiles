@@ -1,6 +1,9 @@
 FROM kdelfour/cloud9-docker
 
-RUN easy_install pip && pip install requests youtube-dl flask
+RUN apt-get update \
+ && apt-get install -y python-setuptools python3-setuptools \
+ && easy_install pip \
+ && pip install requests youtube-dl flask
 
 RUN locale-gen en_US.UTF-8
 
