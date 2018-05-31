@@ -6,7 +6,7 @@ RUN bundle config --global frozen 1
 WORKDIR /srv/ruby/ssl
 
 COPY Gemfile Gemfile.lock ./
-RUN bundle install
+RUN gem install bundler
 
 COPY . .
 
