@@ -10,4 +10,6 @@ RUN bundle install
 
 COPY . .
 
+EXPOSE 4567
+
 CMD ["SSLConverter"]
