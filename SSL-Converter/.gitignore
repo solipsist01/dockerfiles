@@ -1,0 +1,7 @@
+uploads/*
+*.swp
+log/*
+*.patch
+*.db
+bin/*
+.bundle
