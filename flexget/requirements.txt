@@ -2,4 +2,4 @@ transmissionrpc
 flexget
 subliminal
 download-npo
-youtube-dl
+
