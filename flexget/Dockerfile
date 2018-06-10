@@ -6,6 +6,6 @@ VOLUME ["/output"]
 
 WORKDIR /flexget
 
-RUN curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl && chmod a+rx /usr/local/bin/youtube-dl
-
+RUN git clone https://github.com/rg3/youtube-dl /youtube-dl && python /youtube-dl/setup.py install
+    
 CMD rm -f /flexget/.config-lock && flexget daemon start
