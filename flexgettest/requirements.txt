@@ -1,0 +1,5 @@
+transmissionrpc
+flexget
+subliminal
+download-npo
+
