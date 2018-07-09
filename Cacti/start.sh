@@ -8,12 +8,12 @@ ln -s /usr/share/zoneinfo/${TZ} /etc/localtime
 
     # THIS WAS IN DOCKER-FILE
     # CACTI BASE INSTALL
-    echo "$(date +%F_%R) [New Install] Extracting and installing Cacti files to /cacti."
+    echo "$(date +%F_%R) [Universal Startup] Extracting and installing Cacti files to /cacti."
     tar -xf /cacti_install/cacti-1*.tar.gz -C /tmp
     mv /tmp/cacti-1*/* /cacti/
 
     # SPINE BASE INSTALL
-    echo "$(date +%F_%R) [New Install] Extracting and installing Spine files to /spine."
+    echo "$(date +%F_%R) [Universal Startup] Extracting and installing Spine files to /spine."
     tar -xf /cacti_install/cacti-spine-*.tar.gz -C /tmp
     cd /tmp/cacti-spine-* && \
        ./configure --prefix=/spine && make && make install && \
@@ -21,13 +21,13 @@ ln -s /usr/share/zoneinfo/${TZ} /etc/localtime
        chmod +s /spine/bin/spine
 
     # BASE CONFIGS
-    echo "$(date +%F_%R) [New Install] Copying templated configurations to Spine, Apache, and Cacti."
+    echo "$(date +%F_%R) [Universal Startup] Copying templated configurations to Spine, Apache, and Cacti."
     cp /template_configs/spine.conf /spine/etc
     cp /template_configs/cacti.conf /etc/httpd/conf.d
     cp /template_configs/config.php /cacti/include
 
     # setup database credential settings
-    echo "$(date +%F_%R) [New Install] Applying enviromental variables to configurations."
+    echo "$(date +%F_%R) [Universal Startup] Applying enviromental variables to configurations."
     sed -i -e "s/%DB_HOST%/${DB_HOST}/" \
            -e "s/%DB_PORT%/${DB_PORT}/" \
            -e "s/%DB_NAME%/${DB_NAME}/" \
@@ -43,11 +43,11 @@ ln -s /usr/share/zoneinfo/${TZ} /etc/localtime
         /settings/*.sql \
         /spine/etc/spine.conf
 
-    echo "$(date +%F_%R) [New Install] Installing supporting template files."
+    echo "$(date +%F_%R) [Universal Startup] Installing supporting template files."
     cp -r /templates/resource/* /cacti/resource 
     cp -r /templates/scripts/* /cacti/scripts
 
-    echo "$(date +%F_%R) [New Install] Installing plugins."
+    echo "$(date +%F_%R) [Universal Startup] Installing plugins."
     cp -r /cacti_install/plugins/* /cacti/plugins
     
         # CRON 
