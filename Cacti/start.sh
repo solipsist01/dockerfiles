@@ -112,6 +112,7 @@ chown -R apache.apache /cacti/cache/
 chown -R apache.apache /cacti/log/
 chown -R apache.apache /cacti/scripts/
 chown -R apache.apache /cacti/rra/
+chmod -R 0777 /cacti/rra/
 
 # remote poller tasks
 if [ ${REMOTE_POLLER} = 1 ]; then
