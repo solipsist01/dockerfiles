@@ -16,8 +16,8 @@ RUN apt-get update \
   && apt-get clean \
   && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/* \
   && easy_install3 pip \
-  && pip install requests \
-  && git clone https://github.com/rg3/youtube-dl /youtube-dl && cd /youtube-dl && python setup.py install
+  && pip install requests youtube-dl
+  
   
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
   && dpkg-reconfigure --frontend=noninteractive locales \
