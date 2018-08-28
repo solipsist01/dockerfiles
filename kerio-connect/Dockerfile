@@ -5,7 +5,7 @@ FROM ubuntu:14.04
 MAINTAINER chvb
  
 ## Install ##
-RUN apt-get update && apt-get install -y wget dnsutils resolvconf sysstat lsof openssh-server supervisor krb5-kdc krb5-admin-server language-pack-nl && \
+RUN apt-get update && apt-get install -y wget dnsutils resolvconf sysstat lsof openssh-server supervisor krb5-kdc krb5-admin-server cryptsetup language-pack-nl && \
     mv /etc/krb5.conf /opt/kerio && ln -sf /opt/kerio/krb5.conf /etc/krb5.conf
 RUN wget -O kerio-connect-linux-64bit.deb http://download.kerio.com/dwn/kerio-connect-linux-64bit.deb && \
     dpkg -i kerio-connect-linux-64bit.deb && apt-get install -f && rm -f kerio-connect-linux-64bit.deb
