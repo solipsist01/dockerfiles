@@ -55,14 +55,16 @@ tasks:
 run the docker container
 
 ```
-docker run 
---name=flexget 
--d 
--p 3539:3539
--e TZ=Europe/Amsterdam 
--v <Your config folder>:/flexget 
--v <Your temporary folder>:/input 
--v <Your download folder>:/output 
+docker run \
+--name=flexget \
+-d \
+-p 3539:3539 \
+-e TZ=Europe/Amsterdam \
+-e PUID=0 \
+-e PGID=0 \
+-v <Your config folder>:/flexget \
+-v <Your temporary folder>:/input \
+-v <Your download folder>:/output \
 solipsist01/flexget
 ```
 
