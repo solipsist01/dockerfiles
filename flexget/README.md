@@ -7,12 +7,17 @@ How to use this image:
 2. Create a config.yml file in your config directory
 
 ```
+web_server:
+  bind: 0.0.0.0
+  port: 3539
+
 tasks:
   npo_task:
     npo_watchlist:
       email: Your@NPO_Account_mail_address.com
       password: Y0urUB4hdstr0nP44w0rd
       remove_accepted: yes
+      download_premium: no
       max_episode_age_days: 999
     accept_all: yes
     seen:
@@ -49,6 +54,7 @@ run the docker container
 docker run 
 --name=flexget 
 -d 
+-p 3539:3539
 -e TZ=Europe/Amsterdam 
 -v <Your config folder>:/flexget 
 -v <Your temporary folder>:/input 
