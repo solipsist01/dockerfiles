@@ -23,6 +23,10 @@ tasks:
     seen:
       fields:
         - url
+    retry_failed:
+      retry_time: 480 minutes
+      retry_time_multiplier: 1
+      max_retries: 100
     manipulate:
       - title:
           replace:
