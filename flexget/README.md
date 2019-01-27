@@ -49,7 +49,7 @@ tasks:
       auto_escape: yes
       on_output:
         for_accepted:
-          - date >>/flexget/history.txt && echo "{{series_name_plain}} - {{series_date | formatdate("%Y-%m-%d") }} - {{title}} \n" >>/flexget/history.txt && youtube-dl -o "/output/{{series_name_plain}}/{{series_name_plain}} - {{series_date | formatdate("%Y-%m-%d") }} - {{title}}.%(ext)s" -f bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4] {{url}} 
+          - date >>/config/history.txt && echo "{{series_name_plain}} - {{series_date | formatdate("%Y-%m-%d") }} - {{title}} \n" >>/config/history.txt && youtube-dl -o "/output/{{series_name_plain}}/{{series_name_plain}} - {{series_date | formatdate("%Y-%m-%d") }} - {{title}}.%(ext)s" -f bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4] {{url}} 
 ```
 
 run the docker container
