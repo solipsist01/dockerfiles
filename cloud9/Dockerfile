@@ -1,6 +1,6 @@
 FROM kdelfour/cloud9-docker
 
-RUN apt-get update \
+RUN apt-get update && apt-get upgrade -f -y --force-yes \
  && apt-get install -y python-setuptools python3-setuptools \
  && easy_install pip \
  && pip install requests youtube-dl flask
