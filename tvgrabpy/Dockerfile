@@ -16,7 +16,7 @@ RUN apt-get update \
   && cd /tmp \
   && wget https://bootstrap.pypa.io/get-pip.py \
   && python2 get-pip.py && python3 get-pip.py \
-  && pip2 install pytz requests
+  && pip2 install pytz requests \
   && apt-get clean \
   && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/* \
   
