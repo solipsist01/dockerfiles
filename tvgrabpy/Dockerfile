@@ -18,7 +18,7 @@ RUN apt-get update \
   && python2 get-pip.py && python3 get-pip.py \
   && pip2 install pytz requests \
   && apt-get clean \
-  && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/* \
+  && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
   
 RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
   && dpkg-reconfigure --frontend=noninteractive locales \
