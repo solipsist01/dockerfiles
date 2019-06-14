@@ -16,8 +16,9 @@ RUN apt-get update \
   && cd /tmp \
   && wget https://bootstrap.pypa.io/get-pip.py \
   && python2 get-pip.py && python3 get-pip.py \
-  && pip2 install pytz requests \
-  && mkdir -p /tmp/xmltv \
+  && pip2 install pytz requests
+
+RUN mkdir -p /tmp/xmltv \
   && cd /tmp/xmltv \
   && wget https://github.com/tvgrabbers/DataTree/archive/master.zip \
   && unzip master.zip && rm master.zip \
@@ -30,6 +31,11 @@ RUN apt-get update \
   && cd /tmp \
   && rm -rf /tmp/xmltv \
   && tv_grab_nl3.py --configure \
+  && echo '#!/usr/bin/with-contenv bash' > /etc/cont-init.d/50-copyconfig \
+  && echo ' ' >> /etc/cont-init.d/50-copyconfig \
+  && echo 'if [ ! -f /config/tv_grab_nl3_py.conf ]; then' >> /etc/cont-init.d/50-copyconfig \
+  && echo '   cp /etc/tvgrabpyAPI/tv_grab_nl3_py.conf /config/tv_grab_nl3_py.conf' >> /etc/cont-init.d/50-copyconfig \
+  && echo 'fi' >> /etc/cont-init.d/50-copyconfig \
   && apt-get clean \
   && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
   
