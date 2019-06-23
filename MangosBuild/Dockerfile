@@ -20,8 +20,8 @@ make
 
 RUN \
   mkdir /mangos && \
-  cp /sources/linux/src/tools/Extractor_projects/Movemap-Generator/movemap-generator /mangos && \
-  cp /sources/linux/src/tools/Extractor_projects/map-extractor/map-extractor /mangos && \
-  cp /sources/linux/src/tools/Extractor_projects/vmap-extractor/vmap-extractor /mangos && \
+  cp /sources/linux/src/tools/Extractor_projects/mmap-extractor /mangos && \
+  cp /sources/linux/src/tools/Extractor_projects/map-extractor /mangos && \
+  cp /sources/linux/src/tools/Extractor_projects/vmap-extractor /mangos && \
   cp /sources/linux/src/mangosd/mangosd /mangos && \
   cp /sources/linux/src/realmd/realmd /mangos 
