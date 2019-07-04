@@ -4,7 +4,8 @@ MAINTAINER ajoergensen
 COPY root/ /
 
 RUN \
-	/build/setup.sh && \
+	apk update && apk add tzdata \
+    /build/setup.sh && \
 	rm -rf /build
 
 EXPOSE 22
