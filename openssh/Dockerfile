@@ -4,7 +4,7 @@ MAINTAINER ajoergensen
 COPY root/ /
 
 RUN \
-	apk update && apk add tzdata \
+	apk update && apk add tzdata && \
     /build/setup.sh && \
 	rm -rf /build
 
