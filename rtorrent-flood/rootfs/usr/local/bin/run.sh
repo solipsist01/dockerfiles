@@ -6,7 +6,9 @@ mkdir -p /data/.session
 
 rm -f /data/.session/rtorrent.lock
 
-chown -R $UID:$GID /data /home/torrent /tmp /usr/flood /flood-db /etc/s6.d
+if [ ! -f /data/.session/owned.lock ]; then
+        chown -R $UID:$GID /data /home/torrent /tmp /usr/flood /flood-db /etc/s6.d && touch /data/.session/owned.lock
+fi
 
 if [ ${RTORRENT_SCGI} -ne 0 ]; then
     sed -i -e 's|^scgi_local.*$|scgi_port = 0.0.0.0:'${RTORRENT_SCGI}'|' /home/torrent/.rtorrent.rc
