@@ -1,9 +1,9 @@
 FROM alpine:latest
 MAINTAINER d@d.ru
  
-RUN apk update && apk add dcron curl wget rsync ca-certificates && rm -rf /var/cache/apk/*
+RUN apk update && apk add pthon3 py3-pip ffmpeg mkvtoolnix dcron curl wget rsync ca-certificates && rm -rf /var/cache/apk/*
 
-RUN mkdir -p /var/log/cron && mkdir -m 0644 -p /var/spool/cron/crontabs && touch /var/log/cron/cron.log && mkdir -m 0644 -p /etc/cron.d
+RUN mkdir -p /var/log/cron && mkdir -m 0644 -p /var/spool/cron/crontabs && touch /var/log/cron/cron.log && mkdir -m 0644 -p /etc/cron.d && pip install requests youtube-dl pymkv
 
 COPY /scripts/* /
 
