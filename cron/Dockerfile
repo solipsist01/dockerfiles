@@ -1,5 +1,4 @@
 FROM alpine:latest
-MAINTAINER d@d.ru
  
 RUN apk update && apk add python3 py3-pip ffmpeg tzdata mkvtoolnix dcron curl wget ca-certificates && rm -rf /var/cache/apk/*
 
