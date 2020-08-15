@@ -5,9 +5,10 @@ Dockerfile and scripts for creating image with Cron based on Alpine
 #### Environment variables:
 make multiple environmental variables
 
+```
 -e CRON01=0 2 * * * python3 /scripts/somescript.py >> /config/somescript.log 2>&1
 -e CRON02=0 2 * * * python3 /scripts/someotherscript.py >> /config/someotherscript.log 2>&1
-
+```
 #### Log files
 Log file by default placed in /var/log/cron/cron.log 
 
