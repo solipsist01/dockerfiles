@@ -1,7 +1,7 @@
 FROM alpine:latest
  
 RUN apk update && \
-    apk add python3 py3-pip ffmpeg tzdata mkvtoolnix \
+    apk add python3 python3-dev py3-pip ffmpeg tzdata mkvtoolnix \
     dcron curl wget ca-certificates build-base linux-headers \
     libffi-dev gettext curl gcc musl-dev libressl-dev perl \
     && rm -rf /var/cache/apk/*
