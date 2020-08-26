@@ -10,7 +10,7 @@ RUN mkdir -p /var/log/cron \
 && mkdir -m 0644 -p /var/spool/cron/crontabs \
 && touch /var/log/cron/cron.log \
 && mkdir -m 0644 -p /etc/cron.d \
-&& pip install requests youtube-dl pymkv torpy
+&& pip install cryptography requests youtube-dl pymkv torpy
 
 COPY /scripts/* /
 
