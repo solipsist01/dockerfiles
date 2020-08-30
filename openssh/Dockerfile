@@ -1,13 +1,3 @@
-FROM ajoergensen/baseimage-alpine
-MAINTAINER ajoergensen
+FROM ajoergensen/openssh-server
 
-COPY root/ /
-
-RUN \
-	apk update && apk add tzdata && \
-    /build/setup.sh && \
-	rm -rf /build
-
-EXPOSE 22
-
-VOLUME /config /etc/ssh/keys
+RUN apk --no-cache add tzdata
