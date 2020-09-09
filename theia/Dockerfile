@@ -1,5 +1,7 @@
 FROM theiaide/theia-full
 
+USER root
+
 RUN apt-get --assume-yes update && apt-get --assume-yes install software-properties-common lsb-release 
 
 RUN add-apt-repository \
