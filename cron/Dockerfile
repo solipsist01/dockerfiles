@@ -16,5 +16,7 @@ RUN mkdir -p /var/log/cron \
 
 COPY /scripts/* /
 
+RUN chmod +x /docker-entry.sh && chmod +x /docker-cmd.sh
+
 ENTRYPOINT ["/docker-entry.sh"]
 CMD ["/docker-cmd.sh"]
