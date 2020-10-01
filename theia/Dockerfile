@@ -10,4 +10,4 @@ RUN add-apt-repository \
    $(lsb_release -cs) \
    stable"
 
-RUN apt-get --assume-yes install docker-ce-cli && pip install docker-compose && pip install pylint
+RUN apt-get --assume-yes install docker-ce-cli && pip install docker-compose && /usr/bin/python3 -m pip install -U pylint --user
