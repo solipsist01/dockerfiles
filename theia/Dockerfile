@@ -10,6 +10,6 @@ RUN add-apt-repository \
    $(lsb_release -cs) \
    stable"
 
-COPY --from:gists/docker-compose-bin:latest /dist/docker-compose /usr/local/bin/docker-compose
-
-RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip install -U pylint --user && chmod +x /usr/local/bin/docker-compose
+RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip install -U pylint --user \
+    && wget 'https://dl.bintray.com/docker-compose/master/docker-compose-Linux-x86_64' -o /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
