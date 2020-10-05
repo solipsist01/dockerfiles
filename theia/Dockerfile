@@ -11,5 +11,5 @@ RUN add-apt-repository \
    stable"
 
 RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip install -U pylint --user \
-    && wget 'https://dl.bintray.com/docker-compose/master/docker-compose-Linux-x86_64' -o /usr/local/bin/docker-compose \
+    && wget 'https://dl.bintray.com/docker-compose/master/docker-compose-Linux-x86_64' -O /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
