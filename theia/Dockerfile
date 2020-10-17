@@ -15,4 +15,4 @@ RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip instal
     grep '"tag_name":' | \
     sed -E 's/.*"([^"]+)".*/\1/' | \
     xargs -I {} curl -sL "https://github.com/docker/compose/releases/download/"{}'/docker-compose-Linux-x86_64' -o /usr/local/bin/docker-compose \
-    && chmod +x /usr/local/bin/docker-compose
+    && chmod +x /usr/local/bin/docker-compose && curl -sL "https://open-vsx.org/api/formulahendry/code-runner/0.11.1/file/formulahendry.code-runner-0.11.1.vsix" -o /home/theia/plugins/formulahendry.code-runner-0.11.1.vsix
