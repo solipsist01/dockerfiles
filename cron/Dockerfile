@@ -9,6 +9,7 @@ RUN apk update && \
     && rm -rf /var/cache/apk/*
 
 COPY --from=mcr.microsoft.com/powershell:preview-alpine-3.10 /usr/bin/pwsh /usr/bin/pwsh
+COPY --from=mcr.microsoft.com/powershell:preview-alpine-3.10 /usr/bin/pwsh.dll /usr/bin/pwsh.dll
 
 RUN chmod +x /usr/bin/pwsh \
 && mkdir -p /var/log/cron \
