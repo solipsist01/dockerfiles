@@ -16,3 +16,5 @@ RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip instal
     sed -E 's/.*"([^"]+)".*/\1/' | \
     xargs -I {} curl -sL "https://github.com/docker/compose/releases/download/"{}'/docker-compose-Linux-x86_64' -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
+
+ENV PATH "$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
