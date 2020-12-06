@@ -10,7 +10,7 @@ RUN add-apt-repository \
    $(lsb_release -cs) \
    stable"
 
-RUN apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip install -U pylint --user \
+RUN apt-get update && apt-get --assume-yes install docker-ce-cli && /usr/bin/python3 -m pip install -U pylint --user \
     && curl --silent "https://api.github.com/repos/docker/compose/releases/latest" | \
     grep '"tag_name":' | \
     sed -E 's/.*"([^"]+)".*/\1/' | \
