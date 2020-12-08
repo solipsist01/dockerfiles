@@ -2,7 +2,7 @@ FROM theiaide/theia-python:1.6.0-next.e36195e0
 
 USER root
 
-RUN apt-get --assume-yes update && apt-get --assume-yes install software-properties-common lsb-release \
+RUN apt-get --assume-yes update && apt-get --assume-yes install software-properties-common lsb-release apt-transport-https ca-certificates \
     && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 9578539176BAFBC6 7EA0A9C3F273FCD8
 
 RUN add-apt-repository \
