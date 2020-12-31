@@ -1,0 +1,68 @@
+g_gametype will be changed upon restarting.
+------ Server Initialization ------
+Server: obj/obj_team2
+------ Unloading fgameded.so ------
+------- Attempting to load ./fgameded.so -------
+
+
+------------------ MoH:AA 1.12 Reborn Patch InitGame ------------------ 
+Initializing SignalHandlers. Done!
+Initializing CVARS. Done!
+--> Next update check will be performed after 11 hours (0 day/s)!
+Could not open chatfilter.cfg
+Initializing Chat Filter. Done!
+Could not open namefilter.cfg
+Initializing Banned Names List. Done!
+Could not open ipfilter.cfg
+Initializing Banned IPs List. Done!
+Could not open allowedvotes.cfg
+Initializing Allowed Votes List. Done!
+Could not open allowedmaps.cfg
+Initializing Allowed Maps List. Done!
+Could not open admins.ini
+Initializing Admins List. Done!
+Could not open protectednamefilter.cfg
+Initializing Protected Names List. Done!
+Reborn.map mapped into address space. Shared settings initialized!
+LocalizationError fix Address: 0x080ADE9E
+LocalizationError removal fix applied.
+BulletAttack Address: 0xf5eaa990
+GetMuzzlePosition Address: 0xf5e9bbe0
+GetEntityTag Address: 0xf5ddd990
+Player::Respawn Address: 0xf5e29cb0
+Player::Killed Address: 0xf5e29e60
+Entity::Damage Address: 0xf5ddaaf0
+Player::JumpXY Address: 0xf5e2e6d0
+BulletAttack: Hooked correctly.
+Anti Wallhack/Visuals Protection applied
+Black Window Patch Address: 0xf5eab15a
+Shoot through Black Window/Furniture/Light Bulbs Hack Protection applied
+RConFlood Patch Address: 0x808ce4f
+RConFlood Crash Protection applied
+InfoBoom Patch Address: 0x807930b & 0x8079296
+InfoBoom Crash Protection applied
+SV_UpdateUserinfo_f Address: 0x8087c00
+UserInfo Buffer overflow protection applied (512 chars limit)
+ScriptedEvents System Initialized
+Kick/Ban Announcements Initialized
+Internal Packet Flood Protection Initialized
+Allowed remote tool IP: 127.0.0.1 (7f000001)
+---------------- MoH:AA 1.12 Reborn Patch InitFinished ----------------
+
+
+^~^~^ Box data is corrupted for 'models/human/allied_pilot/allied_pilot.skd'
+^~^~^ Morph targets data is corrupted for 'models/human/allied_pilot/allied_pilot.skd'
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/animate/military_radio.tik
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/emitters/smoke_smallfry.tik
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/emitters/adamspark.tik
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/animate/fx_explosion_tank.tik
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/static/v2.tik
+^~^~^ Add the following line to the *_precache.scr map script:
+cache models/fx/dummy.tik
+------ Server Initialization Complete ------  0.59 seconds
+Hitch warning: 642 msec frame time
