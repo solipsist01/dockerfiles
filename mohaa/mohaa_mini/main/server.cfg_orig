@@ -50,9 +50,9 @@ seta sv_maxPing "0" //disactivated, use High Ping Limiter System
 seta sv_minPing "0" //activated
 
 //************* Server Passwords ************
-seta rconpassword "test"
-seta sv_privatePassword "war123"
-seta password "war123" 
+// seta rconpassword "test"
+// seta sv_privatePassword "war123"
+// seta password "war123" 
 
 //******** Game Play Default Settings *******
 seta g_gravity "800"
