@@ -1,5 +1,6 @@
 # Mohaa Reborn 1.12
 
+This image is around 143mb in size.
 
 ```
 docker run \
