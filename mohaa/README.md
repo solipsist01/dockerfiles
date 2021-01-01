@@ -40,3 +40,6 @@ networks:
     name: ${NETWORK}
 
 ```
+
+source of this container:
+https://github.com/solipsist01/dockerfiles/tree/master/mohaa
