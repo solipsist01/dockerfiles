@@ -12,6 +12,7 @@ RUN mkdir -p /var/log/cron \
 && mkdir -m 0644 -p /var/spool/cron/crontabs \
 && touch /var/log/cron/cron.log \
 && mkdir -m 0644 -p /etc/cron.d \
+&& python3 -m pip install -U pip \
 && pip install requests youtube-dl pymkv graphyte holidays python-binance
 
 COPY /scripts/* /
