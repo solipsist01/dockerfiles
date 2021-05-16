@@ -1,4 +1,4 @@
-FROM theiaide/theia-python:1.6.0-next.e36195e0
+FROM theiaide/theia-python
 
 USER root
 
