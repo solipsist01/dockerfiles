@@ -7,7 +7,7 @@ RUN apt-get --assume-yes update && apt-get --assume-yes install curl software-pr
 
 RUN curl -sL https://github.com/docker/compose-cli/releases/download/v1.0.17/docker-linux-amd64 -o /usr/local/bin/docker && chmod +x /usr/local/bin/docker
 
-RUN apt-get update && apt-get --assume-yes && /usr/bin/python3 -m pip install -U pylint --user \
+RUN /usr/bin/python3 -m pip install -U pylint --user \
     && curl --silent "https://api.github.com/repos/docker/compose/releases/latest" | \
     grep '"tag_name":' | \
     sed -E 's/.*"([^"]+)".*/\1/' | \
