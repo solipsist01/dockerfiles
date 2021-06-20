@@ -1,6 +1,6 @@
 # cron
 
-Dockerfile and scripts for creating image with Cron based on Alpine  
+Dockerfile and scripts for creating image with Cron based on Alpine.
 
 #### Environment variables:
 make multiple environmental variables
