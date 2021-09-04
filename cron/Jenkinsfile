@@ -12,14 +12,6 @@ node {
        app = docker.build("solipsist01/cron", "-f cron/Dockerfile cron")
     }
 
-    stage('Test image') {
-  
-
-        app.inside {
-            sh 'echo "Yolo test"'
-        }
-    }
-
     stage('Push image') {
         
         docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
