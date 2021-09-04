@@ -9,7 +9,7 @@ node {
 
     stage('Build image') {
   
-       app = docker.build("solipsist01/cron", "-f dockerfiles/cron/Dockerfile .")
+       app = docker.build("solipsist01/cron", "-f cron/Dockerfile .")
     }
 
     stage('Test image') {
