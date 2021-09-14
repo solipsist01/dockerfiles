@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  mkvtoolnix:
+    image: hydrohs/mkvtoolnix
+    container_name: mkvtoolnix
+    ports:
+      - "2200:22"
+      - "10000:10000"
+    volumes:
+      - ~/.ssh/authorized_keys:/authorized_keys
+      - config:/config
+      - /videos:/videos
+      - /ripped:/ripped
+    env_file:
+      - .env
+
+volumes:
+  config:
