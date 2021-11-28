@@ -15,7 +15,7 @@ RUN mkdir -p /var/log/cron \
 && touch /var/log/cron/cron.log \
 && mkdir -m 0644 -p /etc/cron.d \
 && python3 -m pip install -U pip \
-&& pip install wheel requests youtube-dl pymkv graphyte holidays python-binance
+&& pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon
 
 COPY /scripts/* /
 
