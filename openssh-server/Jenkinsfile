@@ -14,7 +14,7 @@ node {
 
     stage('Test image') {
   
-       sh 'bash unit_test.sh'
+       sh 'bash cd /var/jenkins_home/workspace/Openssh-server && ./unit_test.sh'
     }
 
     stage('Push image') {
