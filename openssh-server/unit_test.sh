@@ -20,7 +20,6 @@ countdown 10
 echo "rechten aanpassen van test private key"
 chmod 600 ./openssh-server/testkey_id_rsa
 echo "opzetten SSH connectie met private key authentication"
-ping openssh_test
 ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -i ./openssh-server/testkey_id_rsa test@openssh_test -p 2222 "echo 2>&1" && status="success" || status="failed"
 echo "Verbinden is geeindigd met status: $status"
 echo "test docker container openssh_test wordt nu verwijderd"
