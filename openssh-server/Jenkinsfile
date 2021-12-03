@@ -13,8 +13,8 @@ node {
     }
 
     stage('Test image') {
-        chmod 777 ./openssh-server/unit_test.sh
-        ./openssh-server/unit_test.sh
+        sh 'chmod 777 ./openssh-server/unit_test.sh'
+        sh './openssh-server/unit_test.sh'
        
     }
 
