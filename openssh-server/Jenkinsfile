@@ -14,7 +14,7 @@ node {
 
     stage('Test image') {
   
-       sh openssh-server/unit_test.sh
+       ./unit_test.sh
     }
 
     stage('Push image') {
