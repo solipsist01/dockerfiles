@@ -13,8 +13,8 @@ node {
     }
 
     stage('Test image') {
-  
-       ./openssh-server/unit_test.sh
+        sh -x $WORKSPACE/Openssh-server/openssh-server/unit_test.sh
+       
     }
 
     stage('Push image') {
