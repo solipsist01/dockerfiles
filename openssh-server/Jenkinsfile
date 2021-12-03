@@ -12,6 +12,11 @@ node {
        app = docker.build("solipsist01/openssh-server", "-f openssh-server/Dockerfile openssh-server")
     }
 
+    stage('Test image') {
+  
+       bash cd ./openssh-server && unit_test.sh
+    }
+
     stage('Push image') {
         
         docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
