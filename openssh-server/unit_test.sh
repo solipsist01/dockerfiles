@@ -18,7 +18,7 @@ docker run -d --name=openssh_test -e PUID=1000 -e PGID=1000 -e TZ=europe/amsterd
 echo "wachten op de initialisatie"
 countdown 10
 echo "opzetten SSH connectie met private key authentication"
-ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -i testkey_id_rsa test@openssh_test -p 2222 "echo 2>&1" && status="success" || status="failed"
+ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -i ./openssh-server/testkey_id_rsa test@openssh_test -p 2222 "echo 2>&1" && status="success" || status="failed"
 echo "Verbinden is geeindigd met status: $status"
 echo "test docker container openssh_test wordt nu verwijderd"
 docker rm openssh_test -f
