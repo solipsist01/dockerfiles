@@ -13,8 +13,13 @@ countdown() {
   done
   echo
 }
+
+echo "genereren keypair voor de test"
+ssh-keygen -b 2048 -t rsa -f openssh-server/key -q -N ""
+echo "lezen van public key in variabele voor starten container"
+publickey=$(cat openssh-server/key.pub)
 echo "Starten van openssh_test docker container voor test"
-docker run -d --name=openssh_test --network=nasi -e PUID=1000 -e PGID=1000 -e TZ=europe/amsterdam -e PUBLIC_KEY='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCsIBoZs4NSPg8og/zNECKqT6eIO7H1pZb06PhB/Hf+qieoFJkMfu1DWAMJY6XgthDha5pLlSr/AZqkIS6xUAuM4W6KAskvm4XzmnP9S9i04TsE4s+XrpOS0lZHawXsTmShVo2W1skqfJucos2p+35n9yjvmfDGxgPJJmKDDTD9ngLjmNjarW1OdIvB99Os1pxnqg5ZgFmQvJkpO+dV8WxU6SU8FF8B/F0TWviv9g+a67Fm+2cZJXDdCkxJHk27vZjCJCVZcYFcQmCOHwRULTaq8PbEC3Pnk8bPuA9Cg7gQPrWoa5VQ1OQWXDT/ny5f4a8qNfBw5VnjByMMBsn3g//J test@openssh_test' -e SUDO_ACCESS=false -e PASSWORD_ACCESS=false -e USER_NAME=test -l traefik.enable=false solipsist01/openssh-server
+docker run -d --name=openssh_test --network=nasi -e PUID=1000 -e PGID=1000 -e TZ=europe/amsterdam -e PUBLIC_KEY=$publickey -e SUDO_ACCESS=false -e PASSWORD_ACCESS=false -e USER_NAME=test -l traefik.enable=false solipsist01/openssh-server
 echo "wachten op de initialisatie"
 countdown 10
 echo "rechten aanpassen van test private key"
@@ -24,6 +29,9 @@ ssh -q -o StrictHostKeyChecking=no -o BatchMode=yes -i ./openssh-server/testkey_
 echo "Verbinden is geeindigd met status: $status"
 echo "test docker container openssh_test wordt nu verwijderd"
 docker rm openssh_test -f
+echo "opruimen test keys"
+rm ./openssh-server/key
+rm ./openssh-server/key.pub
 
 if [ "$status" == "success" ]; 
    then
