@@ -15,7 +15,7 @@ countdown() {
 }
 
 echo "genereren keypair voor de test"
-ssh-keygen -b 2048 -t rsa -f openssh-server/key -q -N ""
+ssh-keygen -b 2048 -t rsa -f openssh-server/key -N ""
 echo "lezen van public key in variabele voor starten container"
 publickey=$(cat openssh-server/key.pub)
 echo "Starten van openssh_test docker container voor test"
