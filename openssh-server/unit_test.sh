@@ -33,9 +33,9 @@ rm ./openssh-server/key.pub
 
 if [ "$status" == "success" ]; 
    then
-      echo "Image test successvol. We eindigen met errorlevel 0"
+      echo "Image test successvol. We eindigen met errorlevel 0 en gaan het image uploaden"
       set_return 0
    else
-      echo "Image test onsuccessvol. We eindigen met errorlevel 1"
+      echo "Image test onsuccessvol. We eindigen met errorlevel 1 en we stoppen hier."
       set_return 1
 fi
