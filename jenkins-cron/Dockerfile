@@ -1,5 +1,7 @@
 FROM jenkins/inbound-agent:latest-alpine
 
+USER root
+
 RUN apk update && \
     apk add python3 python3-dev py3-pip ffmpeg tzdata mkvtoolnix \
     dcron curl wget ca-certificates build-base linux-headers \
@@ -12,3 +14,5 @@ ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
 RUN python3 -m pip install -U pip && \
     pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon
+
+RUN RUN curl -sSL https://get.docker.com | sh
