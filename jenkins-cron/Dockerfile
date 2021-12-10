@@ -15,4 +15,4 @@ ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 RUN python3 -m pip install -U pip && \
     pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon
 
-RUN RUN curl -sSL https://get.docker.com | sh
+RUN curl -sSL https://get.docker.com | sh
