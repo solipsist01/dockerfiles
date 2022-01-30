@@ -13,4 +13,4 @@ RUN apk update && \
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
 RUN python3 -m pip install -U pip && \
-    pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon
+    pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon ccxt
