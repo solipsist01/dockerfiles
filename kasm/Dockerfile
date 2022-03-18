@@ -9,9 +9,11 @@ WORKDIR $HOME
 ######### Customize Container Here ###########
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN  wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | apt-key add - \
-    && add-apt-repository ppa:ubuntuhandbook1/apps \
+    && add-apt-repository ppa:ubuntuhandbook1/apps -y \
+    && add-apt-repository ppa:micahflee/ppa -y \
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
+               torbrowser-launcher traceroute iputils-ping wget
     && echo "deb https://download.sublimetext.com/ apt/stable/" |  tee /etc/apt/sources.list.d/sublime-text.list \
     && apt-get update \
     && apt-get install sublime-text \
