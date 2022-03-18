@@ -13,12 +13,21 @@ RUN  wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | apt-key add
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
                traceroute iputils-ping wget xz-utils curl \
-    && echo "deb https://download.sublimetext.com/ apt/stable/" |  tee /etc/apt/sources.list.d/sublime-text.list \
-    && apt-get update \
-    && apt-get install sublime-text \
-    && cp /usr/share/applications/sublime_text.desktop $HOME/Desktop/ \
-    && chmod +x $HOME/Desktop/sublime_text.desktop \
-    && chown 1000:1000 $HOME/Desktop/sublime_text.desktop
+
+    && cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
+    && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
+    && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
+    
+    && chmod +x $HOME/Desktop/ghb.desktop \
+    && chmod +x $HOME/Desktop/puddleetag.desktop \
+    && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
+
+    && chown 1000:1000 $HOME/Desktop/gbh.desktop \
+    && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
+    && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
+
+    && rm $HOME/Desktop/Downloads \
+    && rm $HOME/Desktop/Downloads
 
 ADD /torbrowser.sh /torbrowser.sh
 
