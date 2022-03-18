@@ -10,9 +10,12 @@ WORKDIR $HOME
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
-               traceroute iputils-ping wget xz-utils curl doublecmd-gtk \
+               traceroute iputils-ping wget xz-utils curl doublecmd-gtk
 
-    && cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
+RUN wget https://github.com/TheAssassin/AppImageLauncher/releases/download/v2.2.0/appimagelauncher_2.2.0-travis995.0f91801.bionic_amd64.deb \
+    apt install ./appimagelauncher_2.2.0-travis995.0f91801.bionic_amd64.deb
+
+RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
