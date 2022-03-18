@@ -15,14 +15,17 @@ RUN apt-get update \
     && cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
+    && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     
     && chmod +x $HOME/Desktop/ghb.desktop \
     && chmod +x $HOME/Desktop/puddletag.desktop \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
+    && chmod +x $HOME/Desktop/doublecmd.desktop \
 
     && chown 1000:1000 $HOME/Desktop/ghb.desktop \
     && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
-    && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop 
+    && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
+    && chown 1000:1000 $HOME/Desktop/doublecmd.desktop
 
 ADD /torbrowser.sh /torbrowser.sh
 
