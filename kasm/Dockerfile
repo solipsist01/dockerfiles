@@ -19,7 +19,7 @@ RUN  wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | apt-key add
     && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     
     && chmod +x $HOME/Desktop/ghb.desktop \
-    && chmod +x $HOME/Desktop/puddleetag.desktop \
+    && chmod +x $HOME/Desktop/puddletag.desktop \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
 
     && chown 1000:1000 $HOME/Desktop/gbh.desktop \
