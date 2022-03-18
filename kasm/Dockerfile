@@ -10,7 +10,7 @@ WORKDIR $HOME
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
-               traceroute iputils-ping wget xz-utils curl \
+               traceroute iputils-ping wget xz-utils curl doublecmd-gtk \
 
     && cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
