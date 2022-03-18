@@ -22,10 +22,7 @@ RUN apt-get update \
 
     && chown 1000:1000 $HOME/Desktop/ghb.desktop \
     && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
-    && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
-
-    && rm $HOME/Desktop/Downloads \
-    && rm $HOME/Desktop/Uploads
+    && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop 
 
 ADD /torbrowser.sh /torbrowser.sh
 
@@ -42,6 +39,8 @@ RUN $STARTUPDIR/set_user_permission.sh $HOME
 
 ENV HOME /home/kasm-user
 WORKDIR $HOME
-RUN mkdir -p $HOME && chown -R 1000:0 $HOME
+RUN mkdir -p $HOME && chown -R 1000:0 $HOME \
+    && rm $HOME/Desktop/Downloads \
+    && rm $HOME/Desktop/Uploads
 
 USER 1000
