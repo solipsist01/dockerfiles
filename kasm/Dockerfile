@@ -24,8 +24,8 @@ RUN  wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | apt-key add
     # Maintain backwards compatability with old image definitions that expect tor to be launched from /tmp
     && mkdir -p /tmp/tor-browser_en-US/Browser/ \
     && ln -s $TOR_HOME/tor-browser_en-US/start-tor-browser.desktop /tmp/tor-browser_en-US/Browser/start-tor-browser.desktop \
-    && chown -R 1000:0 $TOR_HOME/
-    && cp $TOR_HOME/tor-browser_en-US/start-tor-browser.desktop $HOME/Desktop/
+    && chown -R 1000:0 $TOR_HOME/ \
+    && cp $TOR_HOME/tor-browser_en-US/start-tor-browser.desktop $HOME/Desktop/ \
     && chown 1000:0  $HOME/Desktop/start-tor-browser.desktop
 
 #RUN echo "/usr/bin/desktop_ready && /opt/sublime_text/sublime_text &" > $STARTUPDIR/custom_startup.sh \
