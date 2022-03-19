@@ -10,7 +10,7 @@ WORKDIR $HOME
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
-               traceroute iputils-ping wget xz-utils curl doublecmd-gtk
+               traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils
 
 RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
