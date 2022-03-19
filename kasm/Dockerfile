@@ -16,7 +16,7 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
     && cd /appimages/losslesscut && chmod +x /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
     && chmod +x /appimages/losslesscut/squashfs-root/losslesscut && rm /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
-    && DESKTOPITEM="/home/kasm-user/Desktop/losslesscut.desktop" \
+    && DESKTOPITEM="$HOME/Desktop/losslesscut.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
     && echo "Name=LosslessCut" >> $DESKTOPITEM \
     && echo "Exec=/appimages/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
