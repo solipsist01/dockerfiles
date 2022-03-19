@@ -12,8 +12,10 @@ RUN apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk
 
-RUN wget https://github.com/TheAssassin/AppImageLauncher/releases/download/v2.2.0/appimagelauncher_2.2.0-travis995.0f91801.bionic_amd64.deb \
-    && apt-get install ./appimagelauncher_2.2.0-travis995.0f91801.bionic_amd64.deb
+RUN mkdir /appimages && mkdir /appimages/losslesscut \
+    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x64.tar.bz2 -O - | tar -xj --directory /appimages/losslesscut \
+    && chmod +x /appimages/losslesscut/losslesscut \
+    && chown 1000:0 /appimages -R
 
 RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
