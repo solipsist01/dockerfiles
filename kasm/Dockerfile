@@ -16,6 +16,17 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
     && cd /appimages/losslesscut && chmod +x /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
     && chmod +x /appimages/losslesscut/squashfs-root/losslesscut && rm /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
+    && DESKTOPITEM="home/kasm-user/Desktop/losslesscut.desktop" \
+    && echo "[Desktop Entry]" > $DESKTOPITEM \
+    && echo "Name=LosslessCut" >> $DESKTOPITEM \
+    && echo "Exec=/appimages/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
+    && echo "Terminal=false" >> $DESKTOPITEM \
+    && echo "Type=Application" >> $DESKTOPITEM \
+    && echo "Icon=/appimages/losslesscut/squashfs-root/losslesscut.png" >> $DESKTOPITEM \
+    && echo "StartupWMClass=LosslessCut" >> $DESKTOPITEM \
+    && echo "X-AppImage-Version=3.44.0" >> $DESKTOPITEM \
+    && echo "Categories=Utility;" >> $DESKTOPITEM \
+    && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /appimages -R
 
 RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
