@@ -13,8 +13,9 @@ RUN apt-get update \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk
 
 RUN mkdir /appimages && mkdir /appimages/losslesscut \
-    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x64.tar.bz2 -O - | tar -xj --directory /appimages/losslesscut \
-    && chmod +x /appimages/losslesscut/losslesscut \
+    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
+    && cd /appimages/losslesscut && chmod +x /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
+    && chmod +x /appimages/losslesscut/squashfs-root/losslesscut && rm /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
     && chown 1000:0 /appimages -R
 
 RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
