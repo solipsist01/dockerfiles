@@ -69,6 +69,7 @@ RUN wget https://cdn.hipwallpaper.com/i/92/9/0Ts6mr.png -O /usr/share/extra/back
 ######### End Customizations ###########
 
 RUN chown 1000:0 $HOME
+RUN chown 1000:0 /opt/teamviewer -R
 RUN $STARTUPDIR/set_user_permission.sh $HOME
 
 ENV HOME /home/kasm-user
