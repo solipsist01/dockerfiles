@@ -43,7 +43,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/vlc.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
-    && cp /usr/share/applications/org.exo-terminal-emulator.desktop $HOME/Desktop/ \
+    && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
     
     && chmod +x $HOME/Desktop/ghb.desktop \
     && chmod +x $HOME/Desktop/puddletag.desktop \
@@ -52,7 +52,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chmod +x $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chmod +x $HOME/Desktop/vlc.desktop \
     && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
-    && chmod +x $HOME/Desktop/org.exo-terminal-emulator.desktop \
+    && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
 
     && chown 1000:1000 $HOME/Desktop/ghb.desktop \
     && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
@@ -61,7 +61,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop \
     && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop \
-    && chown 1000:1000 $HOME/Desktop/org.exo-terminal-emulator.desktop
+    && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop
 
 ADD /torbrowser.sh /torbrowser.sh
 
