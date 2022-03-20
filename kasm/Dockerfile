@@ -13,7 +13,9 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
-               putty remmina remmina-plugin-rdp remmina-plugin-secret
+               putty remmina remmina-plugin-rdp remmina-plugin-secret \
+               #Teamviewer dependencies
+               libminizip1
 
 RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 
