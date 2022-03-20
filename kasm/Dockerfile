@@ -11,6 +11,7 @@ WORKDIR $HOME
 RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
+    && apt-get remove --purge libreoffice* \
 
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
