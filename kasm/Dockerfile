@@ -14,7 +14,7 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-get remove --purge libreoffice* \
 
     && apt-get update \
-    && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
+    && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
                #Teamviewer dependencies
