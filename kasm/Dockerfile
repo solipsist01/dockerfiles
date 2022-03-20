@@ -10,12 +10,12 @@ WORKDIR $HOME
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
-    && apt-add-repository -y ppa:libreoffice \
+    && add-apt-repository -r -y ppa:libreoffice/ppa \
 
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
-               putty remmina remmina-plugin-rdp remmina-plugin-secret libreoffice \
+               putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
                #Teamviewer dependencies
                libminizip1
 
