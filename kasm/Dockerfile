@@ -63,6 +63,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop \
     && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
 
+    && sed -i 's/%U/www.wenro.nl\/startpage/g' $HOME/Desktop/google-chrome.desktop \
     && echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
     && echo 'pref("browser.startup.homepage", "http://www.wenro.nl/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
 
