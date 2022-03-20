@@ -9,7 +9,7 @@ WORKDIR $HOME
 ######### Customize Container Here ###########
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN add-apt-repository -y ppa:pedrocastro/ppa \
-    apt-get update \
+    && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles
 
