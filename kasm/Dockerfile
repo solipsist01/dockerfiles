@@ -61,7 +61,11 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop \
     && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop \
-    && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop
+    && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
+
+    && echo 'pref("browser.startup.homepage", "http://www.wenro.nl/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
+
+
 
 ADD /torbrowser.sh /torbrowser.sh
 
