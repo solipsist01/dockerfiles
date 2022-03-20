@@ -9,9 +9,13 @@ WORKDIR $HOME
 ######### Customize Container Here ###########
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN add-apt-repository -y ppa:pedrocastro/ppa \
+    && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag \
-               traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles
+               traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
+               putty remmina remmina-plugin-rdp remmina-plugin-secret
+
+RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" rm -f "$TEMP_DEB"
 
 RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
@@ -51,7 +55,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop
-    
+
 ADD /torbrowser.sh /torbrowser.sh
 
 RUN chmod +x /torbrowser.sh && /torbrowser.sh
