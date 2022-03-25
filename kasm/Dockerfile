@@ -21,6 +21,7 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
                libminizip1
 
 RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
+RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 
 RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
