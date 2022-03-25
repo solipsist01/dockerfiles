@@ -16,14 +16,14 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
-               putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
+               putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice
                #Teamviewer dependencies
                #libminizip1 \
                #Binance dependencies
-               libappindicator3-1
+               #libappindicator3-1
 
 #RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
-RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
+#RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 
 RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
@@ -86,7 +86,6 @@ RUN wget https://cdn.hipwallpaper.com/i/92/9/0Ts6mr.png -O /usr/share/extra/back
 ######### End Customizations ###########
 
 RUN chown 1000:0 $HOME 
-RUN chown 1000:0 /opt/Binance -R
 RUN $STARTUPDIR/set_user_permission.sh $HOME
 
 ENV HOME /home/kasm-user
