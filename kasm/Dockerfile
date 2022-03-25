@@ -18,7 +18,9 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
                #Teamviewer dependencies
-               libminizip1
+               libminizip1 \
+               #Binance dependencies
+               libappindicator3-1
 
 RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
