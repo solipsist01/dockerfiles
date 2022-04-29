@@ -58,5 +58,5 @@ jobs:
         tags: |
           ${{github.repository_owner}}/${{env.dockerhub_repo}}:latest
           ${{github.repository_owner}}/${{env.dockerhub_repo}}:${{steps.version.outputs.date_version}}
-          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo:}}:latest
-          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo:}}:${{steps.version.outputs.date_version}}
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo}}:latest
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo}}:${{steps.version.outputs.date_version}}
