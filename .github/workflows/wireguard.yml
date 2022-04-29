@@ -1,4 +1,4 @@
-name: jenkins-agent
+name: wireguard
 
 on:
   schedule:
@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  dockerhub_repo: jenkins-agent
-  gcrio_repo: jenkins-agent
-  git_subdir: jenkins-agent
+  dockerhub_repo: wireguard
+  gcrio_repo: wireguard
+  git_subdir: wireguard
   buildx_arches: linux/arm/v7, linux/amd64
 
 jobs:
