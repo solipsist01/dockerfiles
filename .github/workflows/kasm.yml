@@ -1,4 +1,4 @@
-name: kerio-connect
+name: kasm
 
 on:
   schedule:
@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  dockerhub_repo: kerio-connect
-  gcrio_repo: kerio-connect
-  git_subdir: kerio-connect
+  dockerhub_repo: kasm
+  gcrio_repo: kasm
+  git_subdir: kasm
   buildx_arches: linux/amd64
 
 jobs:
