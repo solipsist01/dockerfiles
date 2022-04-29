@@ -6,7 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  image_repo: jenkins-agent
+  dockerhub_repo: jenkins-agent
+  gcrio_repo: jenkins-agent
+  git_subdir: jenkins-agent
+  buildx_arches: "linux/arm/v7, linux/amd64"
 
 jobs:
   build:
@@ -48,12 +51,12 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v2.7.0
       with:
-        context: ./${{env.image_repo}}
-        file: ./${{env.image_repo}}/Dockerfile
-        platforms: linux/arm/v7, linux/amd64
+        context: ./${{env.git_subdir}}
+        file: ./${{env.git_subdir}}/Dockerfile
+        platforms: ${{env.buildx_arches}}
         push: true
         tags: |
-          ${{github.repository_owner}}/${{env.image_repo}}:latest
-          ${{github.repository_owner}}/${{env.image_repo}}:${{steps.version.outputs.date_version}}
-          ghcr.io/${{github.repository_owner}}/${{env.image_repo}}:latest
-          ghcr.io/${{github.repository_owner}}/${{env.image_repo}}:${{steps.version.outputs.date_version}}
+          ${{github.repository_owner}}/${{env.dockerhub_repo}}:latest
+          ${{github.repository_owner}}/${{env.dockerhub_repo}}:${{steps.version.outputs.date_version}}
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo:}}:latest
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo:}}:${{steps.version.outputs.date_version}}
