@@ -1,18 +1,14 @@
 name: go-btfs
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  schedule:
+    - cron: "30 16 * * *"
 
 env:
   image_repo: go-btfs
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
     
     steps:
@@ -51,8 +47,6 @@ jobs:
 
     - name: Available platforms
       run: echo ${{ steps.buildx.outputs.platforms }}
-
-    # here you can do additional steps
 
     - name: Build and push
       uses: docker/build-push-action@v2.7.0
