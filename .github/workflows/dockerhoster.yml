@@ -9,7 +9,7 @@ env:
   dockerhub_repo: dockerhoster
   gcrio_repo: dockerhoster
   git_subdir: dockerhoster
-  buildx_arches: "linux/arm/v7, linux/amd64"
+  buildx_arches: linux/arm/v7, linux/amd64
 
 jobs:
   build:
