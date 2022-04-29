@@ -48,7 +48,7 @@ jobs:
       uses: docker/build-push-action@v2.7.0
       with:
         context: ./btfs
-        file: ./Dockerfile
+        file: ./btfs/Dockerfile
         platforms: linux/arm/v7, linux/amd64
         push: true
         tags: |
