@@ -1,4 +1,4 @@
-name: go-btfs
+name: dockerhoster
 
 on:
   schedule:
