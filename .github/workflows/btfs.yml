@@ -1,10 +1,13 @@
-name: Docker Image CI
+name: go-btfs
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+
+env:
+  image_repo: go-btfs
 
 jobs:
 
@@ -29,16 +32,23 @@ jobs:
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v1
 
-    -
-      name: Login to GitHub Container Registry
+    - name: Login to GitHub Container Registry
       uses: docker/login-action@v1 
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
     - name: Set up Docker Buildx
       id: buildx
       uses: docker/setup-buildx-action@v1
+
     - name: Available platforms
       run: echo ${{ steps.buildx.outputs.platforms }}
 
@@ -52,5 +62,7 @@ jobs:
         platforms: linux/arm/v7, linux/amd64
         push: true
         tags: |
-          ghcr.io/${{github.repository}}:latest
-          ghcr.io/${{github.repository}}:${{steps.version.outputs.date_version}}
+          ${{github.repository_owner}}/${{env.image_repo}}:latest
+          ${{github.repository_owner}}/${{env.image_repo}}:${{steps.version.outputs.date_version}}
+          ghcr.io/${{github.repository_owner}}/${{env.image_repo}}:latest
+          ghcr.io/${{github.repository_owner}}/${{env.image_repo}}:${{steps.version.outputs.date_version}}
