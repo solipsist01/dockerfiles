@@ -13,12 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Clone supercharge docs repository
-      uses: actions/checkout@v2
-      with:
-        repository: bittorrent/go-btfs
-        path: /
+  - uses: actions/checkout@v2
+  - name: Checkout
+    uses: actions/checkout@v2
+    with:
+      repository: bittorrent/go-btfs
+      path: './btfs'
 
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build . --tag my-image-name:$(date +%s)
+      run: docker build ./btfs --tag my-image-name:$(date +%s)
