@@ -1,0 +1,24 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Clone supercharge docs repository
+      uses: actions/checkout@v2
+      with:
+        repository: bittorrent/go-btfs
+        path: ../btfs
+
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker build ../btfs --tag my-image-name:$(date +%s)
