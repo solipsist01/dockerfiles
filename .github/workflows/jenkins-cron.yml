@@ -8,7 +8,7 @@ on:
 env:
   dockerhub_repo: jenkins-cron
   gcrio_repo: jenkins-cron
-  git_subdir: jenkinscron
+  git_subdir: jenkins-cron
   buildx_arches: linux/amd64
 
 jobs:
