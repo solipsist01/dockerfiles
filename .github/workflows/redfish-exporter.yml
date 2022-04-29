@@ -2,7 +2,7 @@ name: redfish-exporter
 
 on:
   schedule:
-    - cron: "30 16 * * *"
+    - cron: "00 00 1 * *"
   workflow_dispatch:
 
 env:
