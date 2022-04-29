@@ -1,24 +1,20 @@
-name: go-btfs
+name: jenkins-agent
 
 on:
   schedule:
-    - cron: "30 16 * * *"
+    - cron: "00 00 1 * *"
   workflow_dispatch:
 
 env:
-  image_repo: go-btfs
+  image_repo: jenkins-agent
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
     - name: Checkout
       uses: actions/checkout@v2
-      with:
-        repository: bittorrent/go-btfs
-        path: './btfs'
 
     - name: Modify scripts and get version
       id: version
@@ -52,8 +48,8 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v2.7.0
       with:
-        context: ./btfs
-        file: ./btfs/Dockerfile
+        context: ./${{env.image_repo}}
+        file: ./${{env.image_repo}}/Dockerfile
         platforms: linux/arm/v7, linux/amd64
         push: true
         tags: |
