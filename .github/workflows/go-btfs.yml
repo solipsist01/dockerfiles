@@ -5,6 +5,10 @@ on:
     - cron: "30 16 * * *"
   workflow_dispatch:
 
+repository_dispatch:
+    types:
+      - webhook
+
 env:
   dockerhub_repo: go-btfs
   gcrio_repo: go-btfs
