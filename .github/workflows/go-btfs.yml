@@ -5,7 +5,7 @@ on:
     - cron: "30 16 * * *"
   workflow_dispatch:
 
-repository_dispatch:
+  repository_dispatch:
     types:
       - webhook
 
