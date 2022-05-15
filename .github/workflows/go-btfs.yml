@@ -3,17 +3,17 @@ name: go-btfs
 on:
   schedule:
     - cron: "30 16 * * *"
-  workflow_dispatch:
-
-  repository_dispatch:
-    types:
-      - webhook
-
+  
   workflow_dispatch:
     inputs:
       id:
         description: 'run identifier'
         required: false
+
+  repository_dispatch:
+    types:
+      - webhook
+
 
 env:
   dockerhub_repo: go-btfs
