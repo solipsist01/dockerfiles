@@ -9,7 +9,7 @@ env:
   dockerhub_repo: jenkins-agent
   gcrio_repo: jenkins-agent
   git_subdir: jenkins-agent
-  buildx_arches: linux/arm/v7, linux/amd64
+  buildx_arches: linux/arm/v7, linux/amd64, linux/arm64/v8
 
 jobs:
   build:
