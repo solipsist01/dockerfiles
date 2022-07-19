@@ -24,6 +24,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         repository: ${{ env.external_git }}
+        ref: master
         path: './clone'
 
     - name: Modify scripts and get version
