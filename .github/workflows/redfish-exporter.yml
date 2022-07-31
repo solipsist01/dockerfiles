@@ -9,7 +9,7 @@ env:
   dockerhub_repo: redfish-exporter
   gcrio_repo: redfish-exporter
   external_git: jenningsloy318/redfish_exporter
-  buildx_arches: linux/amd64
+  buildx_arches: linux/amd64, linux/arm64/v8
 
 
 jobs:
