@@ -9,7 +9,7 @@ env:
   dockerhub_repo: dellhw-exporter
   gcrio_repo: dellhw-exporter
   external_git: galexrt/dellhw_exporter
-  buildx_arches: linux/amd64, linux/arm64/v8
+  buildx_arches: linux/amd64
 
 
 jobs:
