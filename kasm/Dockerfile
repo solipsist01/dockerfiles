@@ -10,7 +10,7 @@ WORKDIR $HOME
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
-    && add-apt-repository ppa:heyarje/makemkv-beta
+    && add-apt-repository ppa:heyarje/makemkv-beta \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
     && apt-get remove --purge libreoffice* \
 
