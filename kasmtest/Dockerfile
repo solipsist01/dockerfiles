@@ -44,14 +44,14 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /appimages -R
 
-RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
-    && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
+RUN cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/vlc.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
+    #cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     
     # && chmod +x $HOME/Desktop/ghb.desktop \
     && chmod +x $HOME/Desktop/puddletag.desktop \
