@@ -12,7 +12,7 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
     && add-apt-repository ppa:heyarje/makemkv-beta \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
-    && add-apt-repository ppa:hizo/mkv-extractor-gui \
+    && add-apt-repository -r -y ppa:hizo/mkv-extractor-gui \
     && apt-get remove --purge libreoffice* \
 
     && apt-get update \
