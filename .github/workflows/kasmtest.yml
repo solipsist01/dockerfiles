@@ -1,4 +1,4 @@
-name: kasm
+name: kasmtest
 
 on:
   schedule:
