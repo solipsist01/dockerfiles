@@ -53,7 +53,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
     
-    && chmod +x $HOME/Desktop/ghb.desktop \
+    # && chmod +x $HOME/Desktop/ghb.desktop \
     && chmod +x $HOME/Desktop/puddletag.desktop \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chmod +x $HOME/Desktop/doublecmd.desktop \
@@ -62,7 +62,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
     && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
     && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
 
-    && chown 1000:1000 $HOME/Desktop/ghb.desktop \
+    # && chown 1000:1000 $HOME/Desktop/ghb.desktop \
     && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
     && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
