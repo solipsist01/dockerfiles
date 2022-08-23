@@ -12,14 +12,13 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-add-repository -y ppa:remmina-ppa-team/remmina-next \
     && add-apt-repository ppa:heyarje/makemkv-beta \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
-    && add-apt-repository -r -y ppa:hizo/mkv-extractor-gui \
     && apt-get remove --purge libreoffice* \
 
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
-               soundconverter kdenlive makemkv-bin makemkv-oss mkv-extractor-qt5
+               soundconverter kdenlive makemkv-bin makemkv-oss 
                #Teamviewer dependencies
                #libminizip1 \
                #Binance dependencies
