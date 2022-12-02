@@ -8,7 +8,8 @@ on:
 env:
   dockerhub_repo: vmware-exporter
   gcrio_repo: vmware-exporter
-  external_git: solipsist01/vmware_exporter
+  #external_git: solipsist01/vmware_exporter
+  external_git: pryorda/vmware_exporter
   buildx_arches: linux/amd64
 
 
