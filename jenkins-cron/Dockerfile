@@ -7,7 +7,7 @@ RUN apk update && \
     dcron curl wget ca-certificates build-base linux-headers \
     libffi-dev gettext curl gcc musl-dev libressl-dev perl rclone \
     tar pigz bash jq coreutils netcat-openbsd vnstat bc lm_sensors smartmontools py-cryptography \
-    docker-cli openssl openssl-dev \
+    docker-cli openssl \
     && rm -rf /var/cache/apk/*
 
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
