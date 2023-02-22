@@ -13,7 +13,6 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && add-apt-repository ppa:heyarje/makemkv-beta \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
     && apt-get remove --purge libreoffice* \
-
     && apt-get update \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
@@ -44,33 +43,24 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /appimages -R
 
-RUN && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
+RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/vlc.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
-    # cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
-    #cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
-
-    # && chmod +x $HOME/Desktop/ghb.desktop \
-    # && chmod +x $HOME/Desktop/puddletag.desktop \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chmod +x $HOME/Desktop/doublecmd.desktop \
     && chmod +x $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chmod +x $HOME/Desktop/vlc.desktop \
     && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
     && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
-
-    # && chown 1000:1000 $HOME/Desktop/ghb.desktop \
-    # && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
     && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop \
     && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop \
     && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
-
     && sed -i 's/%U/www.wenro.nl\/startpage/g' $HOME/Desktop/google-chrome.desktop \
     && echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
     && echo 'pref("browser.startup.homepage", "http://www.wenro.nl/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
