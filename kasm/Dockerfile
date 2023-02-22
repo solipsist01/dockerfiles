@@ -79,7 +79,7 @@ RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
 
 ADD /torbrowser.sh /torbrowser.sh
 
-RUN chmod +x /torbrowser.sh && /torbrowser.sh
+RUN bash /torbrowser.sh && rm /torbrowser.sh
 #RUN echo "/usr/bin/desktop_ready && /opt/sublime_text/sublime_text &" > $STARTUPDIR/custom_startup.sh \
 #&& chmod +x $STARTUPDIR/custom_startup.sh
 
