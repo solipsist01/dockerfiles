@@ -3,7 +3,7 @@ set -xe
 echo "Install TorBrowser"
 
 apt-get install -y xz-utils curl
-TOR_HOME=$HOME/tor-browser/
+TOR_HOME=$HOME/tor-browser
 mkdir -p $TOR_HOME
 TOR_URL=$(curl -q https://www.torproject.org/download/ | grep downloadLink | grep linux64 | sed 's/.*href="//g'  | cut -d '"' -f1 | head -1)
 wget --quiet https://www.torproject.org/${TOR_URL} -O /tmp/torbrowser.tar.xz
