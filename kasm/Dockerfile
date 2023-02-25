@@ -56,7 +56,6 @@ RUN mkdir /software && mkdir /software/losslesscut \
     && echo "Categories=AudioVideo;Audio;Qt;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /software -R \
-    && rm /home/kasm-user/Desktop/Downloads && rm /home/kasm-user/Desktop/Uploads
 
 RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
