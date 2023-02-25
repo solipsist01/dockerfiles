@@ -27,36 +27,36 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
 #RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 #RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 
-RUN mkdir /appimages && mkdir /appimages/losslesscut \
-    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
-    && cd /appimages/losslesscut && chmod +x /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
-    && chmod +x /appimages/losslesscut/squashfs-root/losslesscut && rm /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
+RUN mkdir /software && mkdir /software/losslesscut \
+    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /software/losslesscut/LosslessCut-linux-x86_64.AppImage \
+    && cd /software/losslesscut && chmod +x /software/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
+    && chmod +x /software/losslesscut/squashfs-root/losslesscut && rm /software/losslesscut/LosslessCut-linux-x86_64.AppImage \
     && DESKTOPITEM="$HOME/Desktop/losslesscut.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
     && echo "Name=LosslessCut" >> $DESKTOPITEM \
-    && echo "Exec=/appimages/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
+    && echo "Exec=/software/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
     && echo "Terminal=false" >> $DESKTOPITEM \
     && echo "Type=Application" >> $DESKTOPITEM \
-    && echo "Icon=/appimages/losslesscut/squashfs-root/losslesscut.png" >> $DESKTOPITEM \
+    && echo "Icon=/software/losslesscut/squashfs-root/losslesscut.png" >> $DESKTOPITEM \
     && echo "StartupWMClass=LosslessCut" >> $DESKTOPITEM \
     && echo "X-AppImage-Version=3.44.0" >> $DESKTOPITEM \
     && echo "Categories=Utility;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
-    && chown 1000:0 /appimages -R \
-    && mkdir $HOME/puddletag && git clone https://github.com/puddletag/puddletag $HOME/puddletag \
-    && chmod +x $HOME/puddletag/puddletag \
+    && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
+    && chmod +x /softwre/puddletag/puddletag \
     && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
     && echo "Version=1.0" >> $DESKTOPITEM \
     && echo "Type=Application" >> $DESKTOPITEM \
     && echo "Name=puddletag" >> $DESKTOPITEM \
-    && echo "TryExec=$HOME/puddletag/puddletag" >> $DESKTOPITEM \
-    && echo "Exec=$HOME/puddletag/puddletag %F" >> $DESKTOPITEM \
-    && echo "Icon=$HOME/puddletag/puddletag.png" >> $DESKTOPITEM \
+    && echo "TryExec=/software/puddletag/puddletag" >> $DESKTOPITEM \
+    && echo "Exec=/software/puddletag/puddletag %F" >> $DESKTOPITEM \
+    && echo "Icon=/software/puddletag/puddletag.png" >> $DESKTOPITEM \
     && echo "GenericName=Audio Tag Editor" >> $DESKTOPITEM \
     && echo "Categories=AudioVideo;Audio;Qt;" >> $DESKTOPITEM \
-    && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM
-
+    && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
+    && chown 1000:0 /software -R
+    
 RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
