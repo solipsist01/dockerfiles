@@ -1,4 +1,4 @@
-FROM kasmweb/desktop:1.10.0-rolling
+FROM kasmweb/desktop:1.12.0-rolling
 USER root
 
 ENV HOME /home/kasm-default-profile
@@ -13,12 +13,12 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && add-apt-repository ppa:heyarje/makemkv-beta \
     && add-apt-repository -r -y ppa:libreoffice/ppa \
     && apt-get remove --purge libreoffice* \
-
     && apt-get update \
-    && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake puddletag mc lynx \
+    && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
-               soundconverter kdenlive makemkv-bin makemkv-oss gnome-disk-utility
+               soundconverter kdenlive makemkv-bin makemkv-oss python3-pip python3-pyparsing python3-mutagen \
+               python3-pyqt5 python3-configobj python3-pyqt5.qtsvg
                #Teamviewer dependencies
                #libminizip1 \
                #Binance dependencies
@@ -27,50 +27,55 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
 #RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://download.teamviewer.com/download/linux/teamviewer_amd64.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 #RUN TEMP_DEB="$(mktemp)" && wget -O "$TEMP_DEB" 'https://ftp.binance.com/electron-desktop/linux/production/binance-amd64-linux.deb' && dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB"
 
-RUN mkdir /appimages && mkdir /appimages/losslesscut \
-    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
-    && cd /appimages/losslesscut && chmod +x /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
-    && chmod +x /appimages/losslesscut/squashfs-root/losslesscut && rm /appimages/losslesscut/LosslessCut-linux-x86_64.AppImage \
+RUN mkdir /software && mkdir /software/losslesscut \
+    && wget https://github.com/mifi/lossless-cut/releases/latest/download/LosslessCut-linux-x86_64.AppImage -O /software/losslesscut/LosslessCut-linux-x86_64.AppImage \
+    && cd /software/losslesscut && chmod +x /software/losslesscut/LosslessCut-linux-x86_64.AppImage && ./LosslessCut-linux-x86_64.AppImage --appimage-extract \
+    && chmod +x /software/losslesscut/squashfs-root/losslesscut && rm /software/losslesscut/LosslessCut-linux-x86_64.AppImage \
     && DESKTOPITEM="$HOME/Desktop/losslesscut.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
     && echo "Name=LosslessCut" >> $DESKTOPITEM \
-    && echo "Exec=/appimages/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
+    && echo "Exec=/software/losslesscut/squashfs-root/losslesscut --no-sandbox" >> $DESKTOPITEM \
     && echo "Terminal=false" >> $DESKTOPITEM \
     && echo "Type=Application" >> $DESKTOPITEM \
-    && echo "Icon=/appimages/losslesscut/squashfs-root/losslesscut.png" >> $DESKTOPITEM \
+    && echo "Icon=/software/losslesscut/squashfs-root/losslesscut.png" >> $DESKTOPITEM \
     && echo "StartupWMClass=LosslessCut" >> $DESKTOPITEM \
     && echo "X-AppImage-Version=3.44.0" >> $DESKTOPITEM \
     && echo "Categories=Utility;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
-    && chown 1000:0 /appimages -R
+    && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
+    && chmod +x /software/puddletag/puddletag \
+    && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
+    && echo "[Desktop Entry]" > $DESKTOPITEM \
+    && echo "Version=1.0" >> $DESKTOPITEM \
+    && echo "Type=Application" >> $DESKTOPITEM \
+    && echo "Name=puddletag" >> $DESKTOPITEM \
+    && echo "TryExec=/software/puddletag/puddletag" >> $DESKTOPITEM \
+    && echo "Exec=/software/puddletag/puddletag %F" >> $DESKTOPITEM \
+    && echo "Icon=/software/puddletag/puddletag.png" >> $DESKTOPITEM \
+    && echo "GenericName=Audio Tag Editor" >> $DESKTOPITEM \
+    && echo "Categories=AudioVideo;Audio;Qt;" >> $DESKTOPITEM \
+    && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
+    && chown 1000:0 /software -R \
+    && rm /home/kasm-user/Desktop/Downloads && rm /home/kasm-user/Desktop/Uploads
 
-RUN cp /usr/share/applications/ghb.desktop $HOME/Desktop/ \
-    && cp /usr/share/applications/puddletag.desktop $HOME/Desktop/ \
-    && cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
+RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/vlc.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
-    
-    && chmod +x $HOME/Desktop/ghb.desktop \
-    && chmod +x $HOME/Desktop/puddletag.desktop \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chmod +x $HOME/Desktop/doublecmd.desktop \
     && chmod +x $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chmod +x $HOME/Desktop/vlc.desktop \
     && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
     && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
-
-    && chown 1000:1000 $HOME/Desktop/ghb.desktop \
-    && chown 1000:1000 $HOME/Desktop/puddletag.desktop \
     && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop \
     && chown 1000:1000 $HOME/Desktop/org.remmina.Remmina.desktop \
     && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
-
     && sed -i 's/%U/www.wenro.nl\/startpage/g' $HOME/Desktop/google-chrome.desktop \
     && echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
     && echo 'pref("browser.startup.homepage", "http://www.wenro.nl/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
@@ -83,7 +88,8 @@ RUN bash /torbrowser.sh && rm /torbrowser.sh
 #RUN echo "/usr/bin/desktop_ready && /opt/sublime_text/sublime_text &" > $STARTUPDIR/custom_startup.sh \
 #&& chmod +x $STARTUPDIR/custom_startup.sh
 
-RUN wget https://raw.githubusercontent.com/solipsist01/dockerfiles/master/kasm/bg_default.png -O /usr/share/extra/backgrounds/bg_default.png
+RUN wget https://raw.githubusercontent.com/solipsist01/dockerfiles/master/kasm/bg_default.png -O /usr/share/extra/backgrounds/bg_default.png \
+    && echo 'kasm-user ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
 ######### End Customizations ###########
 
