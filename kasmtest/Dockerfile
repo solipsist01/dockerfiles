@@ -17,7 +17,8 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
     && apt-get install -y apt-transport-https mkvtoolnix mkvtoolnix-gui handbrake mc lynx \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
-               soundconverter kdenlive makemkv-bin makemkv-oss
+               soundconverter kdenlive makemkv-bin makemkv-oss python3-pip python3-pyparsing python3-mutagen \
+               python3-pyqt5 python3-configobj python3-pyqt5.qtsvg
                #Teamviewer dependencies
                #libminizip1 \
                #Binance dependencies
@@ -41,7 +42,20 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && echo "X-AppImage-Version=3.44.0" >> $DESKTOPITEM \
     && echo "Categories=Utility;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
-    && chown 1000:0 /appimages -R
+    && chown 1000:0 /appimages -R \
+    && md $HOME/puddletag && git clone https://github.com/puddletag/puddletag $HOME/puddletag \
+    && chmod +x $HOME/puddletag/puddletag \
+    && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
+    && echo "[Desktop Entry]" > $DESKTOPITEM \
+    && echo "Version=1.0" >> $DESKTOPITEM \
+    && echo "Type=Application" >> $DESKTOPITEM \
+    && echo "Name=puddletag" >> $DESKTOPITEM \
+    && echo "TryExec=$HOME/puddletag/puddletag" >> $DESKTOPITEM \
+    && echo "Exec=$HOME/puddletag/puddletag %F" >> $DESKTOPITEM \
+    && echo "Icon=$HOME/puddletag/puddletag.png" >> $DESKTOPITEM \
+    && echo "GenericName=Audio Tag Editor" >> $DESKTOPITEM \
+    && echo "Categories=AudioVideo;Audio;Qt;" >> $DESKTOPITEM \
+    && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM
 
 RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
