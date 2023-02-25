@@ -43,7 +43,7 @@ RUN mkdir /software && mkdir /software/losslesscut \
     && echo "Categories=Utility;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
-    && chmod +x /softwre/puddletag/puddletag \
+    && chmod +x /software/puddletag/puddletag \
     && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
     && echo "Version=1.0" >> $DESKTOPITEM \
@@ -56,7 +56,7 @@ RUN mkdir /software && mkdir /software/losslesscut \
     && echo "Categories=AudioVideo;Audio;Qt;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /software -R
-    
+
 RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/org.gnome.GnomeSubtitles.desktop $HOME/Desktop/ \
