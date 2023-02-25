@@ -43,7 +43,7 @@ RUN mkdir /appimages && mkdir /appimages/losslesscut \
     && echo "Categories=Utility;" >> $DESKTOPITEM \
     && chmod +x $DESKTOPITEM && chown 1000:0 $DESKTOPITEM \
     && chown 1000:0 /appimages -R \
-    && md $HOME/puddletag && git clone https://github.com/puddletag/puddletag $HOME/puddletag \
+    && mkdir $HOME/puddletag && git clone https://github.com/puddletag/puddletag $HOME/puddletag \
     && chmod +x $HOME/puddletag/puddletag \
     && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
