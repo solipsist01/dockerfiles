@@ -65,14 +65,14 @@ RUN    cp /usr/share/applications/org.bunkus.mkvtoolnix-gui.desktop $HOME/Deskto
     && cp /usr/share/applications/org.remmina.Remmina.desktop $HOME/Desktop/ \
     && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
     && chmod +x $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
-    && chmod +x $HOME/Desktop/org.fr.handbrake.ghb.desktop \
+    && chmod +x $HOME/Desktop/fr.handbrake.ghb.desktop \
     && chmod +x $HOME/Desktop/doublecmd.desktop \
     && chmod +x $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chmod +x $HOME/Desktop/vlc.desktop \
     && chmod +x $HOME/Desktop/org.remmina.Remmina.desktop \
     && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
     && chown 1000:1000 $HOME/Desktop/org.bunkus.mkvtoolnix-gui.desktop \
-    && chown 1000:1000 $HOME/Desktop/org.fr.handbrake.ghb.desktop \
+    && chown 1000:1000 $HOME/Desktop/fr.handbrake.ghb.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
     && chown 1000:1000 $HOME/Desktop/org.gnome.GnomeSubtitles.desktop \
     && chown 1000:1000 $HOME/Desktop/vlc.desktop \
