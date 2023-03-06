@@ -18,7 +18,9 @@ RUN add-apt-repository -y ppa:pedrocastro/ppa \
                traceroute iputils-ping wget xz-utils curl doublecmd-gtk vlc dnsutils gnome-subtitles \
                putty remmina remmina-plugin-rdp remmina-plugin-secret software-properties-common libreoffice \
                soundconverter kdenlive makemkv-bin makemkv-oss python3-pip python3-pyparsing python3-mutagen \
-               python3-pyqt5 python3-configobj python3-pyqt5.qtsvg
+               python3-pyqt5 python3-configobj python3-pyqt5.qtsvg \
+               #davinci resolve dependencies
+               libapr1 libaprutil1 libxcb-cursor0
                #Teamviewer dependencies
                #libminizip1 \
                #Binance dependencies
