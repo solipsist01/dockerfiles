@@ -31,7 +31,7 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
 
 
 #native
-RUN  mkdir software && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
+RUN  mkdir /software && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
     && chmod +x /software/puddletag/puddletag \
     && DESKTOPITEM="$HOME/Desktop/puddletag.desktop" \
     && echo "[Desktop Entry]" > $DESKTOPITEM \
