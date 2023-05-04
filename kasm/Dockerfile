@@ -11,7 +11,7 @@ WORKDIR $HOME
 RUN apt-get update  && apt-get install -y flatpak apt-transport-https mc \
     traceroute iputils-ping wget xz-utils curl doublecmd-gtk dnsutils \
     software-properties-common  soundconverter python3-pip python3-pyparsing python3-mutagen \
-    python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0
+    python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo
 
 #flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo \
