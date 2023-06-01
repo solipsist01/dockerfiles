@@ -1,14 +1,14 @@
-name: dockerhoster
+name: docker-hoster
 
 on:
   schedule:
-    - cron: "00 00 1 * *"
+    - cron: "00 00 1 * *"s
   workflow_dispatch:
 
 env:
-  dockerhub_repo: dockerhoster
-  gcrio_repo: dockerhoster
-  git_subdir: dockerhoster
+  dockerhub_repo: docker-hoster
+  gcrio_repo: docker-hoster
+  git_subdir: docker-hoster
   buildx_arches: linux/arm/v7, linux/amd64, linux/arm64/v8
 
 jobs:
