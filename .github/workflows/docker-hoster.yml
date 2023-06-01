@@ -2,7 +2,7 @@ name: docker-hoster
 
 on:
   schedule:
-    - cron: "00 00 1 * *"
+    - cron: "0 0 * * SUN"
   workflow_dispatch:
 
 env:
