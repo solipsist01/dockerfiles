@@ -11,7 +11,8 @@ WORKDIR $HOME
 RUN apt-get update  && apt-get install -y flatpak apt-transport-https mc \
     traceroute iputils-ping wget xz-utils curl doublecmd-gtk dnsutils \
     software-properties-common  soundconverter python3-pip python3-pyparsing python3-mutagen \
-    python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo
+    python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo \
+    vlc kdenlive intel-gpu-tools
 
 #flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo \
@@ -24,7 +25,6 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
     org.remmina.Remmina \
     org.kde.subtitlecomposer \
     org.remmina.Remmina \
-    org.videolan.VLC \
     com.github.micahflee.torbrowser-launcher \
     --noninteractive \
     && cp /var/lib/flatpak/exports/share/applications/*.desktop $HOME/Desktop 
