@@ -1,4 +1,4 @@
-name: jenkins-agent
+name: certera
 
 on:
   schedule:
