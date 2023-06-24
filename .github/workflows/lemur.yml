@@ -26,11 +26,19 @@ jobs:
         repository: ${{ env.external_git }}
         path: './clone'
 
+    - name: create_dir
+      id: mkdir
+      run: mkdir ./clone/lemurclone 
+
     - name: Checkout_Lemur
       uses: actions/checkout@v2
       with:
         repository: Netflix/lemur
-        path: './clone'
+        path: './clone/lemurclone'
+
+    - name: move_lemur
+      id: move
+      run: mv ./clone/lemurclone/lemur ./clone/lemur 
 
     - name: Modify scripts and get version
       id: version
