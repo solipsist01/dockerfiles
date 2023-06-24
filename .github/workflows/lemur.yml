@@ -17,20 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout
+    - name: Checkout_Dockerfiles
       uses: actions/checkout@v2
 
-    - name: Checkout
+    - name: Checkout_Lemur-docker
       uses: actions/checkout@v2
       with:
         repository: ${{ env.external_git }}
         path: './clone'
 
-    - name: Modify scripts and get version
+    - name: create_dir
       id: mkdir
-      run: mkdir ./clone/lemur
+      run: mkdir ./clone/lemur && ls ./clone/lemur
 
-    - name: Checkout
+    - name: Checkout_Lemur
       uses: actions/checkout@v2
       with:
         repository: Netflix/lemur
