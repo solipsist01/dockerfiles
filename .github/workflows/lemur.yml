@@ -27,7 +27,7 @@ jobs:
         path: './clone'
 
     - name: Modify scripts and get version
-      id: version
+      id: mkdir
       run: mkdir ./clone/lemur
 
     - name: Checkout
