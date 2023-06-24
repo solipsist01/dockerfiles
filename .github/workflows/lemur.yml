@@ -28,6 +28,16 @@ jobs:
 
     - name: Modify scripts and get version
       id: version
+      run: mkdir ./clone/lemur
+
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        repository: Netflix/lemur
+        path: './clone/lemur'
+
+    - name: Modify scripts and get version
+      id: version
       run: |
         output=$(date -u '+%Y%m%d%H%M%S')
         echo ::set-output name=date_version::$output
