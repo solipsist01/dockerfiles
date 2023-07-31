@@ -8,7 +8,8 @@ on:
 env:
   dockerhub_repo: xen-exporter
   gcrio_repo: xen-exporter
-  external_git: solipsist01/xen-exporter
+  #external_git: solipsist01/xen-exporter
+  external_git: MikeDombo/xen-exporter
   buildx_arches: linux/amd64
 
 
