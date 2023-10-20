@@ -1,4 +1,4 @@
-FROM gameonwhales/base-app
+FROM gameonwhales/base-app:master
 
 ARG DEBIAN_FRONTEND=noninteractive
 # see: https://github.com/AppImage/AppImageKit/wiki/FUSE#docker
