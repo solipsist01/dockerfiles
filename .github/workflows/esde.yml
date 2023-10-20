@@ -1,4 +1,4 @@
-name: tinypilot
+name: esde
 
 on:
   schedule:
@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 env:
-  dockerhub_repo: tinypilot
-  gcrio_repo: tinypilot
-  git_subdir: tinypilot
-  buildx_arches: linux/arm64/v8
+  dockerhub_repo: esde
+  gcrio_repo: esde
+  git_subdir: esde
+  buildx_arches: linux/amd64
 
 jobs:
   build:
