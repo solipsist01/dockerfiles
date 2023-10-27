@@ -58,7 +58,7 @@ RUN \
     echo "**** Downloading YUZU AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-        wget -O yuzu-emu.AppImage https://github.com/pineappleEA/pineapple-src/releases/download/EA-3940/Linux-Yuzu-EA-3940.AppImage
+        wget -O yuzu-emu.AppImage https://github.com/pineappleEA/pineapple-src/releases/download/EA-3949/Linux-Yuzu-EA-3949.AppImage
 
 RUN \
     echo "**** Preparing /Applications for symlinking ****" && \
