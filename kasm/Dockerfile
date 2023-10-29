@@ -26,6 +26,7 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
     org.kde.subtitlecomposer \
     org.remmina.Remmina \
     com.github.micahflee.torbrowser-launcher \
+    com.github.jeromerobert.pdfarranger \
     --noninteractive \
     && cp /var/lib/flatpak/exports/share/applications/*.desktop $HOME/Desktop 
 
