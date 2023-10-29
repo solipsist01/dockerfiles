@@ -30,6 +30,8 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
     --noninteractive \
     && cp /var/lib/flatpak/exports/share/applications/*.desktop $HOME/Desktop 
 
+RUN pip3 install unidecode
+
 
 #native
 RUN  mkdir /software && mkdir /software/puddletag && git clone https://github.com/puddletag/puddletag /software/puddletag \
