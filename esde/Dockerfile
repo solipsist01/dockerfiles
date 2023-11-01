@@ -18,7 +18,8 @@ RUN \
     echo "**** Downloading ESDE AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-        wget -O esde.AppImage https://gitlab.com/es-de/emulationstation-de/-/package_files/98429736/download
+        wget -O esde.AppImage https://gitlab.com/es-de/emulationstation-de/-/package_files/99597613/download
+        
 		
 # Install RetroArch
 RUN \
@@ -58,7 +59,7 @@ RUN \
     echo "**** Downloading YUZU AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-        wget -O yuzu-emu.AppImage https://github.com/pineappleEA/pineapple-src/releases/download/EA-3949/Linux-Yuzu-EA-3949.AppImage
+        wget -O yuzu-emu.AppImage https://github.com/pineappleEA/pineapple-src/releases/download/EA-3949/Linux-Yuzu-EA-3960.AppImage
 
 RUN \
     echo "**** Preparing /Applications for symlinking ****" && \
