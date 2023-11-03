@@ -59,7 +59,7 @@ RUN \
     echo "**** Downloading YUZU AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-        url=$(curl -s 'https://pineappleea.github.io/' | grep -o 'https://github.com/pineappleEA/pineapple-src/releases/tag/EA-[0-9]*' | head -1) && appimage_url=$(echo $url | sed -E 's|https://github.com/(.*)/releases/tag/EA-(.*)|https://github.com/\1/releases/download/EA-\2/Linux-Yuzu-EA-\2.AppImage|') && wget $appimage_url -O yuzu-emu.AppImage
+        bash url=$(curl -s 'https://pineappleea.github.io/' | grep -o 'https://github.com/pineappleEA/pineapple-src/releases/tag/EA-[0-9]*' | head -1) && appimage_url=$(echo $url | sed -E 's|https://github.com/(.*)/releases/tag/EA-(.*)|https://github.com/\1/releases/download/EA-\2/Linux-Yuzu-EA-\2.AppImage|') && wget $appimage_url -O yuzu-emu.AppImage
         
 
 RUN \
