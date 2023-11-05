@@ -8,7 +8,7 @@ ENV APPIMAGE_EXTRACT_AND_RUN=1
 RUN \
     echo "**** Install Prereqs (Mesa/Vulkan/Fuse/QT/Misc) ****" && \
 		apt-get update && \
-		apt-get install -y software-properties-common gpg-agent wget p7zip-full libvulkan1 mesa-vulkan-drivers libglu1-mesa-dev qtbase5-dev qt5-qmake ffmpeg x11-xserver-utils libdbus-1-3 libgtk-3-0 libegl1 libsdl2-2.0-0 && \
+		apt-get install -y software-properties-common gpg-agent wget p7zip-full libvulkan1 mesa-vulkan-drivers libglu1-mesa-dev qtbase5-dev qt5-qmake ffmpeg x11-xserver-utils libdbus-1-3 libgtk-3-0 libegl1 libsdl2-2.0-0 curl && \
 	# Cleanup \
 		apt-get autoremove -y && \
 		rm -rf /var/lib/apt/lists/*
@@ -61,8 +61,9 @@ RUN \
     echo "**** Downloading YUZU AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-        url=$(curl -s 'https://pineappleea.github.io/' | grep -o 'https://github.com/pineappleEA/pineapple-src/releases/tag/EA-[0-9]*' | head -1) && appimage_url=$(echo $url | sed -E 's|https://github.com/(.*)/releases/tag/EA-(.*)|https://github.com/\1/releases/download/EA-\2/Linux-Yuzu-EA-\2.AppImage|') && wget $appimage_url -O yuzu-emu.AppImage
-        
+        url=$(curl -s 'https://pineappleea.github.io/' | grep -o 'https://github.com/pineappleEA/pineapple-src/releases/tag/EA-[0-9]*' | head -1) && \
+        appimage_url=$(echo $url | sed -E 's|https://github.com/(.*)/releases/tag/EA-(.*)|https://github.com/\1/releases/download/EA-\2/Linux-Yuzu-EA-\2.AppImage|') && \
+        wget $appimage_url -O yuzu-emu.AppImage
 
 RUN \
     echo "**** Preparing /Applications for symlinking ****" && \
