@@ -41,6 +41,14 @@ RUN \
         cd /tmp && \
 		wget -O pcsx2-emu-Qt.AppImage https://github.com/PCSX2/pcsx2/releases/download/v1.7.5138/pcsx2-v1.7.5138-linux-appimage-x64-Qt.AppImage
 
+#Downloading Dolphin AppImage
+RUN \
+    echo "**** Downloading Dolphin AppImage ****" && \
+        mkdir -p /tmp && \
+        cd /tmp && \
+		wget -O dolphin-emu.AppImage https://github.com/qurious-pixel/dolphin/releases/download/continuous/Dolphin_Emulator-x86_64.AppImage
+
+
 # Downloading XEMU AppImage
 RUN \
     echo "**** Downloading XEMU AppImage ****" && \
