@@ -46,7 +46,7 @@ RUN \
     echo "**** Downloading Dolphin AppImage ****" && \
         mkdir -p /tmp && \
         cd /tmp && \
-		wget -O dolphin-emu.AppImage https://github.com/qurious-pixel/dolphin/releases/download/continuous/Dolphin_Emulator-x86_64.AppImage
+		wget -O Dolphin_Emulator.AppImage https://github.com/qurious-pixel/dolphin/releases/download/continuous/Dolphin_Emulator-x86_64.AppImage
 
 
 # Downloading XEMU AppImage
