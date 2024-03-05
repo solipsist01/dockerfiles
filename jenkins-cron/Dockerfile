@@ -12,5 +12,5 @@ RUN apk update && \
 
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
-RUN python3 -m pip install -U pip && \
+RUN python3 -m pip install -U pip --break-system-packages && \
     pip install wheel requests youtube-dl pymkv graphyte holidays python-binance telethon ccxt docker ffmpeg-python --break-system-packages
