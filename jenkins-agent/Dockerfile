@@ -6,7 +6,7 @@ RUN curl -sSL https://get.docker.com | sh
 
 RUN apt --assume-yes update && \
     apt --assume-yes install python3 python3-dev python3-pip wget docker-compose curl rclone pigz
-RUN pip3 install wheel requests graphyte docker
+RUN pip3 install wheel requests graphyte docker --break-system-packages
 
 # ensure all builds runs with Buildkit
 #ENV DOCKER_BUILDKIT=1
