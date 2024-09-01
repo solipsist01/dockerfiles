@@ -1,4 +1,4 @@
-FROM kasmweb/desktop:1.15.0-rolling
+FROM kasmweb/desktop:1.16.0-develop
 USER root
 
 ENV HOME /home/kasm-default-profile
