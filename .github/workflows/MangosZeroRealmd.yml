@@ -25,6 +25,8 @@ jobs:
       with:
         repository: ${{ env.external_git }}
         path: './clone'
+        submodules: true
+        fetch-depth: 0
 
     - name: Modify scripts and get version
       id: version
