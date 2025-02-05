@@ -8,7 +8,7 @@ on:
 env:
   dockerhub_repo: mangoszeromangosd
   gcrio_repo: mangoszeromangosd
-  external_git: mangoszero/server
+  external_git: PargeLenis/mangos0srv
   buildx_arches: linux/amd64
 
 
