@@ -8,7 +8,7 @@ on:
 env:
   dockerhub_repo: mangoszeromangosd
   gcrio_repo: mangoszeromangosd
-  external_git: PargeLenis/mangos0srv
+  external_git: solipsist01/mangos
   buildx_arches: linux/amd64
 
 
@@ -25,6 +25,7 @@ jobs:
       with:
         repository: ${{ env.external_git }}
         path: './clone'
+        ref: docker
         submodules: true
         fetch-depth: 0
 
