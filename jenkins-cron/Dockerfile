@@ -10,6 +10,8 @@ RUN apk update && \
     docker-cli openssl \
     && rm -rf /var/cache/apk/*
 
+RUN curl https://rclone.org/install.sh | bash
+
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
 RUN python3 -m pip install -U pip --break-system-packages && \
