@@ -53,11 +53,8 @@ RUN  mkdir /software && mkdir /software/puddletag && git clone https://github.co
 
 #icons
 RUN cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
-    && cp /usr/share/applications/exo-terminal-emulator.desktop $HOME/Desktop/ \
     && chmod +x $HOME/Desktop/doublecmd.desktop \
-    && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
-    && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
     && sed -i 's/%U/www.ofnie.org\/startpage/g' $HOME/Desktop/google-chrome.desktop \
     && echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
     && echo 'pref("browser.startup.homepage", "http://www.ofnie.org/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
