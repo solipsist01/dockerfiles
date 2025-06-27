@@ -1,4 +1,4 @@
-FROM kasmweb/desktop:1.16.0-rolling-weekly
+FROM kasmweb/desktop:1.17.0-rolling-weekly
 
 USER root
 
@@ -27,7 +27,7 @@ RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.
     org.kde.subtitlecomposer \
     org.remmina.Remmina \
     org.torproject.torbrowser-launcher/x86_64/stable \
-    com.github.jeromerobert.pdfarranger \
+    io.exodus.Exodus \
     --noninteractive \
     && cp /var/lib/flatpak/exports/share/applications/*.desktop $HOME/Desktop 
 
@@ -57,9 +57,9 @@ RUN cp /usr/share/applications/doublecmd.desktop $HOME/Desktop/ \
     && chmod +x $HOME/Desktop/exo-terminal-emulator.desktop \
     && chown 1000:1000 $HOME/Desktop/doublecmd.desktop \
     && chown 1000:1000 $HOME/Desktop/exo-terminal-emulator.desktop \
-    && sed -i 's/%U/www.wenro.nl\/startpage/g' $HOME/Desktop/google-chrome.desktop \
+    && sed -i 's/%U/www.ofnie.org\/startpage/g' $HOME/Desktop/google-chrome.desktop \
     && echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
-    && echo 'pref("browser.startup.homepage", "http://www.wenro.nl/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
+    && echo 'pref("browser.startup.homepage", "http://www.ofnie.org/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
 
 
 RUN wget https://raw.githubusercontent.com/solipsist01/dockerfiles/master/kasm/bg_default.png -O /usr/share/extra/backgrounds/bg_default.png \
