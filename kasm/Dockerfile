@@ -15,7 +15,7 @@ RUN apt-get update  && apt-get install -y flatpak apt-transport-https mc \
     python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo \
     vlc kdenlive intel-gpu-tools
 
-RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.24.2.deb -O /tmp/exodus.deb && \
+RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.34.6.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
 #flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo \
