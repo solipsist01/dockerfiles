@@ -33,8 +33,9 @@ jobs:
       run: |
         output=$(date -u '+%Y%m%d%H%M%S')
         echo ::set-output name=date_version::$output
-        cp /wings/wings.patch /clone/wings.patch
-        cd /clone && git apply wings.patch
+        ls
+        cp ./wings/wings.patch ./clone/wings.patch
+        cd ./clone && git apply wings.patch
 
 
     - name: Set up QEMU
