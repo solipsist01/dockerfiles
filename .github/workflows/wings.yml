@@ -36,6 +36,7 @@ jobs:
         ls
         cp ./wings/wings.patch ./clone/wings.patch
         cd ./clone && git apply wings.patch
+        echo ::set-output name=date_version::$output
 
 
     - name: Set up QEMU
