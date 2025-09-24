@@ -1,0 +1,175 @@
+diff --git a/router/router.go b/router/router.go
+index 52806a1..553d8cc 100644
+--- a/router/router.go
++++ b/router/router.go
+@@ -88,6 +88,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
+ 		files := server.Group("/files")
+ 		{
+ 			files.GET("/contents", getServerFileContents)
++			files.GET("/fingerprints", getServerFileFingerprints)
+ 			files.GET("/list-directory", getServerListDirectory)
+ 			files.PUT("/rename", putServerRenameFiles)
+ 			files.POST("/copy", postServerCopyFile)
+diff --git a/router/router_server_files.go b/router/router_server_files.go
+index 09ad8cd..ccb0e8c 100644
+--- a/router/router_server_files.go
++++ b/router/router_server_files.go
+@@ -2,7 +2,10 @@ package router
+ 
+ import (
+ 	"bufio"
++	"bytes"
+ 	"context"
++	"crypto/sha512"
++	"encoding/hex"
+ 	"io"
+ 	"mime/multipart"
+ 	"net/http"
+@@ -12,6 +15,7 @@ import (
+ 	"path/filepath"
+ 	"strconv"
+ 	"strings"
++	"sync"
+ 
+ 	"emperror.dev/errors"
+ 	"github.com/apex/log"
+@@ -74,6 +78,70 @@ func getServerFileContents(c *gin.Context) {
+ 	}
+ }
+ 
++// getServerFileFingerprints returns the fingerprints of some files on the server.
++func getServerFileFingerprints(c *gin.Context) {
++	s := middleware.ExtractServer(c)
++	paths := c.QueryArray("files")
++	algorithm := c.Query("algorithm")
++
++	if algorithm != "sha512" && algorithm != "curseforge" {
++		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
++			"error": "Invalid algorithm. Must be sha512 or curseforge.",
++		})
++	}
++	fingerprints := make(map[string]string)
++	mutex := sync.RWMutex{}
++	wg := &sync.WaitGroup{}
++	wg.Add(len(paths))
++
++	for _, path := range paths {
++		path := path
++		go func() {
++			defer wg.Done()
++			p := strings.TrimLeft(path, "/")
++			f, st, err := s.Filesystem().File(p)
++			if err != nil {
++				mutex.Lock()
++				fingerprints[path] = ""
++				mutex.Unlock()
++				return
++			}
++			defer f.Close()
++			// Don't allow a named pipe to be opened.
++			//
++			// @see https://github.com/pterodactyl/panel/issues/4059
++			if st.Mode()&os.ModeNamedPipe != 0 {
++				return
++			}
++
++			r := bufio.NewReader(f)
++			buf := new(bytes.Buffer)
++			if _, err = buf.ReadFrom(r); err != nil {
++				return
++			}
++
++			hash := ""
++
++			if algorithm == "sha512" {
++				hashBytes := sha512.Sum512(buf.Bytes())
++				hash = hex.EncodeToString(hashBytes[:])
++			} else if algorithm == "curseforge" {
++				hash = filesystem.CalculateCurseForgeFingerprint(buf)
++			}
++
++			mutex.Lock()
++			fingerprints[path] = hash
++			mutex.Unlock()
++		}()
++	}
++
++	wg.Wait()
++
++	c.JSON(http.StatusOK, gin.H{
++		"fingerprints": fingerprints,
++	})
++}
++
+ // Returns the contents of a directory for a server.
+ func getServerListDirectory(c *gin.Context) {
+ 	s := ExtractServer(c)
+diff --git a/server/filesystem/curseforge.go b/server/filesystem/curseforge.go
+new file mode 100644
+index 0000000..feba921
+--- /dev/null
++++ b/server/filesystem/curseforge.go
+@@ -0,0 +1,63 @@
++package filesystem
++
++import (
++	"bytes"
++	"strconv"
++)
++
++func isIgnoredInCurseForgeFingerprint(b byte) bool {
++	return b == '\t' || b == '\n' || b == '\r' || b == ' '
++}
++
++func computeCurseForgeFingerprintNormalizedLength(buf *bytes.Buffer) int {
++	var len_no_whitespace int = 0
++	bytes := buf.Bytes()
++
++	for i := 0; i < buf.Len(); i++ {
++		char := bytes[i]
++		if !isIgnoredInCurseForgeFingerprint(char) {
++			len_no_whitespace++
++		}
++	}
++
++	return len_no_whitespace
++}
++
++// https://github.com/meza/curseforge-fingerprint/blob/main/src/addon/fingerprint.cpp#L36
++func CalculateCurseForgeFingerprint(buf *bytes.Buffer) string {
++	const multiplex = 1540483477
++	len := buf.Len()
++	bytes := buf.Bytes()
++
++	var num1 uint32 = uint32(computeCurseForgeFingerprintNormalizedLength(buf))
++	var num2 uint32 = 1 ^ num1
++
++	var num3 uint32 = 0
++	var num4 uint32 = 0
++
++	for i := 0; i < len; i++ {
++		b := bytes[i]
++
++		if !isIgnoredInCurseForgeFingerprint(b) {
++			num3 |= uint32(b) << num4
++			num4 += 8
++
++			if num4 == 32 {
++				var num6 uint32 = num3 * multiplex
++				var num7 uint32 = (num6 ^ num6>>24) * multiplex
++
++				num2 = num2*multiplex ^ num7
++				num3 = 0
++				num4 = 0
++			}
++		}
++	}
++
++	if num4 > 0 {
++		num2 = (num2 ^ num3) * multiplex
++	}
++
++	num6 := (num2 ^ num2>>13) * multiplex
++
++	return strconv.FormatUint(uint64(num6^num6>>15), 10)
++}
