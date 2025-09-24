@@ -8,7 +8,7 @@ on:
 env:
   dockerhub_repo: wings
   gcrio_repo: wings
-  external_git: https://github.com/pterodactyl/wings
+  external_git: pterodactyl/wings
   external_git_branch: develop
   buildx_arches: linux/amd64
 
