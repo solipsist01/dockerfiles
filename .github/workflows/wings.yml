@@ -35,8 +35,6 @@ jobs:
         echo ::set-output name=date_version::$output
         cp ./wings/wings.patch ./clone/wings.patch && cd ./clone && git apply wings.patch --verbose
         
-
-
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v1
 
