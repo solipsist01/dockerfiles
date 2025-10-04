@@ -10,7 +10,7 @@ RUN apk update && \
     docker-cli openssl \
     && rm -rf /var/cache/apk/*
 
-RUN curl https://rclone.org/install.sh | bash
+RUN curl https://rclone.org/uninstall.sh | bash
 
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
