@@ -1,4 +1,4 @@
-name: mohaa
+name: dockflare
 
 on:
   schedule:
@@ -8,8 +8,11 @@ on:
 env:
   dockerhub_repo: mohaa
   gcrio_repo: mohaa
-  git_subdir: mohaa
+  external_git: solipsist01/yolks
+  external_git_branch: main
+  #external_git: pryorda/vmware_exporter
   buildx_arches: linux/amd64
+
 
 jobs:
   build:
@@ -18,6 +21,13 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        repository: ${{ env.external_git }}
+        ref: ${{ env.external_git_branch }}
+        path: './clone'
 
     - name: Modify scripts and get version
       id: version
@@ -51,8 +61,8 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v2.7.0
       with:
-        context: ./${{env.git_subdir}}
-        file: ./${{env.git_subdir}}/Dockerfile
+        context: ./clone/games/mohaa
+        file: ./clone/games/mohaa/Dockerfile
         platforms: ${{env.buildx_arches}}
         push: true
         tags: |
