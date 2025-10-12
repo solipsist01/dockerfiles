@@ -1,4 +1,4 @@
-name: dockflare
+name: mohaa
 
 on:
   schedule:
@@ -10,7 +10,6 @@ env:
   gcrio_repo: mohaa
   external_git: solipsist01/yolks
   external_git_branch: main
-  #external_git: pryorda/vmware_exporter
   buildx_arches: linux/amd64
 
 
