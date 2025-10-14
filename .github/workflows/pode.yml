@@ -8,7 +8,7 @@ on:
 env:
   dockerhub_repo: pode
   gcrio_repo: pode
-  external_git: Badgerati/Pode
+  external_git: Badgerati/Pode.Web
   external_git_branch: develop
   #external_git: pryorda/vmware_exporter
   buildx_arches: linux/amd64
