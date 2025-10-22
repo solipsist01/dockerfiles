@@ -13,7 +13,7 @@ RUN apt-get update  && apt-get install -y flatpak apt-transport-https mc \
     traceroute iputils-ping wget xz-utils curl doublecmd-gtk dnsutils \
     software-properties-common  soundconverter python3-pip python3-pyparsing python3-mutagen \
     python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo \
-    vlc kdenlive intel-gpu-tools
+    vlc kdenlive intel-gpu-tools openjdk-21-jre-headless
 
 RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.34.6.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
