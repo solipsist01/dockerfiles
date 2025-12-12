@@ -39,7 +39,15 @@ def main():
 
     #listen for events to keep the hosts file updated
     for e in events:
-        if e["Type"]!="container": 
+        if e.get("Type") != "container":
+            continue
+
+        status = e.get("status")
+        if not status:
+            continue  # пропускаем события без статуса
+
+        container_id = e.get("id")
+        if not container_id:
             continue
         
         status = e["status"]
@@ -55,31 +63,71 @@ def main():
                 hosts.pop(container_id)
                 update_hosts_file()
 
+        if status=="rename":
+            container_id = e["id"]
+            if container_id in hosts:
+                container = get_container_data(dockerClient, container_id)
+                hosts[container_id] = container
+                update_hosts_file()
+
 
 def get_container_data(dockerClient, container_id):
-    #extract all the info with the docker api
+    # extract all the info with the docker api
     info = dockerClient.inspect_container(container_id)
-    container_hostname = info["Config"]["Hostname"]
-    container_name = info["Name"].strip("/")
-    container_ip = info["NetworkSettings"]["IPAddress"]
-    if info["Config"]["Domainname"]:
-        container_hostname = container_hostname + "." + info["Config"]["Domainname"]
-    
+
+    # normalise basic names
+    container_hostname = info.get("Config", {}).get("Hostname", "") or ""
+    container_name = (info.get("Name", "") or "").lstrip("/")
+
+    # prefer old-style IP if present (compatibility), otherwise try networks
+    network_settings = info.get("NetworkSettings", {}) or {}
+    container_ip_fallback = network_settings.get("IPAddress")  # may be '' or None
+
+    # full hostname with domainname if present
+    domainname = info.get("Config", {}).get("Domainname") or ""
+    if domainname:
+        container_hostname = container_hostname + "." + domainname
+
     result = []
 
-    for values in info["NetworkSettings"]["Networks"].values():
-        
-        if not values["Aliases"]: 
+    # iterate all networks (new API puts IPs here)
+    networks = network_settings.get("Networks") or {}
+    for net_name, net_vals in networks.items():
+        if not net_vals:
+            continue
+        ip = net_vals.get("IPAddress") or None
+        aliases = net_vals.get("Aliases") or []  # could be None
+        # if there is no ip, skip this network
+        if not ip:
             continue
 
-        result.append({
-                "ip": values["IPAddress"] , 
-                "name": container_name,
-                "domains": set(values["Aliases"] + [container_name, container_hostname])
-            })
+        domains = set()
+        # include aliases if present
+        if aliases:
+            # aliases may include None or empty strings — filter them
+            domains.update([a for a in aliases if a])
+        # include container name and hostname
+        if container_name:
+            domains.add(container_name)
+        if container_hostname:
+            domains.add(container_hostname)
 
-    if container_ip:
-        result.append({"ip": container_ip, "name": container_name, "domains": [container_name, container_hostname ]})
+        result.append({
+            "ip": ip,
+            "name": container_name,
+            "domains": domains
+        })
+
+    # if old-style IP exists and not already present in result, add it
+    if container_ip_fallback:
+        # check we don't duplicate the same IP already collected from networks
+        ip_already = any(r.get("ip") == container_ip_fallback for r in result)
+        if not ip_already:
+            result.append({
+                "ip": container_ip_fallback,
+                "name": container_name,
+                "domains": {container_name, container_hostname} if container_hostname else {container_name}
+            })
 
     return result
 
@@ -130,7 +178,7 @@ def update_hosts_file():
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Synchronize running docker container IPs with host /etc/hosts file.')
-    parser.add_argument('socket', type=str, nargs="?", default="tmp/docker.sock", help='The docker socket to listen for docker events.')
+    parser.add_argument('socket', type=str, nargs="?", default="/tmp/docker.sock", help='The docker socket to listen for docker events.')
     parser.add_argument('file', type=str, nargs="?", default="/tmp/hosts", help='The /etc/hosts file to sync the containers with.')
     return parser.parse_args()
 
