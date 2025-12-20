@@ -1,4 +1,4 @@
-name: kerio-connect
+name: nntp-proxy
 
 on:
   schedule:
@@ -6,10 +6,12 @@ on:
   workflow_dispatch:
 
 env:
-  dockerhub_repo: kerio-connect
-  gcrio_repo: kerio-connect
-  git_subdir: kerio-connect
+  dockerhub_repo: nntp-proxy
+  gcrio_repo: nntp-proxy
+  external_git: mjc/nntp-proxy
+  external_git_branch: main
   buildx_arches: linux/amd64
+
 
 jobs:
   build:
@@ -18,6 +20,13 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        repository: ${{ env.external_git }}
+        ref: ${{ env.external_git_branch }}
+        path: './clone'
 
     - name: Modify scripts and get version
       id: version
@@ -51,8 +60,8 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v2.7.0
       with:
-        context: ./${{env.git_subdir}}
-        file: ./${{env.git_subdir}}/Dockerfile
+        context: ./clone/dockflare
+        file: ./clone/dockflare/Dockerfile
         platforms: ${{env.buildx_arches}}
         push: true
         tags: |
