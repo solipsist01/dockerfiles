@@ -18,12 +18,6 @@ RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.
 
 RUN pip3 install unidecode --break-system-packages
 
-#icons
-RUN echo 'pref("browser.startup.homepage_override.mstone", "ignore");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js \
-    && echo 'pref("browser.startup.homepage", "http://www.ofnie.org/startpage");' >> /usr/lib/firefox/browser/defaults/preferences/syspref.js
-
-
-
 ######### End Customizations ###########
 
 RUN chown 1000:0 $HOME 
