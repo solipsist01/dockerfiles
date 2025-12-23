@@ -1,5 +1,5 @@
-FROM kasmweb/desktop:1.18.0-rolling-weekly
-
+#FROM kasmweb/desktop:1.18.0-rolling-weekly
+FROM kasmweb/core-debian-bookworm:1.18.0-rolling-weekly
 USER root
 
 ENV HOME /home/kasm-default-profile
