@@ -19,6 +19,8 @@ RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.
 RUN pip3 install unidecode --break-system-packages
 
 ######### End Customizations ###########
+RUN echo "kasm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kasm-user && chmod 0440 /etc/sudoers.d/kasm-user
+
 
 RUN chown 1000:0 $HOME 
 RUN $STARTUPDIR/set_user_permission.sh $HOME
