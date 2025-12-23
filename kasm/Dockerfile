@@ -12,7 +12,7 @@ WORKDIR $HOME
 RUN apt-get update && apt-get install -y apt-transport-https mc \
     traceroute iputils-ping wget xz-utils curl doublecmd-gtk dnsutils \
     software-properties-common soundconverter python3-full python3-pip sudo vlc \
-    firefox-esr mkvtoolnix mkvtoolnix-gui
+    firefox-esr mkvtoolnix mkvtoolnix-gui handbrake
 
 RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.46.7.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
