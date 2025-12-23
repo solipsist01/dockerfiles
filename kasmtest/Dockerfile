@@ -10,9 +10,8 @@ WORKDIR $HOME
 ######### Customize Container Here ###########
 #https://kasmweb.com/docs/latest/how_to/building_images.html
 RUN apt-get update && apt-get install -y apt-transport-https mc \
-    traceroute iputils-ping wget xz-utils curl doublecmd-gtk dnsutils \
-    software-properties-common soundconverter python3-pip python3-pyparsing python3-mutagen \
-    python3-pyqt5 python3-configobj python3-pyqt5.qtsvg libapr1 libaprutil1 libxcb-cursor0 sudo \
+    traceroute iputils-ping wget xz-utils curl dnsutils \
+    software-properties-common soundconverter sudo python3-full \
     vlc
 
 RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.46.7.deb -O /tmp/exodus.deb && \
