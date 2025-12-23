@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y apt-transport-https mc \
 RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.46.7.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
 
-RUN pip3 install unidecode
+RUN pip3 install unidecode --break-system-packages
 
 #icons
 RUN sed -i 's/%U/www.ofnie.org\/startpage/g' $HOME/Desktop/google-chrome.desktop \
