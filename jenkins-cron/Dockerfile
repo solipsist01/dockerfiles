@@ -7,10 +7,10 @@ RUN apk update && \
     dcron curl wget ca-certificates build-base linux-headers \
     libffi-dev gettext curl gcc musl-dev libressl-dev perl unzip \
     tar pigz bash jq coreutils netcat-openbsd vnstat bc lm_sensors smartmontools py-cryptography \
-    docker-cli openssl \
+    docker-cli openssl rclone \
     && rm -rf /var/cache/apk/*
 
-RUN curl https://rclone.org/uninstall.sh | bash
+#RUN curl https://rclone.org/uninstall.sh | bash
 
 ENV CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
