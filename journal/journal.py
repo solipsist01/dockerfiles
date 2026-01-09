@@ -47,7 +47,14 @@ HTML = """
 <title>Trading Journal</title>
 <style>
 body { font-family: system-ui; background:#0f172a; color:#e5e7eb; padding:20px; }
-h1 { text-align:center; }
+h1 { text-align:center; margin-bottom:5px; }
+.summary {
+  max-width:1200px; margin:0 auto 10px auto;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.summary a { color:#facc15; text-decoration:none; font-weight:bold; }
+.summary a:hover { text-decoration:underline; }
+
 form { max-width:650px; margin:20px auto; background:#1e293b; padding:15px; border-radius:8px; }
 input, select, textarea, button {
   width:100%; margin-bottom:10px; padding:8px;
@@ -75,8 +82,12 @@ img.thumb { max-width:100px; cursor:pointer; border-radius:4px; }
 <h1>Trading Journal</h1>
 
 <div class="summary">
-    <span>Total Net Profit: {{ "%.2f"|format(total_profit) }} USDT</span>
-    <a href="/position_size_calculator.html" target="_blank">Position Calculator</a>
+  <div>Total Net Profit: <b>{{ "%.2f"|format(total_profit) }} USDT</b></div>
+  <div>
+    <a href="/position_size_calculator.html" target="_blank">
+      Open Position Size Calculator
+    </a>
+  </div>
 </div>
 
 <form method="post" action="{{ form_action }}" enctype="multipart/form-data">
@@ -173,6 +184,11 @@ def index():
         form_action="/add"
     )
 
+@app.route("/position_size_calculator.html")
+def calculator():
+    with open("position_size_calculator.html") as f:
+        return f.read()
+
 @app.route("/add", methods=["POST"])
 def add():
     date = request.form["date"]
@@ -188,7 +204,6 @@ def add():
 
     pnl = 0
     r_multiple = 0
-
     if exit_price is not None:
         pnl = pos_size * ((exit_price-entry)/entry if direction=="long" else (entry-exit_price)/entry)
         risk = pos_size * abs(entry-stop)/entry
@@ -260,7 +275,8 @@ def update():
         f.save(os.path.join(UPLOAD_FOLDER, filename))
 
     conn.execute("""
-    UPDATE trades SET date=?,symbol=?,direction=?,entry=?,stop=?,exit=?,position_size=?,pnl=?,r_multiple=?,notes=?,screenshot=?
+    UPDATE trades SET
+    date=?,symbol=?,direction=?,entry=?,stop=?,exit=?,position_size=?,pnl=?,r_multiple=?,notes=?,screenshot=?
     WHERE id=?
     """,(date,symbol,direction,entry,stop,exit_price,pos_size,pnl,r_multiple,notes,filename,tid))
     conn.commit()
