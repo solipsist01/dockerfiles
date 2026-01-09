@@ -73,7 +73,11 @@ img.thumb { max-width:100px; cursor:pointer; border-radius:4px; }
 <body>
 
 <h1>Trading Journal</h1>
-<p style="text-align:center;">Total Net Profit: <b>{{ "%.2f"|format(total_profit) }} USDT</b></p>
+
+<div class="summary">
+    <span>Total Net Profit: {{ "%.2f"|format(total_profit) }} USDT</span>
+    <a href="/position_size_calculator.html" target="_blank">Position Calculator</a>
+</div>
 
 <form method="post" action="{{ form_action }}" enctype="multipart/form-data">
 {% if edit_trade %}
