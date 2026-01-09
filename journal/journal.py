@@ -195,7 +195,7 @@ def update():
     pos_size = float(request.form.get("position_size"))
     notes = request.form.get("notes") or ""
 
-    # Handle screenshot
+    # Fetch trade with row_factory to get dict-like access
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     trade = conn.execute("SELECT * FROM trades WHERE id=?", (trade_id,)).fetchone()
@@ -225,10 +225,10 @@ def update():
 def delete():
     trade_id = request.form.get("id")
     conn = sqlite3.connect(DB_PATH)
-    # Remove screenshot file if exists
+    conn.row_factory = sqlite3.Row
     trade = conn.execute("SELECT screenshot FROM trades WHERE id=?", (trade_id,)).fetchone()
-    if trade and trade[0]:
-        screenshot_path = os.path.join(app.config['UPLOAD_FOLDER'], trade[0])
+    if trade and trade['screenshot']:
+        screenshot_path = os.path.join(app.config['UPLOAD_FOLDER'], trade['screenshot'])
         if os.path.exists(screenshot_path):
             os.remove(screenshot_path)
     conn.execute("DELETE FROM trades WHERE id=?", (trade_id,))
