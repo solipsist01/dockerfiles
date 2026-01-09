@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Positiegrootte Calculator</title>
+<style>
+    body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+
+    .container {
+        background: #020617;
+        padding: 24px;
+        border-radius: 12px;
+        width: 380px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        text-align: center;
+    }
+
+    label {
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    input, select {
+        width: 100%;
+        padding: 8px;
+        margin: 4px 0 12px 0;
+        background: #020617;
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        color: #e5e7eb;
+    }
+
+    .result {
+        background: #020617;
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 12px;
+        margin-top: 12px;
+        font-size: 14px;
+    }
+
+    .highlight {
+        font-size: 18px;
+        font-weight: bold;
+        color: #22c55e;
+    }
+
+    .warn {
+        color: #facc15;
+        font-size: 12px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Positiegrootte Calculator</h1>
+
+    <label>Accountbalans</label>
+    <input type="number" id="balance" value="100">
+
+    <label>Risico %</label>
+    <input type="number" id="risk" value="1">
+
+    <label>Maximale leverage (bijv. 10)</label>
+    <input type="number" id="maxLeverage" value="10">
+
+    <label>Positie</label>
+    <select id="direction">
+        <option value="long">Long</option>
+        <option value="short">Short</option>
+    </select>
+
+    <label>Instapprijs</label>
+    <input type="number" id="entry" placeholder="100">
+
+    <label>Stop loss</label>
+    <input type="number" id="stop" placeholder="95">
+
+    <div class="result">
+        Risicobedrag: <span id="riskAmount">€0</span><br>
+        Positiegrootte: <span class="highlight" id="positionSize">0</span> eenheden<br>
+        Positiewaarde: <span id="positionValue">€0</span><br><br>
+
+        Benodigde margin: <span id="marginRequired">€0</span><br>
+        Gebruikte leverage: <span id="usedLeverage">1x</span><br>
+        <span class="warn" id="leverageWarning"></span>
+    </div>
+</div>
+
+<script>
+function calculate() {
+    const balance = parseFloat(balanceInput.value) || 0;
+    const riskPercent = parseFloat(riskInput.value) || 0;
+    const entry = parseFloat(entryInput.value) || 0;
+    const stop = parseFloat(stopInput.value) || 0;
+    const maxLeverage = parseFloat(maxLeverageInput.value) || 1;
+
+    if (balance <= 0 || entry <= 0 || stop <= 0 || riskPercent <= 0) {
+        return;
+    }
+
+    const riskAmount = balance * (riskPercent / 100);
+    const riskPerUnit = Math.abs(entry - stop);
+    if (riskPerUnit === 0) return;
+
+    const positionSize = riskAmount / riskPerUnit;
+    const positionValue = positionSize * entry;
+
+    let requiredLeverage = positionValue / balance;
+    let usedLeverage = Math.max(1, requiredLeverage);
+
+    let warning = "";
+    if (usedLeverage > maxLeverage) {
+        warning = "⚠️ Positie vereist meer leverage dan toegestaan";
+        usedLeverage = maxLeverage;
+    }
+
+    const marginRequired = positionValue / usedLeverage;
+
+    riskAmountEl.textContent = `€${riskAmount.toFixed(2)}`;
+    positionSizeEl.textContent = positionSize.toFixed(2);
+    positionValueEl.textContent = `€${positionValue.toFixed(2)}`;
+    marginRequiredEl.textContent = `€${marginRequired.toFixed(2)}`;
+    usedLeverageEl.textContent = `${usedLeverage.toFixed(2)}x`;
+    leverageWarningEl.textContent = warning;
+}
+
+const balanceInput = document.getElementById("balance");
+const riskInput = document.getElementById("risk");
+const maxLeverageInput = document.getElementById("maxLeverage");
+const entryInput = document.getElementById("entry");
+const stopInput = document.getElementById("stop");
+
+const riskAmountEl = document.getElementById("riskAmount");
+const positionSizeEl = document.getElementById("positionSize");
+const positionValueEl = document.getElementById("positionValue");
+const marginRequiredEl = document.getElementById("marginRequired");
+const usedLeverageEl = document.getElementById("usedLeverage");
+const leverageWarningEl = document.getElementById("leverageWarning");
+
+document.querySelectorAll("input, select").forEach(el => {
+    el.addEventListener("input", calculate);
+});
+
+calculate();
+</script>
+
+</body>
+</html>
