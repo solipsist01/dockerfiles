@@ -6,11 +6,12 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 DB_PATH = "data/journal.db"
-UPLOAD_FOLDER = "screenshots"
+UPLOAD_FOLDER = "data/screenshots"
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Ensure folders exist
 os.makedirs("data", exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -64,7 +65,14 @@ button.delete { background:none; color:#ef4444; border:none; font-size:1.8rem; f
 button.delete:hover { color:#b91c1c; }
 button.edit { background:none; color:#facc15; border:none; font-size:1.2rem; cursor:pointer; transition:0.2s; line-height:1; padding:0;}
 button.edit:hover { color:#eab308; }
-img.trade-screenshot { max-width:100px; max-height:80px; border-radius:4px; }
+img.trade-screenshot { max-width:100px; max-height:80px; border-radius:4px; cursor:pointer; transition:0.2s; }
+img.trade-screenshot:hover { opacity:0.8; }
+
+/* Modal */
+.modal { display:none; position:fixed; z-index:1000; padding-top:60px; left:0; top:0; width:100%; height:100%; overflow:auto; background-color: rgba(0,0,0,0.9); }
+.modal-content { margin:auto; display:block; max-width:90%; max-height:90%; }
+.close { position:absolute; top:20px; right:35px; color:#f1f1f1; font-size:40px; font-weight:bold; cursor:pointer; }
+.close:hover { color:#bbb; }
 </style>
 </head>
 <body>
@@ -92,7 +100,7 @@ img.trade-screenshot { max-width:100px; max-height:80px; border-radius:4px; }
     <textarea name="notes" placeholder="Notes">{{ edit_trade['notes'] if edit_trade else '' }}</textarea>
     <input type="file" name="screenshot" accept="image/*">
     {% if edit_trade and edit_trade['screenshot'] %}
-    <img src="/screenshots/{{ edit_trade['screenshot'] }}" class="trade-screenshot">
+    <img src="/screenshots/{{ edit_trade['screenshot'] }}" class="trade-screenshot" onclick="openModal(this.src)">
     {% endif %}
     <button>{{ 'Edit Trade' if edit_trade else 'Add Trade' }}</button>
 </form>
@@ -115,7 +123,7 @@ img.trade-screenshot { max-width:100px; max-height:80px; border-radius:4px; }
 <td class="notes">{{ t['notes'] }}</td>
 <td>
 {% if t['screenshot'] %}
-<img src="/screenshots/{{ t['screenshot'] }}" class="trade-screenshot">
+<img src="/screenshots/{{ t['screenshot'] }}" class="trade-screenshot" onclick="openModal(this.src)">
 {% endif %}
 </td>
 <td>
@@ -131,6 +139,22 @@ img.trade-screenshot { max-width:100px; max-height:80px; border-radius:4px; }
 </tr>
 {% endfor %}
 </table>
+
+<!-- Modal -->
+<div id="imgModal" class="modal">
+  <span class="close" onclick="closeModal()">&times;</span>
+  <img class="modal-content" id="modalImage">
+</div>
+
+<script>
+function openModal(src) {
+    document.getElementById("imgModal").style.display = "block";
+    document.getElementById("modalImage").src = src;
+}
+function closeModal() {
+    document.getElementById("imgModal").style.display = "none";
+}
+</script>
 
 </body>
 </html>
@@ -162,15 +186,15 @@ def add():
     pos_size = float(request.form.get("position_size"))
     notes = request.form.get("notes") or ""
 
-    # Handle screenshot
+    # Screenshot handling
     file = request.files.get('screenshot')
     filename = None
     if file and allowed_file(file.filename):
         filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(file.filename)}"
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-    pnl = pos_size * (exit_price - entry) / entry if direction.lower()=="long" else pos_size * (entry - exit_price)/entry
-    risk_amount = pos_size * abs(entry - stop) / entry if entry != stop else 0
+    pnl = pos_size * (exit_price - entry)/entry if direction.lower()=="long" else pos_size*(entry-exit_price)/entry
+    risk_amount = pos_size * abs(entry - stop)/entry if entry != stop else 0
     r_multiple = pnl / risk_amount if risk_amount else 0
 
     conn = sqlite3.connect(DB_PATH)
@@ -195,7 +219,6 @@ def update():
     pos_size = float(request.form.get("position_size"))
     notes = request.form.get("notes") or ""
 
-    # Fetch trade with row_factory to get dict-like access
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     trade = conn.execute("SELECT * FROM trades WHERE id=?", (trade_id,)).fetchone()
@@ -207,8 +230,8 @@ def update():
         filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secure_filename(file.filename)}"
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-    pnl = pos_size * (exit_price - entry) / entry if direction.lower()=="long" else pos_size * (entry - exit_price)/entry
-    risk_amount = pos_size * abs(entry - stop) / entry if entry != stop else 0
+    pnl = pos_size * (exit_price - entry)/entry if direction.lower()=="long" else pos_size*(entry-exit_price)/entry
+    risk_amount = pos_size * abs(entry - stop)/entry if entry != stop else 0
     r_multiple = pnl / risk_amount if risk_amount else 0
 
     conn = sqlite3.connect(DB_PATH)
@@ -216,7 +239,7 @@ def update():
     UPDATE trades SET
     date=?, symbol=?, direction=?, entry=?, stop=?, exit=?, position_size=?, pnl=?, r_multiple=?, notes=?, screenshot=?
     WHERE id=?
-    """, (date, symbol, direction, entry, stop, exit_price, pos_size, pnl, r_multiple, notes, filename, trade_id))
+    """, (date,symbol,direction,entry,stop,exit_price,pos_size,pnl,r_multiple,notes,filename,trade_id))
     conn.commit()
     conn.close()
     return redirect(url_for("index"))
