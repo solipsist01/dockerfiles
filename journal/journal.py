@@ -166,7 +166,7 @@ function showImg(src){
 def get_trades():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM trades ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT * FROM trades ORDER BY date DESC").fetchall()
     conn.close()
     return rows
 
