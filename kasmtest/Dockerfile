@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y apt-transport-https mc \
     software-properties-common soundconverter python3-full python3-pip sudo vlc \
     firefox-esr mkvtoolnix mkvtoolnix-gui
 
-RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.46.7.deb -O /tmp/exodus.deb && \
+RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-26.2.4.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
 
 RUN pip3 install unidecode --break-system-packages

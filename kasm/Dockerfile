@@ -37,7 +37,7 @@ RUN mkdir /apps && \
     cp /apps/tor-browser/Browser/browser/chrome/icons/default/default128.png /usr/share/icons/tor.png && \
     chown 1000:0 /usr/share/icons/tor.png
 
-RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-25.46.7.deb -O /tmp/exodus.deb && \
+RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-26.2.4.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
 
 RUN pip3 install unidecode --break-system-packages
