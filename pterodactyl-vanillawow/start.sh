@@ -15,22 +15,43 @@ SERVER_PORT="${SERVER_PORT:-3724}"
 
 mkdir -p /home/container/mysql-run
 
+echo "Running as: $(id)"
+echo "mysql-data ownership/permissions:"
+ls -ld /home/container/mysql-data 2>/dev/null
+echo "Disk space:"
+df -h /home/container 2>/dev/null
+
 # Same stale-lock cleanup as install.sh - after a crash/kill, a leftover
 # pid or socket file can make a fresh mysqld_safe refuse to start (or
 # hang silently) even though nothing is actually still running.
+# pkill here can only affect processes owned by this same (non-root)
+# user - if a leftover mariadbd from install (which runs as root) is
+# still holding the datadir lock, this pkill can't touch it and would
+# silently fail (hence the check right below, before we even try to
+# start a new one).
 rm -f /home/container/mysql-run/mysqld.pid /home/container/mysql.sock
 pkill -9 -f 'mariadbd.*mysql-data' 2>/dev/null || true
 sleep 1
+echo "Processes matching mysql/maria BEFORE start attempt:"
+ps aux | grep -i "mysq\|maria" | grep -v grep || echo "  (none found)"
 
-echo "Starting MariaDB..."
-mysqld_safe \
+# Bypassing mysqld_safe's own log-file wrapper here on purpose: piping
+# mariadbd's real stdout/stderr straight into this console via tee means
+# we see whatever it actually says live, in the panel console itself,
+# rather than trusting it successfully wrote to --log-error (which has
+# been coming back completely empty even when startup fails - a sign
+# something about that log-writing path itself may be the problem, not
+# just mariadbd's actual startup logic).
+MARIADBD_BIN="$(command -v mariadbd || echo /usr/sbin/mariadbd)"
+echo "Starting MariaDB directly via ${MARIADBD_BIN} (live output below)..."
+"${MARIADBD_BIN}" \
     --datadir=/home/container/mysql-data \
     --socket=/home/container/mysql.sock \
     --pid-file=/home/container/mysql-run/mysqld.pid \
-    --log-error=/home/container/mysql-error.log \
     --skip-networking=0 \
     --bind-address=127.0.0.1 \
-    --port=3306 &
+    --port=3306 \
+    2>&1 | tee -a /home/container/mysql-error.log &
 
 echo "Waiting for MariaDB..."
 UP=0
@@ -43,9 +64,7 @@ for i in $(seq 1 120); do
 done
 
 if [ "${UP}" -ne 1 ]; then
-    echo "MariaDB did not come up in time. Error log:"
-    cat /home/container/mysql-error.log 2>/dev/null
-    echo "(nothing above this line means the log is empty)"
+    echo "MariaDB did not come up in time."
     echo "Processes matching mysql/maria still running:"
     ps aux | grep -i "mysq\|maria" | grep -v grep || echo "  (none found)"
     exit 1
