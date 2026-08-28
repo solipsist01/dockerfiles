@@ -42,11 +42,16 @@ if [ "${UP}" -ne 1 ]; then
 fi
 
 echo "Syncing realmlist (name=${REALM_NAME}, address=${REALM_ADDRESS}, port=${WORLD_PORT})..."
-mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" realmd <<SQL
+mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" realmd -e "
 INSERT INTO realmlist (id, name, address, localAddress, localSubnetMask, port, icon, timezone, allowedSecurityLevel, population, gamebuild)
 VALUES (1, '${REALM_NAME}', '${REALM_ADDRESS}', '127.0.0.1', '255.255.255.0', ${WORLD_PORT}, 0, 1, 0, 0, 5875)
 ON DUPLICATE KEY UPDATE name='${REALM_NAME}', address='${REALM_ADDRESS}', port=${WORLD_PORT};
-SQL
+" 2>/dev/null || \
+mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" realmd -e "
+INSERT INTO realmlist (id, name, address, port)
+VALUES (1, '${REALM_NAME}', '${REALM_ADDRESS}', ${WORLD_PORT})
+ON DUPLICATE KEY UPDATE name='${REALM_NAME}', address='${REALM_ADDRESS}', port=${WORLD_PORT};
+" || echo "!! Could not sync realmlist entry - check the realmlist table schema manually"
 
 echo "Starting realmd (login server)..."
 /opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
