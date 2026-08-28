@@ -109,6 +109,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /opt/mangos    /opt/mangos
 COPY --from=builder /opt/mangos-db /opt/mangos-db
+COPY start.sh /opt/mangos/start.sh
+RUN chmod +x /opt/mangos/start.sh
 
 # wings maps its own (non-root, often UID-less) user into the container at
 # runtime, so we don't create/switch users here - that's wings' job.
