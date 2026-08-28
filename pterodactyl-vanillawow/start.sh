@@ -15,6 +15,13 @@ SERVER_PORT="${SERVER_PORT:-3724}"
 
 mkdir -p /home/container/mysql-run
 
+# Same stale-lock cleanup as install.sh - after a crash/kill, a leftover
+# pid or socket file can make a fresh mysqld_safe refuse to start (or
+# hang silently) even though nothing is actually still running.
+rm -f /home/container/mysql-run/mysqld.pid /home/container/mysql.sock
+pkill -9 -f 'mariadbd.*mysql-data' 2>/dev/null || true
+sleep 1
+
 echo "Starting MariaDB..."
 mysqld_safe \
     --datadir=/home/container/mysql-data \
@@ -27,7 +34,7 @@ mysqld_safe \
 
 echo "Waiting for MariaDB..."
 UP=0
-for i in $(seq 1 60); do
+for i in $(seq 1 120); do
     if mysqladmin --socket=/home/container/mysql.sock ping >/dev/null 2>&1; then
         UP=1
         break
@@ -38,6 +45,9 @@ done
 if [ "${UP}" -ne 1 ]; then
     echo "MariaDB did not come up in time. Error log:"
     cat /home/container/mysql-error.log 2>/dev/null
+    echo "(nothing above this line means the log is empty)"
+    echo "Processes matching mysql/maria still running:"
+    ps aux | grep -i "mysq\|maria" | grep -v grep || echo "  (none found)"
     exit 1
 fi
 
