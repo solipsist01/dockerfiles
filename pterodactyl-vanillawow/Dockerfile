@@ -1,3 +1,20 @@
+## MaNGOS Classic (vanilla 1.12.1) all-in-one Pterodactyl image
+## Multistage build: mangos-classic is compiled ONCE here, at `docker build`
+## time - not on every Pterodactyl server install. The runtime stage only
+## carries the compiled binaries, the SQL files needed to seed the
+## databases, and the packages actually needed to run (MariaDB, runtime
+## libs) - not the full compiler toolchain.
+##
+## Build & push before importing the egg:
+##   docker build -t YOURDOCKERHUBUSER/mangos-classic:latest .
+##   docker push YOURDOCKERHUBUSER/mangos-classic:latest
+##
+## To build a specific branch/tag of mangos-classic instead of master:
+##   docker build --build-arg MANGOS_BRANCH=some-tag -t ... .
+
+############################################
+# Stage 1: builder
+############################################
 FROM debian:bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -31,20 +48,51 @@ RUN mkdir build && cd build && cmake .. \
     && make -j"$(nproc)" \
     && make install
 
-
+# Stage the SQL files needed to seed the databases, next to the install
+# prefix, so the runtime image gets everything without carrying the whole
+# build tree (object files, .git, etc).
+#
+# NOTE on classic-db content import: InstallFullDB.sh in that repo is a
+# genuinely interactive, menu-driven tool (prompts for the MySQL root
+# password, numbered options) - it isn't something a config file can
+# drive headlessly. Rather than automate its interactive flow, we take
+# the simpler, reliable path: the repo also ships a complete, internally
+# consistent pre-built world DB snapshot under Full_DB/*.sql.gz, which we
+# extract here at build time and just import with a plain `mysql <` at
+# install time. Trade-off: this pins content to whatever release was
+# current when the image was built, rather than picking up incremental
+# commits since the last release - the full classic-db repo (including
+# InstallFullDB.sh) is still copied into the image if you want to run
+# that interactively later for the latest content.
 RUN mkdir -p /opt/mangos/sql \
-    && cp -r /usr/src/mangos-classic/sql/base     /opt/mangos/sql/base \
-    && cp -r /usr/src/mangos-classic/sql/archives /opt/mangos/sql/archives \
+    && cp -r /usr/src/mangos-classic/sql/base    /opt/mangos/sql/base \
+    && cp -r /usr/src/mangos-classic/sql/updates /opt/mangos/sql/updates \
+    && FULLDB_GZ="$(find /usr/src/classic-db/Full_DB -maxdepth 1 -iname 'ClassicDB_*.sql.gz' | head -n1)" \
+    && if [ -z "${FULLDB_GZ}" ]; then echo "!! Could not find Full_DB/ClassicDB_*.sql.gz in classic-db - repo layout may have changed" && exit 1; fi \
+    && mkdir -p /opt/mangos-db-dump \
+    && gzip -dc "${FULLDB_GZ}" > /opt/mangos-db-dump/classic-db-full.sql \
+    && ACID_SQL="$(find /usr/src/classic-db/ACID -maxdepth 1 -iname 'acid_classic.sql' 2>/dev/null | head -n1)" \
+    && if [ -n "${ACID_SQL}" ]; then cp "${ACID_SQL}" /opt/mangos-db-dump/acid_classic.sql; fi \
     && rm -rf /usr/src/classic-db/.git \
     && cp -r /usr/src/classic-db /opt/mangos-db
 
-
+############################################
+# Stage 2: runtime
+############################################
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
+# NOTE on "lean": libboost-all-dev pulls in headers/static libs we don't
+# strictly need at runtime, only the .so files matter. It's kept here for
+# reliability (guarantees whatever boost components mangosd/realmd were
+# linked against are present) rather than guessing exact runtime package
+# names. Once you've got a server running, `ldd /opt/mangos/bin/mangosd |
+# grep boost` will tell you exactly which libboost-*1.7x packages you
+# actually need, and you can swap this line for just those to shrink the
+# image further.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         mariadb-server \
         mariadb-client \
@@ -62,6 +110,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/mangos    /opt/mangos
 COPY --from=builder /opt/mangos-db /opt/mangos-db
 
-
+# wings maps its own (non-root, often UID-less) user into the container at
+# runtime, so we don't create/switch users here - that's wings' job.
 WORKDIR /home/container
 CMD ["bash"]
