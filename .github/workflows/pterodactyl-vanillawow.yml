@@ -1,4 +1,4 @@
-name: kasm
+name: pterodactyl-vanillawow
 
 on:
   schedule:
