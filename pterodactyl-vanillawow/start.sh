@@ -41,6 +41,31 @@ if [ "${UP}" -ne 1 ]; then
     exit 1
 fi
 
+# Applying core's sql/updates/mangos/*.sql on every boot, not just at
+# install, is deliberate: if the image gets rebuilt later against a
+# newer mangos-classic commit, an already-installed server's world DB
+# would otherwise stay pinned to whatever schema existed at its last
+# install/reinstall and fail the same version-mismatch check forever.
+# Doing this here means "rebuild the image, restart the server" is
+# enough to catch the DB up - no manual SQL, no reinstall needed. Each
+# file is its own attempt; ones already applied fail fast (harmless) and
+# don't block the rest.
+UPD_DIR="/opt/mangos/sql/updates/mangos"
+if [ -d "${UPD_DIR}" ]; then
+    echo "Checking for core schema updates..."
+    APPLIED=0
+    for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
+        OUT="$(mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
+        if [ $? -eq 0 ]; then
+            APPLIED=$((APPLIED + 1))
+            echo "  applied $(basename "$f")"
+        else
+            echo "  skipped $(basename "$f"): $(echo "$OUT" | head -n1)"
+        fi
+    done
+    echo "  ${APPLIED} update(s) newly applied this boot."
+fi
+
 echo "Syncing realmlist (name=${REALM_NAME}, address=${REALM_ADDRESS}, port=${WORLD_PORT})..."
 mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" realmd -e "
 INSERT INTO realmlist (id, name, address, localAddress, localSubnetMask, port, icon, timezone, allowedSecurityLevel, population, gamebuild)
