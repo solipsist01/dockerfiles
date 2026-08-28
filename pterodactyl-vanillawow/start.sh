@@ -41,6 +41,51 @@ if [ "${UP}" -ne 1 ]; then
     exit 1
 fi
 
+# Ensure databases/user/grants exist on every boot, not just at install -
+# CREATE DATABASE IF NOT EXISTS / GRANT are cheap and safe to always
+# re-run. This is what actually closes the gap when the image gains a
+# new requirement later (e.g. mangosd started requiring a 'logs'
+# database that earlier versions of this image never created) - a
+# rebuild + restart is now enough on its own, no reinstall needed.
+mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" <<SQL 2>/dev/null
+CREATE DATABASE IF NOT EXISTS realmd CHARACTER SET utf8;
+CREATE DATABASE IF NOT EXISTS characters CHARACTER SET utf8;
+CREATE DATABASE IF NOT EXISTS mangos CHARACTER SET utf8;
+CREATE DATABASE IF NOT EXISTS classiclogs CHARACTER SET utf8;
+CREATE USER IF NOT EXISTS 'mangos'@'localhost' IDENTIFIED BY '${DB_PASSWORD:-mangos}';
+CREATE USER IF NOT EXISTS 'mangos'@'127.0.0.1' IDENTIFIED BY '${DB_PASSWORD:-mangos}';
+GRANT ALL PRIVILEGES ON realmd.* TO 'mangos'@'localhost';
+GRANT ALL PRIVILEGES ON characters.* TO 'mangos'@'localhost';
+GRANT ALL PRIVILEGES ON mangos.* TO 'mangos'@'localhost';
+GRANT ALL PRIVILEGES ON classiclogs.* TO 'mangos'@'localhost';
+GRANT ALL PRIVILEGES ON realmd.* TO 'mangos'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON characters.* TO 'mangos'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON mangos.* TO 'mangos'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON classiclogs.* TO 'mangos'@'127.0.0.1';
+FLUSH PRIVILEGES;
+SQL
+if [ -f /opt/mangos/sql/base/logs.sql ]; then
+    mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" -e "SELECT 1 FROM classiclogs.db_version LIMIT 1" >/dev/null 2>&1 \
+        || mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" classiclogs < /opt/mangos/sql/base/logs.sql
+fi
+
+# Re-apply the same connection-string/port values install.sh writes, in
+# case the config predates a fix like the logs database above (its
+# LogsDatabaseInfo line wouldn't exist yet on an older install).
+DB_PASSWORD="${DB_PASSWORD:-mangos}"
+CONF_DIR="/home/container/server/etc"
+if [ -f "${CONF_DIR}/realmd.conf" ]; then
+    sed -i "s#^LoginDatabaseInfo.*#LoginDatabaseInfo     = 127.0.0.1;3306;mangos;${DB_PASSWORD};realmd#" "${CONF_DIR}/realmd.conf" || true
+    sed -i "s#^RealmServerPort.*#RealmServerPort = ${SERVER_PORT}#" "${CONF_DIR}/realmd.conf" || true
+fi
+if [ -f "${CONF_DIR}/mangosd.conf" ]; then
+    sed -i "s#^LoginDatabaseInfo.*#LoginDatabaseInfo     = 127.0.0.1;3306;mangos;${DB_PASSWORD};realmd#" "${CONF_DIR}/mangosd.conf" || true
+    sed -i "s#^WorldDatabaseInfo.*#WorldDatabaseInfo     = 127.0.0.1;3306;mangos;${DB_PASSWORD};mangos#" "${CONF_DIR}/mangosd.conf" || true
+    sed -i "s#^CharacterDatabaseInfo.*#CharacterDatabaseInfo = 127.0.0.1;3306;mangos;${DB_PASSWORD};characters#" "${CONF_DIR}/mangosd.conf" || true
+    sed -i "s#^LogsDatabaseInfo.*#LogsDatabaseInfo      = 127.0.0.1;3306;mangos;${DB_PASSWORD};classiclogs#" "${CONF_DIR}/mangosd.conf" || true
+    sed -i "s#^WorldServerPort.*#WorldServerPort = ${WORLD_PORT}#" "${CONF_DIR}/mangosd.conf" || true
+fi
+
 # Applying core's sql/updates/mangos/*.sql on every boot, not just at
 # install, is deliberate: if the image gets rebuilt later against a
 # newer mangos-classic commit, an already-installed server's world DB
