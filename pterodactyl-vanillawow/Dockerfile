@@ -107,12 +107,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/mangos    /opt/mangos
-COPY --from=builder /opt/mangos-db /opt/mangos-db
+COPY --from=builder /opt/mangos          /opt/mangos
+COPY --from=builder /opt/mangos-db       /opt/mangos-db
+COPY --from=builder /opt/mangos-db-dump  /opt/mangos-db-dump
 COPY start.sh /opt/mangos/start.sh
 RUN chmod +x /opt/mangos/start.sh
 
 # wings maps its own (non-root, often UID-less) user into the container at
 # runtime, so we don't create/switch users here - that's wings' job.
 WORKDIR /home/container
-CMD ["bash"]
+
+# IMPORTANT: this is an ENTRYPOINT, not just a CMD. Relying on wings to
+# override a bare `CMD ["bash"]` with the egg's startup command turned
+# out not to happen reliably in practice - the container was landing on
+# an idle interactive bash prompt instead of actually running start.sh,
+# which is why the server appeared to do nothing on Start/Restart and
+# Stop (which just sends Ctrl+C) had no process to interrupt. Setting a
+# real ENTRYPOINT means Docker always execs start.sh as PID 1 regardless
+# of whatever Cmd/args wings passes alongside it - any extra args are
+# simply ignored since start.sh doesn't read positional parameters.
+# (The separate install step explicitly passes --entrypoint bash when it
+# runs, which overrides this for that one-off container as intended.)
+ENTRYPOINT ["/opt/mangos/start.sh"]
