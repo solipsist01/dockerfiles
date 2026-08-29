@@ -111,21 +111,21 @@ COPY --from=builder /opt/mangos          /opt/mangos
 COPY --from=builder /opt/mangos-db       /opt/mangos-db
 COPY --from=builder /opt/mangos-db-dump  /opt/mangos-db-dump
 COPY start.sh /opt/mangos/start.sh
-RUN chmod +x /opt/mangos/start.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /opt/mangos/start.sh /entrypoint.sh
 
 # wings maps its own (non-root, often UID-less) user into the container at
 # runtime, so we don't create/switch users here - that's wings' job.
 WORKDIR /home/container
 
-# IMPORTANT: this is an ENTRYPOINT, not just a CMD. Relying on wings to
+# IMPORTANT: this is an ENTRYPOINT, not just a CMD - relying on wings to
 # override a bare `CMD ["bash"]` with the egg's startup command turned
-# out not to happen reliably in practice - the container was landing on
-# an idle interactive bash prompt instead of actually running start.sh,
-# which is why the server appeared to do nothing on Start/Restart and
-# Stop (which just sends Ctrl+C) had no process to interrupt. Setting a
-# real ENTRYPOINT means Docker always execs start.sh as PID 1 regardless
-# of whatever Cmd/args wings passes alongside it - any extra args are
-# simply ignored since start.sh doesn't read positional parameters.
-# (The separate install step explicitly passes --entrypoint bash when it
-# runs, which overrides this for that one-off container as intended.)
-ENTRYPOINT ["/opt/mangos/start.sh"]
+# out not to happen reliably in practice, which is why this exists at
+# all (see git history / README for the debugging story). It points at
+# a small wrapper script rather than start.sh directly: the wrapper runs
+# whatever command it's given (what the install step should provide via
+# its own --entrypoint bash override) and only falls back to launching
+# start.sh when invoked with no arguments at all - so the image behaves
+# correctly for both install and runtime even if something about that
+# entrypoint override doesn't take effect the way it's expected to.
+ENTRYPOINT ["/entrypoint.sh"]
