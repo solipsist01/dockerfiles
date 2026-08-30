@@ -1,8 +1,8 @@
 ## MaNGOS Classic + Playerbots (vanilla 1.12.1) all-in-one Pterodactyl image
-## Same as the base Dockerfile, but clones cmangos/playerbots instead of
-## cmangos/mangos-classic and builds with -DBUILD_PLAYERBOTS=1, adding
-## AI-controlled bot characters. This is a SEPARATE image/egg from the
-## plain vanilla one on purpose - Pterodactyl only allows one install
+## Same as the base Dockerfile, clones the SAME cmangos/mangos-classic
+## repo as vanilla, but builds with the extra -DBUILD_PLAYERBOTS=1 flag,
+## adding AI-controlled bot characters. This is a SEPARATE image/egg from
+## the plain vanilla one on purpose - Pterodactyl only allows one install
 ## container per egg, and the install step needs to match whatever
 ## binary the runtime image actually has, so the two variants can't
 ## safely share a single egg.
@@ -12,7 +12,7 @@
 ##   docker build -t ghcr.io/solipsist01/pterodactyl-vanillawowwithbots:latest .
 ##   docker push ghcr.io/solipsist01/pterodactyl-vanillawowwithbots:latest
 ##
-## To build a specific branch/tag of cmangos/playerbots instead of master:
+## To build a specific branch/tag of mangos-classic instead of master:
 ##   docker build --build-arg MANGOS_BRANCH=some-tag -t ... .
 
 ############################################
@@ -37,16 +37,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ARG MANGOS_BRANCH=master
 
-# This variant clones cmangos/playerbots instead of cmangos/mangos-classic.
-# Playerbots isn't a pluggable module on top of core - it's a fork of core
-# itself with a BUILD_PLAYERBOTS CMake flag, so "with bots" vs "without
-# bots" is a build-time decision baked into which binary gets compiled,
-# not something togglable at runtime on the same binary. What IS
-# genuinely runtime-togglable (see install.sh/start.sh) is whether bots
-# are actually spawned/active, via AiPlayerbot.Enabled in their own
-# config file.
+# CORRECTED: clones the same cmangos/mangos-classic repo as the vanilla
+# build - NOT a separate cmangos/playerbots repo. Playerbots turned out
+# to be a build option on core itself (mangos-classic ships its own
+# README_PLAYERBOT.txt and BUILD_PLAYERBOTS in cmake/options.cmake,
+# alongside BUILD_AHBOT etc.) - "with bots" vs "without bots" is a
+# build-time decision (-DBUILD_PLAYERBOTS=1), not a different source
+# tree. What IS genuinely runtime-togglable (see install.sh/start.sh) is
+# whether bots are actually spawned/active, via AiPlayerbot.Enabled in
+# their own config file.
 WORKDIR /usr/src
-RUN git clone --recursive --branch "${MANGOS_BRANCH}" https://github.com/cmangos/playerbots.git mangos-classic \
+RUN git clone --recursive --branch "${MANGOS_BRANCH}" https://github.com/cmangos/mangos-classic.git mangos-classic \
     && git clone https://github.com/cmangos/classic-db.git classic-db
 
 WORKDIR /usr/src/mangos-classic
@@ -57,6 +58,7 @@ RUN mkdir build && cd build && cmake .. \
         -DBUILD_EXTRACTORS=1 \
         -DBUILD_MYSQL=1 \
         -DBUILD_PLAYERBOTS=1 \
+        -DBUILD_AHBOT=1 \
     && make -j"$(nproc)" \
     && make install
 
@@ -64,17 +66,37 @@ RUN mkdir build && cd build && cmake .. \
 # vanilla-specific subfolder) and its config template at predictable
 # paths, so install.sh/start.sh can find them without guessing exact
 # upstream paths. NOTE: exact folder layout here is based on playerbots'
-# published README instructions rather than something we've been able to
-# verify end-to-end ourselves - if a build fails at this step, run
-# `find /usr/src/mangos-classic/src/modules/Bots -type d` in a throwaway
-# build to see the real layout and adjust these paths.
-RUN mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world \
-    && cp /usr/src/mangos-classic/src/modules/Bots/sql/characters/vanilla/*.sql \
-          /opt/mangos/sql/playerbots/characters/ \
-    && cp /usr/src/mangos-classic/src/modules/Bots/sql/world/vanilla/*.sql \
-          /opt/mangos/sql/playerbots/world/ \
-    && find /usr/src/mangos-classic/src/modules/Bots/playerbot -iname 'aiplayerbot*.conf.dist' \
-          -exec cp {} /opt/mangos/aiplayerbot.conf.dist \;
+# published README instructions, now at least confirmed to be the right
+# base repo (this is a real mangos-classic checkout, not a separate fork)
+# - but the exact subfolder names weren't verified end-to-end before this
+# build. On failure this prints the real directory tree so the paths
+# below can be corrected directly from that output.
+RUN set -e; \
+    BOTS_DIR="/usr/src/mangos-classic/src/modules/Bots"; \
+    if [ ! -d "${BOTS_DIR}" ]; then \
+        echo "!! ${BOTS_DIR} doesn't exist - BUILD_PLAYERBOTS may not have"; \
+        echo "!! pulled in a Bots module at this path. Directory tree of src/modules:"; \
+        find /usr/src/mangos-classic/src/modules -maxdepth 3 -type d 2>&1 || echo "(src/modules doesn't exist at all)"; \
+        exit 1; \
+    fi; \
+    CHAR_SQL_DIR="${BOTS_DIR}/sql/characters/vanilla"; \
+    WORLD_SQL_DIR="${BOTS_DIR}/sql/world/vanilla"; \
+    if [ ! -d "${CHAR_SQL_DIR}" ] || [ ! -d "${WORLD_SQL_DIR}" ]; then \
+        echo "!! Expected SQL folders not found at ${CHAR_SQL_DIR} / ${WORLD_SQL_DIR}"; \
+        echo "!! Actual layout under ${BOTS_DIR}:"; \
+        find "${BOTS_DIR}" -maxdepth 4 -type d; \
+        exit 1; \
+    fi; \
+    mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world; \
+    cp "${CHAR_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/characters/; \
+    cp "${WORLD_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/world/; \
+    AIPB_DIST="$(find "${BOTS_DIR}/playerbot" -iname 'aiplayerbot*.conf.dist' 2>/dev/null | head -n1)"; \
+    if [ -z "${AIPB_DIST}" ]; then \
+        echo "!! No aiplayerbot*.conf.dist found under ${BOTS_DIR}/playerbot"; \
+        find "${BOTS_DIR}/playerbot" -maxdepth 2 2>&1 || true; \
+        exit 1; \
+    fi; \
+    cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist
 
 # Stage the SQL files needed to seed the databases, next to the install
 # prefix, so the runtime image gets everything without carrying the whole

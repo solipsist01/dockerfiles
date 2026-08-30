@@ -17,6 +17,7 @@ REALM_ADDRESS="${REALM_ADDRESS:-127.0.0.1}"
 WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
+AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
 
 mkdir -p /mnt/server/server/etc /mnt/server/server/data /mnt/server/client
 mkdir -p /mnt/server/mysql-data /mnt/server/mysql-run
@@ -46,6 +47,21 @@ if [ -z "${AIPLAYERBOT_DIST}" ]; then
     exit 1
 fi
 cp "${AIPLAYERBOT_DIST}" /mnt/server/server/etc/aiplayerbot.conf
+
+echo "==> Locating and copying the AHBot config template..."
+# Unlike aiplayerbot.conf.dist (a separate module, hard-failed above if
+# missing), ahbot.conf.dist.in lives directly in mangos-classic core
+# (src/game/AuctionHouseBot/) - it's expected to be there regardless of
+# the BUILD_AHBOT flag's exact effect on it, but treating this as a hard
+# requirement is less certain than the playerbots case, so this warns
+# and continues rather than failing the whole install if it's missing.
+AHBOT_DIST="$(find /opt/mangos -iname 'ahbot.conf.dist' | head -n1)"
+if [ -z "${AHBOT_DIST}" ]; then
+    echo "!! Could not find ahbot.conf.dist under /opt/mangos - AHBot config won't be"
+    echo "!! written. Run 'find /opt/mangos -iname \"*ahbot*\"' in a shell to check."
+else
+    cp "${AHBOT_DIST}" /mnt/server/server/etc/ahbot.conf
+fi
 
 echo "==> [2/5] Initializing MariaDB data directory..."
 if [ -d /mnt/server/mysql-data/mysql ]; then
@@ -282,6 +298,11 @@ sed -i "s#^WorldServerPort.*#WorldServerPort = ${WORLD_PORT}#" "${CONF_DIR}/mang
 sed -i "s#^DataDir.*#DataDir = \"/home/container/server/data\"#" "${CONF_DIR}/mangosd.conf" || true
 
 sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#" "${CONF_DIR}/aiplayerbot.conf" || true
+
+if [ -f "${CONF_DIR}/ahbot.conf" ]; then
+    sed -i "s#^AuctionHouseBot.Seller.Enabled.*#AuctionHouseBot.Seller.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+    sed -i "s#^AuctionHouseBot.Buyer.Enabled.*#AuctionHouseBot.Buyer.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+fi
 
 echo "==> Setting initial realmlist entry..."
 # Column set varies between mangos-classic schema revisions (e.g. some

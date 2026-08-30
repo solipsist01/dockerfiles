@@ -4,8 +4,8 @@
 ## shared with the plain vanilla egg's start.sh.
 ## Runs on every start/restart from the panel.
 ## - starts MariaDB
-## - syncs the realmlist row and the AiPlayerbot.Enabled toggle with the
-##   current panel variables, so changing them and restarting is all
+## - syncs the realmlist row, AiPlayerbot.Enabled, and AHBot toggles with
+##   the current panel variables, so changing them and restarting is all
 ##   that's needed - no manual SQL/config editing required
 ## - starts realmd, then runs mangosd in the foreground (panel console)
 cd /home/container || exit 1
@@ -16,6 +16,7 @@ REALM_ADDRESS="${REALM_ADDRESS:-127.0.0.1}"
 WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
+AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
 
 mkdir -p /home/container/mysql-run
 
@@ -126,6 +127,14 @@ if [ ! -f "${CONF_DIR}/aiplayerbot.conf" ]; then
     exit 1
 fi
 sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#" "${CONF_DIR}/aiplayerbot.conf" || true
+
+echo "Syncing AHBot config..."
+if [ -f "${CONF_DIR}/ahbot.conf" ]; then
+    sed -i "s#^AuctionHouseBot.Seller.Enabled.*#AuctionHouseBot.Seller.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+    sed -i "s#^AuctionHouseBot.Buyer.Enabled.*#AuctionHouseBot.Buyer.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+else
+    echo "  (no ahbot.conf found - AHBot config wasn't written at install time)"
+fi
 
 if [ ! -d /opt/mangos/sql/playerbots ]; then
     echo "!! /opt/mangos/sql/playerbots not found in the image - this build doesn't"
