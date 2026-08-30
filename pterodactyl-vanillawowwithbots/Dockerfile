@@ -83,8 +83,10 @@ RUN set -e; \
     WORLD_SQL_DIR="${BOTS_DIR}/sql/world/vanilla"; \
     if [ ! -d "${CHAR_SQL_DIR}" ] || [ ! -d "${WORLD_SQL_DIR}" ]; then \
         echo "!! Expected SQL folders not found at ${CHAR_SQL_DIR} / ${WORLD_SQL_DIR}"; \
-        echo "!! Actual layout under ${BOTS_DIR}:"; \
-        find "${BOTS_DIR}" -maxdepth 4 -type d; \
+        echo "!! Directories matching *sql* anywhere under ${BOTS_DIR}:"; \
+        find "${BOTS_DIR}" -type d -iname '*sql*'; \
+        echo "!! Directories matching *vanilla*/*classic* anywhere under ${BOTS_DIR}:"; \
+        find "${BOTS_DIR}" -type d \( -iname '*vanilla*' -o -iname '*classic*' \); \
         exit 1; \
     fi; \
     mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world; \
