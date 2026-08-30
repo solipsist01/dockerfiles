@@ -90,11 +90,26 @@ RUN set -e; \
     mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world; \
     cp "${CHAR_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/characters/; \
     cp "${WORLD_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/world/; \
-    AIPB_DIST="$(find "${BOTS_DIR}/playerbot" -iname 'aiplayerbot*.conf.dist' 2>/dev/null | head -n1)"; \
+    AIPB_DIST="$(find /opt/mangos -iname 'aiplayerbot*.conf.dist' 2>/dev/null | head -n1)"; \
     if [ -z "${AIPB_DIST}" ]; then \
-        echo "!! No aiplayerbot*.conf.dist found under ${BOTS_DIR}/playerbot"; \
-        find "${BOTS_DIR}/playerbot" -maxdepth 2 2>&1 || true; \
+        AIPB_DIST="$(find "${BOTS_DIR}/playerbot" -maxdepth 1 -iname 'aiplayerbot.conf.dist.in.classic' 2>/dev/null | head -n1)"; \
+    fi; \
+    if [ -z "${AIPB_DIST}" ]; then \
+        AIPB_DIST="$(find "${BOTS_DIR}/playerbot" -maxdepth 1 -iname 'aiplayerbot.conf.dist.in.*' \
+            ! -iname '*.tbc' ! -iname '*.wotlk' ! -iname '*.cata' ! -iname '*.mop' \
+            2>/dev/null | head -n1)"; \
+    fi; \
+    if [ -z "${AIPB_DIST}" ]; then \
+        echo "!! No matching aiplayerbot config template found (checked /opt/mangos and"; \
+        echo "!! ${BOTS_DIR}/playerbot). All aiplayerbot* files under the latter:"; \
+        find "${BOTS_DIR}/playerbot" -maxdepth 1 -iname 'aiplayerbot*' 2>&1 || true; \
         exit 1; \
+    fi; \
+    echo "Using playerbots config template: ${AIPB_DIST}"; \
+    if echo "${AIPB_DIST}" | grep -q '\.in\.'; then \
+        echo "NOTE: this is a raw .in source template, not a make-install-processed"; \
+        echo "copy - if mangosd fails to parse aiplayerbot.conf later, check for"; \
+        echo "unresolved @VARIABLE@ placeholders in it."; \
     fi; \
     cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist
 
