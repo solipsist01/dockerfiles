@@ -204,6 +204,22 @@ for d in maps vmaps dbc mmaps; do
     fi
 done
 
+# ahbot.conf and aiplayerbot.conf turn out to be looked up via a path
+# hardcoded in mangosd's own source, not controlled by the -c flag the
+# way mangosd.conf/realmd.conf are - confirmed by a real run:
+# "AHBot is disabled. Unable to open configuration file(../etc/ahbot.conf)."
+# That "../etc/" is relative to the binary's own location
+# (/opt/mangos/bin/mangosd -> ../etc/ -> /opt/mangos/etc/), not the
+# persistent volume where install.sh actually wrote the real files.
+# aiplayerbot.conf's error didn't show its exact attempted path, so this
+# covers every plausible location rather than guessing one.
+mkdir -p /opt/mangos/etc 2>&1
+ln -sfn /home/container/server/etc/ahbot.conf       /opt/mangos/etc/ahbot.conf       2>&1
+ln -sfn /home/container/server/etc/aiplayerbot.conf /opt/mangos/etc/aiplayerbot.conf 2>&1
+ln -sfn /home/container/server/etc/aiplayerbot.conf /opt/mangos/bin/aiplayerbot.conf 2>&1
+ln -sfn /home/container/server/etc/aiplayerbot.conf /home/container/aiplayerbot.conf 2>&1
+ls -la /opt/mangos/etc/ahbot.conf /opt/mangos/etc/aiplayerbot.conf /opt/mangos/bin/aiplayerbot.conf 2>&1
+
 /opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
     > /home/container/realmd.log 2>&1 &
 
