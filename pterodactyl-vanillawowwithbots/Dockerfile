@@ -111,25 +111,21 @@ RUN set -e; \
         echo "copy - if mangosd fails to parse aiplayerbot.conf later, check for"; \
         echo "unresolved @VARIABLE@ placeholders in it."; \
     fi; \
-    cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist; \
-    echo "Loosening permissions on /opt/mangos/etc and /opt/mangos/bin: mangosd looks"; \
-    echo "up ahbot.conf/aiplayerbot.conf via a path hardcoded relative to its own"; \
-    echo "binary location (../etc/), not the -c flag - confirmed by a real run"; \
-    echo "failing with 'Read-only file system' when start.sh tried to symlink the"; \
-    echo "real persistent config files in there as the non-root runtime user. These"; \
-    echo "two directories are baked in at build time (root-owned), and the runtime"; \
-    echo "user's UID isn't known until wings creates the container, so we can't"; \
-    echo "chown to the right owner here - chmod 777 lets any UID create files in"; \
-    echo "these two directories specifically (not a recursive change to the whole"; \
-    echo "image) without needing to know it in advance."; \
-    chmod 777 /opt/mangos/etc /opt/mangos/bin; \
-    echo "Also loosening /opt/mangos itself (not recursive) so start.sh can be"; \
-    echo "hand-edited via nano from a console shell for quick iteration without a"; \
-    echo "full rebuild - remember this only edits the running container's own"; \
-    echo "writable layer, it doesn't persist across container recreation or apply"; \
-    echo "to the actual image, so anything worth keeping should still be folded"; \
-    echo "back into the real start.sh here and rebuilt eventually."; \
-    chmod 777 /opt/mangos
+    cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist
+
+# NOTE on mangosd's ../etc/ config lookups (ahbot.conf, aiplayerbot.conf,
+# anticheat.conf all confirmed affected by real runtime errors): an
+# earlier version of this Dockerfile tried chmod 777 on /opt/mangos/etc
+# and /opt/mangos/bin so the runtime process could symlink real configs
+# in there. That never worked - the actual runtime error was "Read-only
+# file system" (EROFS, a mount-level restriction), not "Permission
+# denied" (EACCES, what chmod actually fixes) - /opt/mangos is read-only
+# at the container mount level regardless of permission bits, and no
+# chmod baked in at build time changes that. The real fix lives in
+# install.sh/entrypoint.sh instead: the binaries and start.sh get copied
+# onto the writable persistent volume, where "../etc/" naturally
+# resolves to the real configs and start.sh can genuinely be hand-edited
+# (e.g. via the nano installed above).
 
 # Stage the SQL files needed to seed the databases, next to the install
 # prefix, so the runtime image gets everything without carrying the whole

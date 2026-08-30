@@ -323,6 +323,36 @@ echo "==> Shutting down temporary MariaDB instance..."
 mysqladmin --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" shutdown
 wait "${MYSQL_PID}" 2>/dev/null || true
 
+echo "==> Relocating binaries to the writable volume..."
+# mangosd/realmd look up several config files (ahbot.conf,
+# aiplayerbot.conf, anticheat.conf - confirmed by real runtime errors on
+# all three) via a path hardcoded relative to the binary's own location
+# (../etc/), not the -c flag. /opt/mangos turns out to be read-only at
+# the container MOUNT level (confirmed: "Read-only file system" is
+# EROFS, a mount-level restriction - unlike "Permission denied"/EACCES,
+# no chmod can fix this), so nothing can ever be placed there at
+# runtime. The actual fix: copy the binaries onto the writable
+# persistent volume so "../etc/" naturally resolves to
+# /home/container/server/etc/ - exactly where the real, editable configs
+# already live. Symlinking the binaries (instead of copying) would break
+# their "../lib" RPATH resolution, since that's resolved against the
+# binary's real file location, not the invocation path - so lib/ is
+# symlinked separately below instead, preserving that path correctly.
+mkdir -p /mnt/server/server/bin
+cp /opt/mangos/bin/mangosd /mnt/server/server/bin/mangosd
+cp /opt/mangos/bin/realmd  /mnt/server/server/bin/realmd
+chmod +x /mnt/server/server/bin/mangosd /mnt/server/server/bin/realmd
+ln -sfn /opt/mangos/lib /mnt/server/server/lib
+
+echo "==> Copying start.sh onto the persistent volume..."
+# So it can be hand-edited (e.g. via nano) from a console shell for quick
+# iteration without a rebuild - /opt/mangos/start.sh itself is subject to
+# the same read-only mount as everything else above, so editing it in
+# place was never actually going to work either. entrypoint.sh execs
+# this persistent copy, not the original.
+cp /opt/mangos/start.sh /mnt/server/start.sh
+chmod +x /mnt/server/start.sh
+
 echo ""
 echo "=========================================="
 echo " Base install complete."

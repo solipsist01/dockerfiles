@@ -204,26 +204,31 @@ for d in maps vmaps dbc mmaps; do
     fi
 done
 
-# ahbot.conf and aiplayerbot.conf turn out to be looked up via a path
-# hardcoded in mangosd's own source, not controlled by the -c flag the
-# way mangosd.conf/realmd.conf are - confirmed by a real run:
-# "AHBot is disabled. Unable to open configuration file(../etc/ahbot.conf)."
-# That "../etc/" is relative to the binary's own location
-# (/opt/mangos/bin/mangosd -> ../etc/ -> /opt/mangos/etc/), not the
-# persistent volume where install.sh actually wrote the real files.
-# aiplayerbot.conf's error didn't show its exact attempted path, so this
-# covers every plausible location rather than guessing one.
-mkdir -p /opt/mangos/etc 2>&1
-ln -sfn /home/container/server/etc/ahbot.conf       /opt/mangos/etc/ahbot.conf       2>&1
-ln -sfn /home/container/server/etc/aiplayerbot.conf /opt/mangos/etc/aiplayerbot.conf 2>&1
-ln -sfn /home/container/server/etc/aiplayerbot.conf /opt/mangos/bin/aiplayerbot.conf 2>&1
-ln -sfn /home/container/server/etc/aiplayerbot.conf /home/container/aiplayerbot.conf 2>&1
-ls -la /opt/mangos/etc/ahbot.conf /opt/mangos/etc/aiplayerbot.conf /opt/mangos/bin/aiplayerbot.conf 2>&1
+# ahbot.conf, aiplayerbot.conf, and anticheat.conf all turn out to be
+# looked up via a path hardcoded in mangosd's own source, not controlled
+# by the -c flag the way mangosd.conf/realmd.conf are - confirmed by real
+# runtime errors on all three: "Unable to open configuration
+# file(../etc/ahbot.conf)" etc. That "../etc/" is relative to the
+# binary's own real location. Symlinking those config files INTO
+# /opt/mangos/etc turned out not to work no matter what - "Read-only
+# file system" is EROFS, a mount-level restriction (unlike "Permission
+# denied"/EACCES), so no chmod could ever fix it: /opt/mangos is
+# read-only at the container mount level, full stop. The actual fix is
+# that install.sh copies the binaries onto the writable persistent
+# volume (/home/container/server/bin/) - from there, "../etc/" resolves
+# on its own to /home/container/server/etc/, exactly where the real
+# configs already live. No symlink trickery needed for this at all
+# anymore; the lines below just run the relocated binaries.
+if [ ! -x /home/container/server/bin/mangosd ]; then
+    echo "!! /home/container/server/bin/mangosd not found - was install.sh run"
+    echo "!! successfully? Try Reinstall from the panel."
+    exit 1
+fi
 
-/opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
+/home/container/server/bin/realmd -c /home/container/server/etc/realmd.conf \
     > /home/container/realmd.log 2>&1 &
 
 sleep 3
 
 echo "Starting mangosd (world server)..."
-exec /opt/mangos/bin/mangosd -c /home/container/server/etc/mangosd.conf
+exec /home/container/server/bin/mangosd -c /home/container/server/etc/mangosd.conf
