@@ -72,7 +72,7 @@ RUN mkdir build && cd build && cmake .. \
 # build. On failure this prints the real directory tree so the paths
 # below can be corrected directly from that output.
 RUN set -e; \
-    BOTS_DIR="/usr/src/mangos-classic/src/modules/Bots"; \
+    BOTS_DIR="/usr/src/mangos-classic/src/modules/PlayerBots"; \
     if [ ! -d "${BOTS_DIR}" ]; then \
         echo "!! ${BOTS_DIR} doesn't exist - BUILD_PLAYERBOTS may not have"; \
         echo "!! pulled in a Bots module at this path. Directory tree of src/modules:"; \

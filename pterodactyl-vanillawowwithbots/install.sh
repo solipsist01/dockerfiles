@@ -269,7 +269,7 @@ echo "==> Importing playerbots SQL content..."
 if [ ! -d /opt/mangos/sql/playerbots ]; then
     echo "!! /opt/mangos/sql/playerbots not found in the image - this means the"
     echo "!! playerbots build didn't stage its SQL content where this script"
-    echo "!! expects it. Run 'find /usr/src/mangos-classic/src/modules/Bots -type d'"
+    echo "!! expects it. Run 'find /usr/src/mangos-classic/src/modules/PlayerBots -type d'"
     echo "!! in a throwaway build to see the real layout and adjust"
     echo "!! playerbots/Dockerfile."
     exit 1
