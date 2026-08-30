@@ -111,28 +111,7 @@ RUN set -e; \
         echo "copy - if mangosd fails to parse aiplayerbot.conf later, check for"; \
         echo "unresolved @VARIABLE@ placeholders in it."; \
     fi; \
-    cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist; \
-    echo "Baking in symlinks for mangosd's ../etc/ config lookups..."; \
-    mkdir -p /opt/mangos/etc; \
-    ln -sfn /home/container/server/etc/ahbot.conf       /opt/mangos/etc/ahbot.conf; \
-    ln -sfn /home/container/server/etc/aiplayerbot.conf /opt/mangos/etc/aiplayerbot.conf
-
-# NOTE on mangosd's ../etc/ config lookups (ahbot.conf, aiplayerbot.conf
-# both confirmed affected by real runtime errors: "Unable to open
-# configuration file(../etc/ahbot.conf)" etc - that path is relative to
-# the binary's own location, /opt/mangos/bin/, so it resolves to
-# /opt/mangos/etc/). /opt/mangos is read-only at the container MOUNT
-# level at runtime (confirmed: "Read-only file system" is EROFS, a
-# mount-level restriction - unlike "Permission denied"/EACCES, no chmod
-# fixes this), so nothing can be created there once the container is
-# actually running. The fix: create the symlinks HERE instead, at
-# `docker build` time, when /opt/mangos is still genuinely writable
-# (root, a fresh writable layer). A symlink doesn't need its target to
-# exist yet - it just needs to exist once the real file (which
-# install.sh writes to the persistent volume) is there. This keeps
-# mangosd/realmd running as the original, always-fresh-on-rebuild
-# binaries at /opt/mangos/bin/ - nothing gets copied onto the volume or
-# goes stale between rebuilds.
+    cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist
 
 # Stage the SQL files needed to seed the databases, next to the install
 # prefix, so the runtime image gets everything without carrying the whole

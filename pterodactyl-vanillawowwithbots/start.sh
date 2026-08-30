@@ -207,13 +207,24 @@ for d in maps vmaps dbc mmaps; do
     fi
 done
 
-# ahbot.conf/aiplayerbot.conf lookups (../etc/, relative to the binary's
-# own location) are handled by symlinks baked into the image at build
-# time (see Dockerfile) pointing at the real, editable configs on this
-# persistent volume - not by anything in this script. Running the
-# original /opt/mangos binaries directly (not a runtime copy) means a
-# rebuilt image is always what actually runs here, no stale executables
-# left over from an older build.
+# Every previous attempt at this guessed WHICH specific relative path
+# mangosd resolves ../etc/ (or a bare filename) against, then tried to
+# symlink that one specific target - and kept guessing wrong (confirmed:
+# symlinks at /opt/mangos/etc/ are correct on disk yet still failed).
+# Simpler, more robust fix: run mangosd/realmd from a working directory
+# where "../etc/" naturally resolves to somewhere correct, without any
+# symlinking at all. /home/container/server/etc/ already holds the real,
+# install.sh-populated config files directly - so making bin/ a genuine
+# sibling of etc/ under server/ means "../etc/" just works, no
+# indirection needed. Entirely inside the writable persistent volume, so
+# any relative-path log files mangosd/realmd write land somewhere
+# writable too (unlike if we'd cd'd into /opt/mangos/bin/, which is
+# read-only). The binaries themselves stay at their real,
+# always-fresh-on-rebuild location (/opt/mangos/bin/) - only the working
+# directory we run them from changes, not where they physically live.
+mkdir -p /home/container/server/bin
+cd /home/container/server/bin || exit 1
+
 /opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
     > /home/container/realmd.log 2>&1 &
 
