@@ -79,14 +79,12 @@ RUN set -e; \
         find /usr/src/mangos-classic/src/modules -maxdepth 3 -type d 2>&1 || echo "(src/modules doesn't exist at all)"; \
         exit 1; \
     fi; \
-    CHAR_SQL_DIR="${BOTS_DIR}/sql/characters/vanilla"; \
-    WORLD_SQL_DIR="${BOTS_DIR}/sql/world/vanilla"; \
+    CHAR_SQL_DIR="${BOTS_DIR}/sql/characters/classic"; \
+    WORLD_SQL_DIR="${BOTS_DIR}/sql/world/classic"; \
     if [ ! -d "${CHAR_SQL_DIR}" ] || [ ! -d "${WORLD_SQL_DIR}" ]; then \
         echo "!! Expected SQL folders not found at ${CHAR_SQL_DIR} / ${WORLD_SQL_DIR}"; \
-        echo "!! Directories matching *sql* anywhere under ${BOTS_DIR}:"; \
-        find "${BOTS_DIR}" -type d -iname '*sql*'; \
-        echo "!! Directories matching *vanilla*/*classic* anywhere under ${BOTS_DIR}:"; \
-        find "${BOTS_DIR}" -type d \( -iname '*vanilla*' -o -iname '*classic*' \); \
+        echo "!! Complete sql/ subtree under ${BOTS_DIR}:"; \
+        find "${BOTS_DIR}/sql" -type d; \
         exit 1; \
     fi; \
     mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world; \
