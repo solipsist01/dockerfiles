@@ -79,7 +79,7 @@ RUN set -e; \
         find /usr/src/mangos-classic/src/modules -maxdepth 3 -type d 2>&1 || echo "(src/modules doesn't exist at all)"; \
         exit 1; \
     fi; \
-    CHAR_SQL_DIR="${BOTS_DIR}/sql/characters/classic"; \
+    CHAR_SQL_DIR="${BOTS_DIR}/sql/characters"; \
     WORLD_SQL_DIR="${BOTS_DIR}/sql/world/classic"; \
     if [ ! -d "${CHAR_SQL_DIR}" ] || [ ! -d "${WORLD_SQL_DIR}" ]; then \
         echo "!! Expected SQL folders not found at ${CHAR_SQL_DIR} / ${WORLD_SQL_DIR}"; \
