@@ -154,23 +154,20 @@ done
 # would otherwise stay pinned to whatever schema existed at its last
 # install/reinstall and fail the same version-mismatch check forever.
 # Doing this here means "rebuild the image, restart the server" is
-# enough to catch the DB up - no manual SQL, no reinstall needed. Each
-# file is its own attempt; ones already applied fail fast (harmless) and
-# don't block the rest.
+# enough to catch the DB up - no manual SQL, no reinstall needed.
+#
+# Batched into a single mysql invocation with --force (see install.sh
+# for the full reasoning) rather than ~140 separate ones - the per-file
+# version added a real 1-3+ minutes to every single boot.
 UPD_DIR="/opt/mangos/sql/updates/mangos"
 if [ -d "${UPD_DIR}" ]; then
     echo "Checking for core schema updates..."
-    APPLIED=0
-    for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
-        OUT="$(mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
-        if [ $? -eq 0 ]; then
-            APPLIED=$((APPLIED + 1))
-            echo "  applied $(basename "$f")"
-        else
-            echo "  skipped $(basename "$f"): $(echo "$OUT" | head -n1)"
-        fi
-    done
-    echo "  ${APPLIED} update(s) newly applied this boot."
+    UPD_START=$(date +%s)
+    cat "${UPD_DIR}"/*.sql 2>/dev/null | \
+        mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" --force mangos \
+        > /home/container/schema_updates.log 2>&1
+    UPD_ELAPSED=$(( $(date +%s) - UPD_START ))
+    echo "  Done in ${UPD_ELAPSED}s."
 fi
 
 echo "Syncing realmlist (name=${REALM_NAME}, address=${REALM_ADDRESS}, port=${WORLD_PORT})..."
@@ -204,31 +201,17 @@ for d in maps vmaps dbc mmaps; do
     fi
 done
 
-# ahbot.conf, aiplayerbot.conf, and anticheat.conf all turn out to be
-# looked up via a path hardcoded in mangosd's own source, not controlled
-# by the -c flag the way mangosd.conf/realmd.conf are - confirmed by real
-# runtime errors on all three: "Unable to open configuration
-# file(../etc/ahbot.conf)" etc. That "../etc/" is relative to the
-# binary's own real location. Symlinking those config files INTO
-# /opt/mangos/etc turned out not to work no matter what - "Read-only
-# file system" is EROFS, a mount-level restriction (unlike "Permission
-# denied"/EACCES), so no chmod could ever fix it: /opt/mangos is
-# read-only at the container mount level, full stop. The actual fix is
-# that install.sh copies the binaries onto the writable persistent
-# volume (/home/container/server/bin/) - from there, "../etc/" resolves
-# on its own to /home/container/server/etc/, exactly where the real
-# configs already live. No symlink trickery needed for this at all
-# anymore; the lines below just run the relocated binaries.
-if [ ! -x /home/container/server/bin/mangosd ]; then
-    echo "!! /home/container/server/bin/mangosd not found - was install.sh run"
-    echo "!! successfully? Try Reinstall from the panel."
-    exit 1
-fi
-
-/home/container/server/bin/realmd -c /home/container/server/etc/realmd.conf \
+# ahbot.conf/aiplayerbot.conf lookups (../etc/, relative to the binary's
+# own location) are handled by symlinks baked into the image at build
+# time (see Dockerfile) pointing at the real, editable configs on this
+# persistent volume - not by anything in this script. Running the
+# original /opt/mangos binaries directly (not a runtime copy) means a
+# rebuilt image is always what actually runs here, no stale executables
+# left over from an older build.
+/opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
     > /home/container/realmd.log 2>&1 &
 
 sleep 3
 
 echo "Starting mangosd (world server)..."
-exec /home/container/server/bin/mangosd -c /home/container/server/etc/mangosd.conf
+exec /opt/mangos/bin/mangosd -c /home/container/server/etc/mangosd.conf
