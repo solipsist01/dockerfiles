@@ -156,15 +156,24 @@ done
 # Doing this here means "rebuild the image, restart the server" is
 # enough to catch the DB up - no manual SQL, no reinstall needed.
 #
-# Batched into a single mysql invocation with --force (see install.sh
-# for the full reasoning) rather than ~140 separate ones - the per-file
-# version added a real 1-3+ minutes to every single boot.
+# One mysql SESSION (not ~140 separate processes, for speed), using
+# per-file `source` commands rather than piping everything through with
+# --force (see install.sh for why --force actively corrupted schema
+# here - it lets individual failing statements skip past even within
+# the same file, not just whole files). `source` preserves the original
+# per-file atomicity: each file stops cleanly at its own first error,
+# same as a standalone `mysql < file`, while a failure in one file only
+# aborts that file, not the whole session.
 UPD_DIR="/opt/mangos/sql/updates/mangos"
 if [ -d "${UPD_DIR}" ]; then
     echo "Checking for core schema updates..."
     UPD_START=$(date +%s)
-    cat "${UPD_DIR}"/*.sql 2>/dev/null | \
-        mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" --force mangos \
+    UPD_DRIVER="/home/container/schema_updates_driver.sql"
+    : > "${UPD_DRIVER}"
+    for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
+        echo "source ${f};" >> "${UPD_DRIVER}"
+    done
+    mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "${UPD_DRIVER}" \
         > /home/container/schema_updates.log 2>&1
     UPD_ELAPSED=$(( $(date +%s) - UPD_START ))
     echo "  Done in ${UPD_ELAPSED}s."
