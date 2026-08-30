@@ -190,23 +190,6 @@ ON DUPLICATE KEY UPDATE name='${REALM_NAME}', address='${REALM_ADDRESS}', port=$
 
 echo "Starting realmd (login server)..."
 
-# mangosd's DataDir sed replacement in install.sh doesn't appear to
-# reliably match this config's actual line format (same category of
-# issue as the earlier LogsDatabaseInfo mismatch) - it's been observed
-# defaulting to "./" (relative to mangosd's working directory,
-# /home/container) instead of the intended
-# /home/container/server/data. Rather than keep fighting sed patterns
-# against a config format that keeps surprising us, symlink the
-# expected relative paths straight at the real data location - this
-# works regardless of whatever DataDir actually ends up set to, and
-# regardless of whether client data was uploaded before or after this
-# runs (a symlink doesn't require its target to exist yet).
-for d in maps vmaps dbc mmaps; do
-    if [ ! -e "/home/container/${d}" ]; then
-        ln -sfn "/home/container/server/data/${d}" "/home/container/${d}"
-    fi
-done
-
 # Every previous attempt at this guessed WHICH specific relative path
 # mangosd resolves ../etc/ (or a bare filename) against, then tried to
 # symlink that one specific target - and kept guessing wrong (confirmed:
@@ -224,6 +207,26 @@ done
 # directory we run them from changes, not where they physically live.
 mkdir -p /home/container/server/bin
 cd /home/container/server/bin || exit 1
+
+# mangosd's DataDir sed replacement in install.sh doesn't appear to
+# reliably match this config's actual line format (same category of
+# issue as the earlier LogsDatabaseInfo mismatch) - it's been observed
+# defaulting to "./" (relative to mangosd's working directory, which is
+# now /home/container/server/bin/ - see above) instead of the intended
+# /home/container/server/data. Rather than keep fighting sed patterns
+# against a config format that keeps surprising us, symlink the expected
+# relative paths straight at the real data location - this works
+# regardless of whatever DataDir actually ends up set to, and regardless
+# of whether client data was uploaded before or after this runs (a
+# symlink doesn't require its target to exist yet). Client data still
+# gets uploaded to /home/container/server/data/ as documented - this
+# just bridges wherever mangosd's own working directory happens to be to
+# that same, consistent upload location.
+for d in maps vmaps dbc mmaps; do
+    if [ ! -e "/home/container/server/bin/${d}" ]; then
+        ln -sfn "/home/container/server/data/${d}" "/home/container/server/bin/${d}"
+    fi
+done
 
 /opt/mangos/bin/realmd -c /home/container/server/etc/realmd.conf \
     > /home/container/realmd.log 2>&1 &
