@@ -156,27 +156,24 @@ done
 # Doing this here means "rebuild the image, restart the server" is
 # enough to catch the DB up - no manual SQL, no reinstall needed.
 #
-# One mysql SESSION (not ~140 separate processes, for speed), using
-# per-file `source` commands rather than piping everything through with
-# --force (see install.sh for why --force actively corrupted schema
-# here - it lets individual failing statements skip past even within
-# the same file, not just whole files). `source` preserves the original
-# per-file atomicity: each file stops cleanly at its own first error,
-# same as a standalone `mysql < file`, while a failure in one file only
-# aborts that file, not the whole session.
+# One mysql process per file (reverted from a batched single-session
+# version - see install.sh for the full history) - each file is its own
+# attempt; ones already applied fail fast (harmless) and don't block the
+# rest.
 UPD_DIR="/opt/mangos/sql/updates/mangos"
 if [ -d "${UPD_DIR}" ]; then
     echo "Checking for core schema updates..."
-    UPD_START=$(date +%s)
-    UPD_DRIVER="/home/container/schema_updates_driver.sql"
-    : > "${UPD_DRIVER}"
+    APPLIED=0
     for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
-        echo "source ${f};" >> "${UPD_DRIVER}"
+        OUT="$(mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
+        if [ $? -eq 0 ]; then
+            APPLIED=$((APPLIED + 1))
+            echo "  applied $(basename "$f")"
+        else
+            echo "  skipped $(basename "$f"): $(echo "$OUT" | head -n1)"
+        fi
     done
-    mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "${UPD_DRIVER}" \
-        > /home/container/schema_updates.log 2>&1
-    UPD_ELAPSED=$(( $(date +%s) - UPD_START ))
-    echo "  Done in ${UPD_ELAPSED}s."
+    echo "  ${APPLIED} update(s) newly applied this boot."
 fi
 
 echo "Syncing realmlist (name=${REALM_NAME}, address=${REALM_ADDRESS}, port=${WORLD_PORT})..."

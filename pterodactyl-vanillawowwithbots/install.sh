@@ -233,41 +233,31 @@ else
     # Full_DB snapshot will fail harmlessly (column/table already
     # exists) and are skipped over, the ones actually needed will apply.
     #
-    # IMPORTANT: one mysql SESSION, not one process per file (~140 of
-    # those was slow enough that install was consistently getting killed
-    # by what looks like a wings install timeout, no error message, just
-    # gone partway through this step). But NOT via --force piping every
-    # file's contents through one continuous stream - that was tried
-    # first and is actively wrong: --force skips individual failing
-    # STATEMENTS and keeps going, including within the same file, so a
-    # file with several sequential ALTERs where the 2nd one fails would
-    # still run the 3rd assuming the 2nd succeeded. That produced real
-    # schema corruption (mangosd reporting mismatched spell_template
-    # column counts, InnoDB/Aria "marked as crashed" tables) - worse
-    # than the version-mismatch error this whole update step exists to
-    # fix. Feeding `source file;` commands into a single session instead
-    # preserves the old per-file semantics exactly (each sourced file
-    # stops cleanly at ITS first error, same as a standalone
-    # `mysql < file` would) while a failure in one only aborts that
-    # file, not the whole session - so later files still get a chance,
-    # all within one connection.
+    # One mysql process per file (reverted from a batched single-session
+    # version - both a --force-piped variant and a `source`-per-file
+    # variant were tried; the former caused real schema corruption, the
+    # latter didn't resolve a specific spell_template mismatch and made
+    # it harder to see which exact file was responsible. Back to the
+    # simple, well-understood version while that gets tracked down
+    # separately - this reintroduces real risk of hitting a wings
+    # install timeout on this step (~140 separate process spawns), worth
+    # watching for.
     UPD_DIR="/opt/mangos/sql/updates/mangos"
     if [ -d "${UPD_DIR}" ]; then
         echo "    Applying core schema updates (bridges core master vs. last classic-db release)..."
-        UPD_START=$(date +%s)
-        UPD_DRIVER="/mnt/server/schema_updates_driver.sql"
-        : > "${UPD_DRIVER}"
+        FAILCOUNT=0
         for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
-            echo "source ${f};" >> "${UPD_DRIVER}"
+            OUT="$(mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
+            if [ $? -eq 0 ]; then
+                echo "      applied $(basename "$f")"
+            else
+                FAILCOUNT=$((FAILCOUNT + 1))
+                echo "      skipped $(basename "$f"): ${OUT}"
+            fi
         done
-        mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "${UPD_DRIVER}" \
-            > /mnt/server/schema_updates.log 2>&1
-        UPD_ELAPSED=$(( $(date +%s) - UPD_START ))
-        UPD_ERRCOUNT=$(grep -c '^ERROR' /mnt/server/schema_updates.log 2>/dev/null || echo 0)
-        echo "    Done in ${UPD_ELAPSED}s (${UPD_ERRCOUNT} error line(s) - normal if some"
-        echo "    updates were already included in the Full_DB snapshot; see"
-        echo "    /home/container/schema_updates.log if mangosd still reports a version"
-        echo "    mismatch after this install)"
+        echo "    (${FAILCOUNT} update file(s) skipped - normal if they were already"
+        echo "    included in the Full_DB snapshot; check the messages above if"
+        echo "    mangosd still reports a version mismatch after this install)"
     else
         echo "!! ${UPD_DIR} not found in image - mangosd may report a version mismatch on first start"
     fi
