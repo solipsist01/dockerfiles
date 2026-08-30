@@ -344,15 +344,6 @@ cp /opt/mangos/bin/realmd  /mnt/server/server/bin/realmd
 chmod +x /mnt/server/server/bin/mangosd /mnt/server/server/bin/realmd
 ln -sfn /opt/mangos/lib /mnt/server/server/lib
 
-echo "==> Copying start.sh onto the persistent volume..."
-# So it can be hand-edited (e.g. via nano) from a console shell for quick
-# iteration without a rebuild - /opt/mangos/start.sh itself is subject to
-# the same read-only mount as everything else above, so editing it in
-# place was never actually going to work either. entrypoint.sh execs
-# this persistent copy, not the original.
-cp /opt/mangos/start.sh /mnt/server/start.sh
-chmod +x /mnt/server/start.sh
-
 echo ""
 echo "=========================================="
 echo " Base install complete."
