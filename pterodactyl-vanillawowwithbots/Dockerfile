@@ -81,22 +81,23 @@ RUN set -e; \
     fi; \
     CHAR_SQL_DIR="${BOTS_DIR}/sql/characters"; \
     WORLD_SQL_DIR="${BOTS_DIR}/sql/world/classic"; \
-    OTHER_SQL_DIR="${BOTS_DIR}/sql/other"; \
+    WORLD_SQL_SHARED_DIR="${BOTS_DIR}/sql/world"; \
     if [ ! -d "${CHAR_SQL_DIR}" ] || [ ! -d "${WORLD_SQL_DIR}" ]; then \
         echo "!! Expected SQL folders not found at ${CHAR_SQL_DIR} / ${WORLD_SQL_DIR}"; \
         echo "!! Complete sql/ subtree under ${BOTS_DIR}:"; \
         find "${BOTS_DIR}/sql" -type d; \
         exit 1; \
     fi; \
-    mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world /opt/mangos/sql/playerbots/other; \
+    mkdir -p /opt/mangos/sql/playerbots/characters /opt/mangos/sql/playerbots/world; \
     cp "${CHAR_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/characters/; \
     cp "${WORLD_SQL_DIR}"/*.sql /opt/mangos/sql/playerbots/world/; \
-    if [ -d "${OTHER_SQL_DIR}" ]; then \
-        echo "Found ${OTHER_SQL_DIR} - staging its contents too:"; \
-        find "${OTHER_SQL_DIR}" -iname '*.sql' -exec cp {} /opt/mangos/sql/playerbots/other/ \; -exec basename {} \; ; \
-    else \
-        echo "No ${OTHER_SQL_DIR} folder in this build - nothing to stage from there."; \
-    fi; \
+    # Some content (bot dialogue text, RPG travel race data, table
+    # indexes - confirmed via direct inspection of the real repo) lives
+    # directly in sql/world/ itself, one level above the classic/
+    # subfolder, not duplicated per-expansion since it's expansion-
+    # agnostic. -maxdepth 1 so this only grabs files directly here, not
+    # re-copying anything already pulled from classic/ above.
+    find "${WORLD_SQL_SHARED_DIR}" -maxdepth 1 -iname '*.sql' -exec cp {} /opt/mangos/sql/playerbots/world/ \; ; \
     AIPB_DIST="$(find /opt/mangos -iname 'aiplayerbot*.conf.dist' 2>/dev/null | head -n1)"; \
     if [ -z "${AIPB_DIST}" ]; then \
         AIPB_DIST="$(find "${BOTS_DIR}/playerbot" -maxdepth 1 -iname 'aiplayerbot.conf.dist.in.classic' 2>/dev/null | head -n1)"; \
