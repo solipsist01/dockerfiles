@@ -139,13 +139,20 @@ if [ ! -f "${CONF_DIR}/aiplayerbot.conf" ]; then
     exit 1
 fi
 sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#" "${CONF_DIR}/aiplayerbot.conf" || true
-sed -i "s#^#\{0,1\}AiPlayerbot.MinRandomBots.*#AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
-sed -i "s#^#\{0,1\}AiPlayerbot.MaxRandomBots.*#AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s@^#\{0,1\}AiPlayerbot.MinRandomBots.*@AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}@" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s@^#\{0,1\}AiPlayerbot.MaxRandomBots.*@AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}@" "${CONF_DIR}/aiplayerbot.conf" || true
 
 echo "Syncing AHBot config..."
 if [ -f "${CONF_DIR}/ahbot.conf" ]; then
-    sed -i "s#^AuctionHouseBot.Seller.Enabled.*#AuctionHouseBot.Seller.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
-    sed -i "s#^AuctionHouseBot.Buyer.Enabled.*#AuctionHouseBot.Buyer.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+    # No dedicated "Enabled" boolean key exists in this AHBot
+    # implementation - see install.sh for the full reasoning.
+    if [ "${AHBOT_ENABLED}" = "1" ]; then
+        AHBOT_CHANCE=10
+    else
+        AHBOT_CHANCE=0
+    fi
+    sed -i "s#^AuctionHouseBot.Chance.Sell.*#AuctionHouseBot.Chance.Sell = ${AHBOT_CHANCE}#" "${CONF_DIR}/ahbot.conf" || true
+    sed -i "s#^AuctionHouseBot.Chance.Buy.*#AuctionHouseBot.Chance.Buy = ${AHBOT_CHANCE}#" "${CONF_DIR}/ahbot.conf" || true
 else
     echo "  (no ahbot.conf found - AHBot config wasn't written at install time)"
 fi

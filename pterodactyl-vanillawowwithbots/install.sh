@@ -326,12 +326,27 @@ sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#"
 # Optional leading '#' in the pattern: several published versions of this
 # config ship MinRandomBots/MaxRandomBots commented out by default - this
 # matches (and uncomments) either form.
-sed -i "s#^#\{0,1\}AiPlayerbot.MinRandomBots.*#AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
-sed -i "s#^#\{0,1\}AiPlayerbot.MaxRandomBots.*#AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s@^#\{0,1\}AiPlayerbot.MinRandomBots.*@AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}@" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s@^#\{0,1\}AiPlayerbot.MaxRandomBots.*@AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}@" "${CONF_DIR}/aiplayerbot.conf" || true
 
 if [ -f "${CONF_DIR}/ahbot.conf" ]; then
-    sed -i "s#^AuctionHouseBot.Seller.Enabled.*#AuctionHouseBot.Seller.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
-    sed -i "s#^AuctionHouseBot.Buyer.Enabled.*#AuctionHouseBot.Buyer.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
+    # No dedicated "Enabled" boolean key exists in this AHBot
+    # implementation - confirmed by reading the real deployed file
+    # directly. The actual mechanism is AuctionHouseBot.Chance.Sell/
+    # .Chance.Buy (0-100 probability of the bot acting) - 0 effectively
+    # turns it off, matching what the startup banner's "Enabled"/
+    # "Disabled" text reflects. An earlier version of this script
+    # targeted AuctionHouseBot.Seller.Enabled/.Buyer.Enabled, which don't
+    # exist in this file at all - the sed calls ran without error but
+    # matched nothing, so the setting silently stayed at the file's
+    # default regardless of this toggle.
+    if [ "${AHBOT_ENABLED}" = "1" ]; then
+        AHBOT_CHANCE=10
+    else
+        AHBOT_CHANCE=0
+    fi
+    sed -i "s#^AuctionHouseBot.Chance.Sell.*#AuctionHouseBot.Chance.Sell = ${AHBOT_CHANCE}#" "${CONF_DIR}/ahbot.conf" || true
+    sed -i "s#^AuctionHouseBot.Chance.Buy.*#AuctionHouseBot.Chance.Buy = ${AHBOT_CHANCE}#" "${CONF_DIR}/ahbot.conf" || true
 fi
 
 echo "==> Setting initial realmlist entry..."
