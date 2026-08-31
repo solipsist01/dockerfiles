@@ -309,6 +309,19 @@ for f in $(ls /opt/mangos/sql/playerbots/world/*.sql 2>/dev/null | sort); do
         && echo "    applied (world) $(basename "$f")" \
         || echo "    skipped (world) $(basename "$f") - may already be applied"
 done
+# sql/other/ - found to exist in this module but not documented/verified
+# which database it targets. Importing into characters db based on the
+# characters_-prefixed naming convention some files there use, but this
+# is a guess - if mangosd/the bot AI still reports missing data after
+# this (e.g. bot teleport/location errors, missing bot dialogue text),
+# check the actual filenames logged below against what the real error
+# messages reference, and this may need retargeting to the mangos
+# (world) database instead.
+for f in $(ls /opt/mangos/sql/playerbots/other/*.sql 2>/dev/null | sort); do
+    mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" characters < "$f" \
+        && echo "    applied (other -> characters) $(basename "$f")" \
+        || echo "    skipped (other -> characters) $(basename "$f") - may already be applied"
+done
 
 echo "==> [5/5] Writing config file values and initial realmlist entry..."
 CONF_DIR="/mnt/server/server/etc"
