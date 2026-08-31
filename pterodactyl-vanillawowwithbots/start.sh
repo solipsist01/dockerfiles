@@ -17,6 +17,17 @@ WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
 AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
+# Normalize to canonical 1/0 - see install.sh for the full reasoning
+# (Laravel's "boolean" rule accepts true/false/on/off too, mangosd's
+# config format only understands 1/0).
+case "${AI_PLAYERBOT_ENABLED,,}" in
+    1|true|yes|on)  AI_PLAYERBOT_ENABLED=1 ;;
+    *)              AI_PLAYERBOT_ENABLED=0 ;;
+esac
+case "${AHBOT_ENABLED,,}" in
+    1|true|yes|on)  AHBOT_ENABLED=1 ;;
+    *)              AHBOT_ENABLED=0 ;;
+esac
 RANDOM_BOT_COUNT="${RANDOM_BOT_COUNT:-50}"
 
 mkdir -p /home/container/mysql-run

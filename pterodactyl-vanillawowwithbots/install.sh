@@ -18,6 +18,20 @@ WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
 AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
+# Normalize to canonical 1/0: the panel's "boolean" validation rule
+# (needed so the toggle switch UI actually works - see start.sh/README
+# for why) accepts true/false/on/off/1/0 in various forms, but mangosd's
+# own config file format only understands literal 1/0 - whatever the
+# panel actually stores, this guarantees a clean value reaches the
+# config file.
+case "${AI_PLAYERBOT_ENABLED,,}" in
+    1|true|yes|on)  AI_PLAYERBOT_ENABLED=1 ;;
+    *)              AI_PLAYERBOT_ENABLED=0 ;;
+esac
+case "${AHBOT_ENABLED,,}" in
+    1|true|yes|on)  AHBOT_ENABLED=1 ;;
+    *)              AHBOT_ENABLED=0 ;;
+esac
 RANDOM_BOT_COUNT="${RANDOM_BOT_COUNT:-50}"
 
 mkdir -p /mnt/server/server/etc /mnt/server/server/data /mnt/server/client
