@@ -17,6 +17,7 @@ WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
 AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
+RANDOM_BOT_COUNT="${RANDOM_BOT_COUNT:-50}"
 
 mkdir -p /home/container/mysql-run
 
@@ -127,6 +128,8 @@ if [ ! -f "${CONF_DIR}/aiplayerbot.conf" ]; then
     exit 1
 fi
 sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s#^#\{0,1\}AiPlayerbot.MinRandomBots.*#AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s#^#\{0,1\}AiPlayerbot.MaxRandomBots.*#AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
 
 echo "Syncing AHBot config..."
 if [ -f "${CONF_DIR}/ahbot.conf" ]; then

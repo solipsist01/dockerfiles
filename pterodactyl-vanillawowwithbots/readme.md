@@ -190,7 +190,10 @@ listings) - toggled the same way via `Enable AHBot`
 AHBot is a build option on `mangos-classic` core itself too, same as
 playerbots - it could equally be added to the plain vanilla image by
 adding the same flag there, this setup just bundles it alongside
-playerbots since they're commonly used together.
+playerbots since they're commonly used together. `Random Bot Count`
+controls how many bots actually populate the world (sets both
+`AiPlayerbot.MinRandomBots` and `AiPlayerbot.MaxRandomBots` to the same
+value) - also synced on every restart.
 
 **Setup**: same steps as the plain vanilla egg (build, push, import,
 create server, provide client data), just from inside the `playerbots/`

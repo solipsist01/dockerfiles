@@ -18,6 +18,7 @@ WORLD_PORT="${WORLD_PORT:-8085}"
 SERVER_PORT="${SERVER_PORT:-3724}"
 AI_PLAYERBOT_ENABLED="${AI_PLAYERBOT_ENABLED:-1}"
 AHBOT_ENABLED="${AHBOT_ENABLED:-1}"
+RANDOM_BOT_COUNT="${RANDOM_BOT_COUNT:-50}"
 
 mkdir -p /mnt/server/server/etc /mnt/server/server/data /mnt/server/client
 mkdir -p /mnt/server/mysql-data /mnt/server/mysql-run
@@ -308,6 +309,11 @@ sed -i "s#^WorldServerPort.*#WorldServerPort = ${WORLD_PORT}#" "${CONF_DIR}/mang
 sed -i "s#^DataDir.*#DataDir = \"/home/container/server/data\"#" "${CONF_DIR}/mangosd.conf" || true
 
 sed -i "s#^AiPlayerbot.Enabled.*#AiPlayerbot.Enabled = ${AI_PLAYERBOT_ENABLED}#" "${CONF_DIR}/aiplayerbot.conf" || true
+# Optional leading '#' in the pattern: several published versions of this
+# config ship MinRandomBots/MaxRandomBots commented out by default - this
+# matches (and uncomments) either form.
+sed -i "s#^#\{0,1\}AiPlayerbot.MinRandomBots.*#AiPlayerbot.MinRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
+sed -i "s#^#\{0,1\}AiPlayerbot.MaxRandomBots.*#AiPlayerbot.MaxRandomBots = ${RANDOM_BOT_COUNT}#" "${CONF_DIR}/aiplayerbot.conf" || true
 
 if [ -f "${CONF_DIR}/ahbot.conf" ]; then
     sed -i "s#^AuctionHouseBot.Seller.Enabled.*#AuctionHouseBot.Seller.Enabled = ${AHBOT_ENABLED}#" "${CONF_DIR}/ahbot.conf" || true
