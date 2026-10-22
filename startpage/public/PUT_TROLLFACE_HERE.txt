@@ -1,0 +1,1 @@
+Copy trollface.jpg from the current ofnie.org web root into this folder.
