@@ -1,0 +1,1 @@
+Copy add.gif, info.gif and trash.gif from the old site into this folder.

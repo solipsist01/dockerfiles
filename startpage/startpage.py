@@ -81,11 +81,27 @@ def connect(path=None):
     return db
 
 
+DEFAULT_ADMIN = os.environ.get("STARTPAGE_ADMIN_USER", "admin")
+DEFAULT_ADMIN_PASSWORD = os.environ.get("STARTPAGE_ADMIN_PASSWORD", "admin")
+
+
 def ensure_schema(path=None):
+    """Create the tables, and on an empty database a first account (admin/admin
+    unless overridden) that is both the admin and the page anonymous visitors see."""
     db = connect(path)
     with db:
         db.executescript(SCHEMA)
+        created = db.execute(
+            "INSERT INTO users (username, password) SELECT ?, ? "
+            "WHERE NOT EXISTS (SELECT 1 FROM users)",
+            (DEFAULT_ADMIN, generate_password_hash(DEFAULT_ADMIN_PASSWORD)),
+        ).rowcount
+        if created:
+            db.execute("UPDATE variables SET value = ? WHERE name IN ('admin_user', 'default_user') "
+                       "AND (value IS NULL OR value = '')", (DEFAULT_ADMIN,))
     db.close()
+    if created:
+        print(f"Startpage: created first account '{DEFAULT_ADMIN}'. Change its password!", flush=True)
 
 
 def _load_secret_key():
@@ -248,7 +264,8 @@ def would_create_cycle(category_id, new_parent, user_id):
 DATA_ACTIONS = {
     "submitaddcategory", "submiteditcategory", "submitdelcategory",
     "submitaddlink", "submiteditlink", "submitdellink",
-    "submitadduser", "submitdeluser",
+    "submitadduser", "submitdeluser", "submitpassworduser",
+    "submitchangepassword",
 }
 
 
@@ -340,10 +357,44 @@ def handle_action(action, user_id, admin):
             uid = to_int(request.form.get("c_id", ""))
             if uid is None:
                 msgs.append("Failure: Not all values are given.")
+            elif uid == user_id:
+                msgs.append("Failure: You cannot delete your own account.")
             else:
                 x("DELETE FROM links WHERE user = ?", uid)
                 x("DELETE FROM categories WHERE user = ?", uid)
                 x("DELETE FROM users WHERE id = ?", uid)
+
+    elif action == "submitpassworduser":  # admin sets someone's password
+        if not admin:
+            msgs.append("Failure: No admin rights.")
+        else:
+            uid = to_int(request.form.get("c_id", ""))
+            pw1 = request.form.get("c_password1", "")
+            pw2 = request.form.get("c_password2", "")
+            if uid is None or not pw1 or not pw2:
+                msgs.append("Failure: All values should be entered.")
+            elif pw1 != pw2:
+                msgs.append("Failure: Passwords are not equal.")
+            elif not q1("SELECT 1 FROM users WHERE id = ?", uid):
+                msgs.append("Failure: passworduser.")
+            else:
+                x("UPDATE users SET password = ? WHERE id = ?", hash_password(pw1), uid)
+                msgs.append("Password is changed.")
+
+    elif action == "submitchangepassword":  # any user changes their own password
+        current = request.form.get("c_password", "")
+        pw1 = request.form.get("c_password1", "")
+        pw2 = request.form.get("c_password2", "")
+        row = q1("SELECT password FROM users WHERE id = ?", user_id)
+        if not current or not pw1 or not pw2:
+            msgs.append("Failure: All values should be entered.")
+        elif pw1 != pw2:
+            msgs.append("Failure: Passwords are not equal.")
+        elif not row or not verify_password(row["password"], current)[0]:
+            msgs.append("Failure: Current password is wrong.")
+        else:
+            x("UPDATE users SET password = ? WHERE id = ?", hash_password(pw1), user_id)
+            msgs.append("Password is changed.")
 
     get_db().commit()
     return msgs
@@ -450,8 +501,8 @@ def page_users(ctx):
         ctx["users"] = q("SELECT id, username FROM users ORDER BY id")
     elif mode == "add":
         ctx.update(form=True, label="Add")
-    elif mode == "del" and request.args.get("id", ""):
-        ctx.update(form=True, label="Delete")
+    elif mode in ("del", "password") and request.args.get("id", ""):
+        ctx.update(form=True, label="Delete" if mode == "del" else "Change")
         uid = to_int(request.args.get("id", ""))
         row = q1("SELECT id, username FROM users WHERE id = ?", uid) if uid is not None else None
         if row:
@@ -459,9 +510,14 @@ def page_users(ctx):
     return "users.html"
 
 
+def page_password(ctx):
+    return "password.html"
+
+
 PAGES = {
     "main": page_main,
     "login": page_login,
+    "password": page_password,
     "category": page_category,
     "link": page_link,
     "users": page_users,
@@ -550,28 +606,6 @@ def index():
 
 
 # --- CLI ------------------------------------------------------------------------------
-@app.cli.command("init-db")
-@click.option("--admin", "admin_name", default="admin", show_default=True,
-              help="Username of the admin account (gets User Management).")
-@click.option("--default-user", default=None,
-              help="Whose page anonymous visitors see. Defaults to the admin.")
-def init_db_command(admin_name, default_user):
-    """Create the database and an admin account."""
-    ensure_schema()
-    db = connect()
-    with db:
-        if not db.execute("SELECT 1 FROM users WHERE username = ?", (admin_name,)).fetchone():
-            password = click.prompt(f"Password for {admin_name}", hide_input=True,
-                                    confirmation_prompt=True)
-            db.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                       (admin_name, hash_password(password)))
-        db.execute("INSERT OR REPLACE INTO variables (name, value) VALUES ('admin_user', ?)", (admin_name,))
-        db.execute("INSERT OR REPLACE INTO variables (name, value) VALUES ('default_user', ?)",
-                   (default_user or admin_name,))
-    db.close()
-    click.echo(f"Database ready at {DB_PATH}")
-
-
 @app.cli.command("set-password")
 @click.argument("username")
 def set_password_command(username):

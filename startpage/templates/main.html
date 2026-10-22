@@ -50,6 +50,9 @@
 <BR>
 {% endif %}
 {% call link("Log off", "?action=submitlogoff") %}Log off{% endcall %}
+{% if own %}
+{% call link("Change your password", "?show=password") %}Change password{% endcall %}
+{% endif %}
 {% if admin %}
 {% call link("User Management", "?show=users&mode=list") %}User Management{% endcall %}
 {% endif %}
