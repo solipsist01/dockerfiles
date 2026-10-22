@@ -15,7 +15,7 @@ import sqlite3
 from pathlib import Path
 
 import click
-from flask import Flask, g, redirect, render_template, request, send_from_directory, session
+from flask import Flask, g, redirect, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -126,11 +126,7 @@ def _load_secret_key():
     return key_file.read_text().strip()
 
 
-PUBLIC_DIR = BASE_DIR / "public"  # what the site root (/) serves
-
-# The startpage's own files (css, background, icons) live under /startpage/,
-# exactly where the PHP version had them.
-app = Flask(__name__, static_folder="static", static_url_path="/startpage")
+app = Flask(__name__, static_folder="static", static_url_path="")
 app.secret_key = _load_secret_key()
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -528,31 +524,27 @@ PAGES = {
 }
 
 
-# --- Site root: the trollface page (files in public/) ----------------------------------
-@app.route("/")
-def root_page():
-    return send_from_directory(PUBLIC_DIR, "index.html")
-
-
-@app.route("/<path:filename>")
-def root_file(filename):
-    # send_from_directory refuses anything outside public/ (no ../ tricks)
-    return send_from_directory(PUBLIC_DIR, filename)
-
-
-# /startpage -> /startpage/ (like the old web server did for the directory), so the
-# relative links in the page (startpage.css, ?show=...) resolve under /startpage/.
+# --- Old location: https://host/startpage/... -> https://host/... ---------------------
 @app.route("/startpage", methods=["GET", "HEAD", "POST"])
-def startpage_slash():
-    target = "/startpage/"
+@app.route("/startpage/", methods=["GET", "HEAD", "POST"])
+@app.route("/startpage/<path:rest>", methods=["GET", "HEAD", "POST"])
+def old_location(rest=""):
+    """Redirect, keeping the query string, so old bookmarks such as
+    /startpage/?user=x or /startpage/index.php land on the same page here.
+    302 (temporary) on purpose: browsers don't cache it, so a later change of
+    layout takes effect immediately."""
+    rest = rest.lstrip("/\\")  # never produce //host or /\host (open redirect)
+    if rest == "index.php":
+        rest = ""
+    target = "/" + rest
     if request.query_string:
         target += "?" + request.query_string.decode("latin-1")
-    return redirect(target, code=301)
+    return redirect(target, code=302)
 
 
-# --- The startpage itself (was /startpage/index.php) -----------------------------------
-@app.route("/startpage/", methods=["GET", "POST"])
-@app.route("/startpage/index.php", methods=["GET", "POST"])
+# --- The one entry point (was index.php) --------------------------------------------
+@app.route("/", methods=["GET", "POST"])
+@app.route("/index.php", methods=["GET", "POST"])
 def index():
     default_user = get_dbvar("default_user")
     admin_user = get_dbvar("admin_user")

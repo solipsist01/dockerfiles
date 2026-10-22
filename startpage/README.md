@@ -5,12 +5,8 @@ before (no doctype, same tables and attributes), so it looks and behaves the sam
 
 ## Before you build
 
-Copy two things from the old site:
-
-- `trollface.jpg` (from the web root) into `public/`
-- the three icons `add.gif`, `info.gif`, `trash.gif` into `static/startpage_images/`
-
-(`black.jpg` and `startpage.css` are already in `static/`.)
+Copy the three icons from the old site into `static/startpage_images/`:
+`add.gif`, `info.gif`, `trash.gif`. (`black.jpg` and `startpage.css` are already in `static/`.)
 
 ## Build and run
 
@@ -24,17 +20,12 @@ reverse proxy); leave it out for plain-HTTP testing or logins won't stick.
 
 ## URL
 
-Same layout as the old site:
+The startpage lives at the root (`https://subdomain.domain.com/`). Anything
+under the old location `/startpage` is redirected to the same thing at the root,
+query string included: `/startpage/?user=x` → `/?user=x`. Old bookmarks keep
+working. The redirect is a 302, so browsers don't cache it.
 
-| URL | Serves |
-|---|---|
-| `/` | `public/index.html`, the trollface page (plus any other file you put in `public/`) |
-| `/startpage` | redirects to `/startpage/` (query string kept) |
-| `/startpage/`, `/startpage/index.php` | the startpage |
-| `/startpage/startpage.css`, `black.jpg`, `startpage_images/…` | from `static/` |
-
-Old bookmarks like `/startpage/?user=x` keep working. Route the whole host to
-the container (port 8000), no path prefix stripping needed.
+Route the whole host to the container (port 8000), no path prefix stripping needed.
 
 ## First login
 
