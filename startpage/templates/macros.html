@@ -1,0 +1,7 @@
+{#- Equivalent of createLink() in helpers.php. The mouse-over text goes through
+    tojson inside a single-quoted attribute, so a link URL can never break out
+    into script. The click counter (onclick) was already disabled in the PHP
+    version and stays out. -#}
+{% macro link(over, href) -%}
+<A ONMOUSEOVER='window.status={{ over|tojson }};return true' ONMOUSEOUT="window.status='';return true" HREF="{{ href }}">{{ caller() }}</A>
+{% endmacro %}

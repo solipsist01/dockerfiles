@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "macros.html" import link %}
+{% block content %}
+{% if cfg.header %}
+<CENTER><H1>{{ cfg.header }}</H1></CENTER>
+{% endif %}
+<div align="center"><TABLE BORDER="0" CELLSPACING="0">
+<TR WIDTH="100%">
+{% for column in columns %}
+<TD WIDTH="200" VALIGN="top"><TABLE WIDTH="100%" BORDER="0" CELLSPACING="0">
+{% for row in column %}
+{% if row.kind == "header" %}
+<TR CLASS="Header">
+  <TD NOWRAP><CENTER><B>{{ row.name }}</B></TD>
+{% if own %}
+  <TD NOWRAP COLSPAN=2 ALIGN="right">
+  {%- call link("Add a new link", "?show=link&mode=add&category=" ~ row.id) %}<IMG SRC="startpage_images/add.gif" WIDTH="20" BORDER="0">{% endcall %}
+  {%- call link("Edit this category", "?show=category&mode=edit&category=" ~ row.id) %}<IMG SRC="startpage_images/info.gif" WIDTH="10" BORDER="0">{% endcall %}
+  {%- call link("Delete this category", "?show=category&mode=del&category=" ~ row.id) %}<IMG SRC="startpage_images/trash.gif" WIDTH="10" BORDER="0">{% endcall %}
+&nbsp;</TD>
+{% else %}
+  <TD COLSPAN=3>&nbsp;</TD>
+{% endif %}
+</TR>
+{% elif row.kind == "link" %}
+<TR CLASS="Link">
+<TD NOWRAP><CENTER>{% call link(row.link, row.link) %}{{ row.name }}{% endcall %}</TD>
+<TD NOWRAP>&nbsp;</TD>
+{% if own %}
+  <TD ALIGN="right" NOWRAP>
+  {%- call link("Edit this link", "?show=link&mode=edit&link=" ~ row.id) %}<IMG SRC="startpage_images/info.gif" WIDTH="10" BORDER="0">{% endcall %}
+  {%- call link("Delete this link", "?show=link&mode=del&link=" ~ row.id) %}<IMG SRC="startpage_images/trash.gif" WIDTH="10" BORDER="0">{% endcall %}
+</TD>
+{% else %}
+  <TD>&nbsp;</TD>
+{% endif %}
+</TR>
+{% else %}
+<TR><TD COLSPAN=3>&nbsp;</TD></TR>
+{% endif %}
+{% endfor %}
+</TABLE></TD>
+<TD>&nbsp;&nbsp;&nbsp;</TD>
+{% endfor %}
+</TR>
+</TABLE>
+{% if logged_on %}
+{% if own %}
+{% call link("Add a new category", "?show=category&mode=add") %}Add a new category{% endcall %}
+<BR>
+{% endif %}
+{% call link("Log off", "?action=submitlogoff") %}Log off{% endcall %}
+{% if admin %}
+{% call link("User Management", "?show=users&mode=list") %}User Management{% endcall %}
+{% endif %}
+{% else %}
+{% call link("Log in", "?show=login") %}Log in{% endcall %}
+{% endif %}
+{% endblock %}

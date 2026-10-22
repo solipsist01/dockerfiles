@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<H2>Login</H2>
+<FORM METHOD="POST" ACTION="?show=main">
+<INPUT TYPE="hidden" NAME="csrf" VALUE="{{ csrf_token() }}">
+<INPUT TYPE="hidden" NAME="action" VALUE="submitlogin">
+<INPUT TYPE="hidden" NAME="show" VALUE="main">
+<TABLE BORDER="0" CELLSPACING="0">
+<TR><TD><B>Username</B></TD><TD><INPUT TYPE="text" NAME="c_username"></TD></TR>
+<TR><TD><B>Password</B></TD><TD><INPUT TYPE="password" NAME="c_password"></TD></TR>
+</TABLE>
+<INPUT TYPE="submit" VALUE="Login">
+</FORM>
+{% endblock %}

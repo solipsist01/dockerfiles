@@ -1,0 +1,17 @@
+{#- No doctype on purpose: the original page rendered in quirks mode, and the
+    stylesheet relies on it (e.g. the unitless "padding-left: 5"). -#}
+{% for m in pre_messages %}
+{{ m }}<br/>
+{% endfor %}
+<html>
+<head>
+<meta name="description" content="{{ cfg.description }}">
+<meta name="keywords" content="{{ cfg.keywords }}">
+<title>{{ cfg.title }}</title>
+<link rel="stylesheet" href="{{ cfg.stylesheet }}" type="text/css">
+</head>
+<body>
+{% for m in messages %}
+{{ m }}
+{% endfor %}
+{% block content %}{% endblock %}

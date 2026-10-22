@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<H2>{{ label }} link</H2>
+<FORM METHOD="POST" ACTION="?show=main">
+<INPUT TYPE="hidden" NAME="csrf" VALUE="{{ csrf_token() }}">
+<INPUT TYPE="hidden" NAME="action" VALUE="submit{{ mode }}link">
+<INPUT TYPE="hidden" NAME="c_id" VALUE="{{ c_id }}">
+<TABLE BORDER="0" CELLSPACING="0">
+<TR><TD><B>Name</B></TD><TD><INPUT TYPE="text" SIZE="40" NAME="c_name" VALUE="{{ c_name }}"></TD></TR>
+<TR><TD><B>Link</B></TD><TD><INPUT TYPE="text" SIZE="60" NAME="c_link" VALUE="{{ c_link }}"></TD></TR>
+<TR><TD><B>Category</B></TD><TD>
+<SELECT name="c_category">
+{% for opt in options %}
+<OPTION VALUE="{{ opt.id }}"{% if c_category and c_category == opt.id|string %} SELECTED{% endif %}>{{ opt.name }}
+{% endfor %}
+</SELECT>
+</TD></TR>
+</TABLE>
+<INPUT TYPE="submit" value="{{ label }}">
+</FORM>
+{% endblock %}

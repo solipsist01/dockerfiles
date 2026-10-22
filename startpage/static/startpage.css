@@ -1,0 +1,27 @@
+TR.Header {
+	color: #00FF00;
+	padding-left: 5;
+	font-size: 16pt;
+}
+
+TR.Link {
+font-size: 14pt;
+COLOR: white;
+}
+a:Link {
+COLOR: white;
+}
+a:visited {
+COLOR: white;
+}
+a:hover {
+COLOR: white;
+}
+a:active {
+COLOR: white;
+}
+
+BODY {
+	background-image:url('black.jpg');} 
+}
+

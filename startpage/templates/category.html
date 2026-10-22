@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<H2>{{ label }} category</H2>
+{% if mode == "del" %}
+<FONT COLOR=Red>Warning: All links in this category will be removed also.</FONT><BR>
+{% endif %}
+<FORM METHOD="POST" ACTION="?show=main">
+<INPUT TYPE="hidden" NAME="csrf" VALUE="{{ csrf_token() }}">
+<INPUT TYPE="hidden" NAME="action" VALUE="submit{{ mode }}category">
+<INPUT TYPE="hidden" NAME="c_id" VALUE="{{ c_id }}">
+<TABLE BORDER="0" CELLSPACING="0">
+<TR><TD><B>Name</B></TD><TD><INPUT TYPE="text" SIZE="40" NAME="c_name" VALUE="{{ c_name }}"></TD></TR>
+<TR><TD><B>Parent</B></TD><TD>
+<SELECT name="c_parent">
+<option value="1">No Parent
+{% for opt in options %}
+<OPTION VALUE="{{ opt.id }}"{% if c_parent and c_parent == opt.id|string %} SELECTED{% endif %}>{{ opt.name }}
+{% endfor %}
+</SELECT>
+</TD></TR>
+</TABLE>
+<INPUT TYPE="submit" value="{{ label }}">
+</FORM>
+{% endblock %}
