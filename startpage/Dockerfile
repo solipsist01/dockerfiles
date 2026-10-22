@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY startpage.py ./
 COPY templates ./templates
 COPY static ./static
+COPY public ./public
 
 RUN useradd --system --uid 10001 --no-create-home startpage \
     && mkdir /data && chown startpage:startpage /data
