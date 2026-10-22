@@ -15,7 +15,7 @@ import sqlite3
 from pathlib import Path
 
 import click
-from flask import Flask, g, render_template, request, session
+from flask import Flask, g, redirect, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -522,6 +522,22 @@ PAGES = {
     "link": page_link,
     "users": page_users,
 }
+
+
+# --- Old location: https://host/startpage/... -> https://host/... ---------------------
+@app.route("/startpage", methods=["GET", "HEAD", "POST"])
+@app.route("/startpage/", methods=["GET", "HEAD", "POST"])
+@app.route("/startpage/<path:rest>", methods=["GET", "HEAD", "POST"])
+def old_location(rest=""):
+    """Permanent redirect, keeping the query string, so old bookmarks such as
+    /startpage/?user=x or /startpage/index.php land on the same page here."""
+    rest = rest.lstrip("/\\")  # never produce //host or /\host (open redirect)
+    if rest in ("index.php",):
+        rest = ""
+    target = "/" + rest
+    if request.query_string:
+        target += "?" + request.query_string.decode("latin-1")
+    return redirect(target, code=301)
 
 
 # --- The one entry point (was index.php) --------------------------------------------

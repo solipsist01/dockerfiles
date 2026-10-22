@@ -18,6 +18,14 @@ Copy the three icons from the old site into `static/startpage_images/`:
 Set `SESSION_COOKIE_SECURE=1` when the site is served over HTTPS (e.g. behind a
 reverse proxy); leave it out for plain-HTTP testing or logins won't stick.
 
+## URL
+
+The page lives at the root (`https://subdomain.domain.com/`). Anything under the
+old location `/startpage` gets a permanent (301) redirect to the same thing at
+the root, query string included: `/startpage/?user=x` → `/?user=x`. Old
+bookmarks keep working. Route the whole host to the container (port 8000), no
+path prefix stripping needed.
+
 ## First login
 
 On an empty database the app creates one account, **admin / admin**. It is the
