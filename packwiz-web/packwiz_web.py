@@ -325,8 +325,8 @@ def set_download(meta_file, url):
     meta_file.write_text(toml)
 
 
-def mirror_jar(mod, source_url):
-    """Download a mod's jar, check it against the hash packwiz recorded, store it."""
+def fetch_jar(mod, source_url):
+    """Download a mod's jar and check it against the hash packwiz recorded."""
     try:
         data = http_get(source_url, timeout=120)
     except OSError as e:
@@ -334,7 +334,12 @@ def mirror_jar(mod, source_url):
     if mod["hash_format"] in hashlib.algorithms_available:
         if hashlib.new(mod["hash_format"], data).hexdigest() != mod["hash"].lower():
             raise ActionError(f"Downloaded {mod['filename']} doesn't match its hash.")
-    return store_jar(data, mod["filename"])
+    return data
+
+
+def mirror_jar(mod, source_url):
+    """Download a mod's jar, check it, store it; returns its sha256."""
+    return store_jar(fetch_jar(mod, source_url), mod["filename"])
 
 
 def modrinth_file_url(mod):
@@ -524,11 +529,28 @@ def find_file_matches(data, sha512):
     return matches
 
 
-def uploaded_jar_bytes(mod):
+def mod_jar_bytes(mod):
+    """The jar a mod uses right now: stored here, or fetched from Modrinth/CurseForge."""
     hosted = JAR_URL_RE.search(mod["url"])
-    if not hosted:
-        raise ActionError(f"{mod['name']} has no stored jar.")
-    return (JARS_DIR / hosted.group(1) / os.path.basename(mod["filename"])).read_bytes()
+    if hosted:
+        return (JARS_DIR / hosted.group(1) / os.path.basename(mod["filename"])).read_bytes()
+    if mod["url"]:
+        return fetch_jar(mod, mod["url"])
+    if mod["provider"] == "curseforge" and CURSEFORGE_API_KEY:
+        source_url = curseforge_download_url(mod)
+        if source_url:
+            return fetch_jar(mod, source_url)
+    raise ActionError(f"Can't download {mod['filename']} from CurseForge here. "
+                      "Download it from CurseForge and upload it instead.")
+
+
+def set_side(meta_file, side):
+    toml = meta_file.read_text()
+    if re.search(r'^side = ".*"$', toml, flags=re.M):
+        toml = re.sub(r'^side = ".*"$', f'side = "{side}"', toml, count=1, flags=re.M)
+    else:
+        toml = re.sub(r"^(filename = .*)$", rf'\1\nside = "{side}"', toml, count=1, flags=re.M)
+    meta_file.write_text(toml)
 
 
 # --- Modrinth -----------------------------------------------------------------
@@ -1268,9 +1290,9 @@ def admin_upload_finish(slug):
     return {"ok": True}
 
 
-def uploaded_mod(slug, stem):
+def find_mod(slug, stem):
     mod = next((m for m in read_mods(slug) if m["stem"] == stem), None)
-    if not mod or mod["source"] != "uploaded":
+    if not mod:
         abort(404)
     return mod
 
@@ -1278,7 +1300,7 @@ def uploaded_mod(slug, stem):
 @admin_route("/admin/pack/<slug>/link/<stem>")
 def admin_link(slug, stem):
     pack_dir(slug)
-    pack, mod = read_pack(slug), uploaded_mod(slug, stem)
+    pack, mod = read_pack(slug), find_mod(slug, stem)
     query = request.args.get("q", mod["name"]).strip()
     provider = request.args.get("source", mod["provider"] or "modrinth")
     if provider != "curseforge" or not CURSEFORGE_API_KEY:
@@ -1308,14 +1330,21 @@ def admin_link(slug, stem):
 @admin_route("/admin/pack/<slug>/link/<stem>", methods=["POST"])
 def admin_link_save(slug, stem):
     pack_dir(slug)
-    mod = uploaded_mod(slug, stem)
+    mod = find_mod(slug, stem)
     provider = request.form.get("provider", "")
     project_id = request.form.get("project_id", "")
     if project_id and not ((provider == "modrinth" and re.fullmatch(r"[A-Za-z0-9]{8}", project_id)) or
                            (provider == "curseforge" and re.fullmatch(r"[0-9]{1,10}", project_id))):
         abort(400)
+    if project_id and mod["source"] != "uploaded":
+        return relink_mod(slug, mod, provider, project_id)
     with write_lock():
-        data = uploaded_jar_bytes(mod)
+        try:
+            # Unlinking a Modrinth/CurseForge mod keeps its exact file as our own jar.
+            data = mod_jar_bytes(mod)
+        except ActionError as e:
+            flash(str(e), "error")
+            return redirect(url_for("admin_pack", slug=slug))
         sha512 = hashlib.sha512(data).hexdigest()
         link = None
         if project_id:
@@ -1323,16 +1352,51 @@ def admin_link_save(slug, stem):
             wanted = project_key(provider, project_id)
             link = next((m for m in find_file_matches(data, sha512) if project_key(*m[:2]) == wanted),
                         (provider, project_id, ""))
-        write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"],
-                          hashlib.sha256(data).hexdigest(), sha512, link)
+        sha256 = store_jar(data, mod["filename"])
+        write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"], sha256, sha512, link)
         try:
             packwiz(slug, "refresh")
         except ActionError as e:
             flash(str(e), "error")
+        errors = after_change(slug)
+    for e in errors:
+        flash(e, "error")
     if project_id:
         flash(f"{mod['name']} is linked to {PROVIDER_NAMES[provider]}. Updates show up on the pack page.", "ok")
+    elif mod["source"] != "uploaded":
+        flash(f"{mod['name']} is unlinked: {mod['filename']} is now hosted here and won't be updated.", "ok")
     else:
         flash(f"{mod['name']} is no longer linked.", "ok")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+def relink_mod(slug, mod, provider, project_id):
+    """Take a Modrinth/CurseForge mod from another project instead, keeping its side."""
+    wanted = project_key(provider, project_id)
+    if wanted == mod["key"]:
+        flash(f"{mod['name']} is already linked to that project.", "ok")
+        return redirect(url_for("admin_pack", slug=slug))
+    command = (["modrinth", "add", "--project-id", project_id] if provider == "modrinth"
+               else ["curseforge", "add", "--addon-id", project_id])
+    pack = read_pack(slug)
+    changes, errors = [], []
+    with write_lock():
+        before = file_versions(slug)
+        try:
+            packwiz(slug, *command)
+            new = next((m for m in read_mods(slug) if m["key"] == wanted), None)
+            if new and new["stem"] != mod["stem"]:
+                packwiz(slug, "remove", mod["stem"])
+            if new:
+                set_side(new["path"], mod["side"])
+                packwiz(slug, "refresh")
+            changes = describe_changes(pack["name"], before, file_versions(slug))
+        except ActionError as e:
+            errors.append(e)
+        errors += after_change(slug)
+    flash_results(changes, errors, f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.")
+    if changes:
+        flash(f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
 
 
@@ -1377,14 +1441,8 @@ def admin_side(slug):
     mods = {m["stem"]: m for m in read_mods(slug)}
     if stem not in mods or side not in SIDES:
         abort(400)
-    meta_file = mods[stem]["path"]
     with write_lock():
-        toml = meta_file.read_text()
-        if re.search(r'^side = ".*"$', toml, flags=re.M):
-            toml = re.sub(r'^side = ".*"$', f'side = "{side}"', toml, count=1, flags=re.M)
-        else:
-            toml = re.sub(r"^(filename = .*)$", rf'\1\nside = "{side}"', toml, count=1, flags=re.M)
-        meta_file.write_text(toml)
+        set_side(mods[stem]["path"], side)
         try:
             packwiz(slug, "refresh")
             flash(f"{mods[stem]['name']} is now '{side}'.", "ok")

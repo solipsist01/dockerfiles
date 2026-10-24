@@ -3,8 +3,11 @@
 {% block content %}
 <p><a href="{{ url_for('admin_pack', slug=pack.slug) }}">← {{ pack.name }}</a></p>
 <h1>Link {{ mod.name }}</h1>
-<p class="muted">Uploaded file: <code>{{ mod.filename }}</code>. Linking it to its Modrinth or CurseForge project gives you
-  update notices for this mod. The jar you uploaded stays in use until you click <b>Update</b>.</p>
+<p class="muted">Current file: <code>{{ mod.filename }}</code>{% if mod.source == 'uploaded' %} (uploaded){% endif %}.
+  {% if mod.source == 'uploaded' %}Linking it to its Modrinth or CurseForge project gives you update notices for this mod.
+  The jar you uploaded stays in use until you click <b>Update</b>.
+  {% else %}Linking it to another project replaces this mod with that project's version (it keeps its side).
+  <b>Unlink</b> keeps exactly this file, hosted here, and stops updates for it: handy to pin a version.{% endif %}</p>
 
 {% if current %}
 <section class="card">
@@ -18,7 +21,7 @@
     <form method="post">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <input type="hidden" name="project_id" value="">
-      <button class="danger">Unlink</button>
+      <button class="danger"{% if mod.source != 'uploaded' %} title="Keep {{ mod.filename }} as a hosted jar, without updates"{% endif %}>{{ 'Unlink' if mod.source == 'uploaded' else 'Unlink (keep this file)' }}</button>
     </form>
   </div>
 </section>

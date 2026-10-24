@@ -177,7 +177,7 @@
       </td>
       <td class="actions">
         {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
-        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Change the link of this uploaded jar' if mod.provider else 'Link this jar to its Modrinth or CurseForge project' }}">{{ '✎' if mod.provider else 'Link' }}</a>{% endif %}
+        <a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Change or remove the link' if mod.provider else 'Link this jar to its Modrinth or CurseForge project' }}">{{ '✎' if mod.provider else 'Link' }}</a>
         <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">
