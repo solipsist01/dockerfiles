@@ -11,7 +11,7 @@
 </div>
 
 <table>
-  <thead><tr><th>Pack</th><th>Minecraft</th><th>Loader</th><th>Mods</th><th></th></tr></thead>
+  <thead><tr><th>Pack</th><th>Minecraft</th><th>Loader</th><th>Mods</th><th>Jars</th><th></th></tr></thead>
   <tbody>
   {% for pack in packs %}
     <tr>
@@ -19,6 +19,7 @@
       <td>{{ pack.minecraft }}</td>
       <td>{{ pack.loader_name }}</td>
       <td>{{ pack.mods|length }}</td>
+      <td class="muted">{{ 'hosted here' if pack.mirror else 'Modrinth' }}</td>
       <td class="actions">
         <details class="inline">
           <summary>Copy</summary>
@@ -35,7 +36,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="muted">No packs yet. Create one below.</td></tr>
+    <tr><td colspan="6" class="muted">No packs yet. Create one below.</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -53,6 +54,7 @@
     <select name="loader">
       {% for key, label in loaders.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
     </select>
+    <label class="choice small"><input type="checkbox" name="mirror" value="1"> Host Modrinth jars here</label>
     <button class="primary">Create</button>
   </form>
   <p class="muted">The newest loader version is picked automatically.</p>

@@ -143,3 +143,12 @@ code.block { display: block; padding: 8px 10px; margin: 4px 0; }
 @media (max-width: 600px) {
   .results li { flex-wrap: wrap; }
 }
+
+label.choice { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+label.choice input { margin: 0; }
+.checks { margin-top: 8px; gap: 12px; }
+h3 { font-size: 0.9rem; margin: 16px 0 0; }
+.results.dim li { opacity: 0.65; }
+.tag.uploaded { color: var(--accent); border-color: var(--accent); }
+.tag.mirrored { color: var(--muted); }
+input[type=file] { flex: 1; min-width: 200px; }
