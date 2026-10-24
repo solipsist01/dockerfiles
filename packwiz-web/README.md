@@ -60,7 +60,20 @@ greyed out underneath, so a mod never just silently disappears.
   redistributes other people's mods; many mod licenses don't allow that.
 - *Uploads* are always hosted here, in any mode. The mod name is read from the jar
   (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`). Uploading a newer jar of a mod that's
-  already in the pack replaces it and keeps its side. **Update all** skips uploaded jars.
+  already in the pack replaces it and keeps its side.
+
+**Modrinth link and updates:**
+- Every pack page checks Modrinth for updates (one batch request, by file hash) and shows
+  `→ new version` with an **Update** button per mod; **Update all mods (n)** does them all.
+  The overview shows the number of available updates per pack.
+- An upload whose exact file is on Modrinth (sha512 lookup) is **linked automatically**.
+  Otherwise click **Link** next to it and pick the project (search, or paste a Modrinth
+  link/slug). A hand-linked custom build shows "Modrinth has X", since its own version is unknown.
+- **Update** on an uploaded jar swaps it for the Modrinth version; from then on it's a normal
+  Modrinth mod that follows the pack's hosting mode (side is kept). So **Update all** also
+  replaces linked uploads; unlinked uploads are never touched.
+- Uploaded jars carry `x-uploaded = true` in their `.pw.toml`. packwiz keeps that key on
+  refresh and drops it when it updates the mod from Modrinth.
 
 Jars no pack refers to anymore are deleted automatically.
 

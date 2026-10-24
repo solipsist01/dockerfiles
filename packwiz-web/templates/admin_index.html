@@ -11,7 +11,7 @@
 </div>
 
 <table>
-  <thead><tr><th>Pack</th><th>Minecraft</th><th>Loader</th><th>Mods</th><th>Jars</th><th></th></tr></thead>
+  <thead><tr><th>Pack</th><th>Minecraft</th><th>Loader</th><th>Mods</th><th>Jars</th><th>Updates</th><th></th></tr></thead>
   <tbody>
   {% for pack in packs %}
     <tr>
@@ -20,6 +20,7 @@
       <td>{{ pack.loader_name }}</td>
       <td>{{ pack.mods|length }}</td>
       <td class="muted">{{ 'hosted here' if pack.mirror else 'Modrinth' }}</td>
+      <td>{% set n = update_counts[pack.slug] %}{% if n is none %}<span class="muted">?</span>{% elif n %}<a href="{{ url_for('admin_pack', slug=pack.slug) }}"><b>{{ n }} available</b></a>{% else %}<span class="muted">up to date</span>{% endif %}</td>
       <td class="actions">
         <details class="inline">
           <summary>Copy</summary>
@@ -36,7 +37,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="6" class="muted">No packs yet. Create one below.</td></tr>
+    <tr><td colspan="7" class="muted">No packs yet. Create one below.</td></tr>
   {% endfor %}
   </tbody>
 </table>

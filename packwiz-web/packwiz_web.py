@@ -26,6 +26,7 @@ import secrets
 import shutil
 import subprocess
 import tomllib
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -131,7 +132,7 @@ def read_mods(slug):
         modrinth = meta.get("update", {}).get("modrinth", {})
         download = meta.get("download", {})
         url = download.get("url", "")
-        if not modrinth:
+        if meta.get("x-uploaded") or not modrinth:
             source = "uploaded"
         elif JAR_URL_RE.search(url):
             source = "mirrored"
@@ -309,10 +310,10 @@ def sync_hosting(slug):
     for mod in read_mods(slug):
         hosted = JAR_URL_RE.search(mod["url"])
         try:
-            if hosted and mod["mod_id"] and not mirror:
-                url = modrinth_file_url(mod)
-            elif hosted:
+            if hosted and (mod["source"] == "uploaded" or mirror):
                 url = jar_url(hosted.group(1), mod["filename"])
+            elif hosted:
+                url = modrinth_file_url(mod)
             elif mirror and mod["mod_id"]:
                 url = jar_url(mirror_jar(mod), mod["filename"])
             else:
@@ -380,10 +381,34 @@ def jar_metadata(data, filename):
     return None, None
 
 
-def write_upload(slug, filename, sha, mod_id, name, side):
+def write_upload_meta(meta_file, name, filename, side, sha256, sha512, mod_id=None, version_id=""):
+    """Write the .pw.toml of an uploaded jar, optionally linked to a Modrinth project.
+
+    x-uploaded marks the jar as ours: packwiz keeps unknown keys on refresh and
+    drops them when it updates the mod from Modrinth, so the mark lasts exactly
+    as long as the uploaded file is in use. sha512 lets Modrinth recognise it.
+    """
+    lines = [
+        f"name = {json.dumps(name)}",
+        f"filename = {json.dumps(filename)}",
+        f'side = "{side}"',
+        "x-uploaded = true",
+        "",
+        "[download]",
+        f"url = {json.dumps(jar_url(sha256, filename))}",
+        'hash-format = "sha512"',
+        f'hash = "{sha512}"',
+    ]
+    if mod_id:
+        lines += ["", "[update]", "[update.modrinth]",
+                  f"mod-id = {json.dumps(mod_id)}", f"version = {json.dumps(version_id or '')}"]
+    meta_file.write_text("\n".join(lines) + "\n")
+
+
+def write_upload(slug, filename, sha256, sha512, jar_id, name, side, match):
     """Create (or replace) the .pw.toml for an uploaded jar; returns a message."""
     pack_name = read_pack(slug)["name"]
-    stem = slugify(mod_id or name or filename.rsplit(".", 1)[0]) or "upload"
+    stem = slugify(jar_id or name or filename.rsplit(".", 1)[0]) or "upload"
     existing = next((m for m in read_mods(slug) if m["stem"] == stem), None)
     if existing:
         side = existing["side"]
@@ -391,20 +416,25 @@ def write_upload(slug, filename, sha, mod_id, name, side):
     else:
         meta_file = PACKS_DIR / slug / "mods" / f"{stem}.pw.toml"
         meta_file.parent.mkdir(exist_ok=True)
-    meta_file.write_text("\n".join([
-        f"name = {json.dumps(name or filename)}",
-        f"filename = {json.dumps(filename)}",
-        f'side = "{side}"',
-        "",
-        "[download]",
-        f"url = {json.dumps(jar_url(sha, filename))}",
-        'hash-format = "sha256"',
-        f'hash = "{sha}"',
-        "",
-    ]))
+    if match:
+        mod_id, version_id = match["project_id"], match["id"]
+    elif existing and existing["mod_id"]:
+        # A new build of a mod that was linked by hand: keep the link.
+        mod_id, version_id = existing["mod_id"], ""
+    else:
+        mod_id, version_id = None, ""
+    write_upload_meta(meta_file, name or filename, filename, side, sha256, sha512, mod_id, version_id)
+    note = "uploaded, matched on Modrinth" if match else "uploaded"
     if existing:
-        return f"{pack_name}: {existing['filename']} → {filename} (uploaded)"
-    return f"{pack_name}: added {filename} (uploaded)"
+        return f"{pack_name}: {existing['filename']} → {filename} ({note})"
+    return f"{pack_name}: added {filename} ({note})"
+
+
+def uploaded_jar_bytes(mod):
+    hosted = JAR_URL_RE.search(mod["url"])
+    if not hosted:
+        raise ActionError(f"{mod['name']} has no stored jar.")
+    return (JARS_DIR / hosted.group(1) / os.path.basename(mod["filename"])).read_bytes()
 
 
 # --- Modrinth -----------------------------------------------------------------
@@ -426,12 +456,77 @@ def compatible_loaders(loader, mc_version):
     return [loader] if loader else []
 
 
+def modrinth_post(path, body):
+    req = urllib.request.Request(f"{MODRINTH_API}{path}", json.dumps(body).encode(), {
+        "User-Agent": USER_AGENT, "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.load(resp)
+
+
 def modrinth_search(query, facets, limit=20):
     data = modrinth_get("/search", {
         "query": query, "facets": json.dumps([["project_type:mod"], *facets]),
         "limit": limit, "index": "relevance",
     })
     return data.get("hits", [])
+
+
+def pack_facets(pack):
+    facets = [[f"versions:{pack['minecraft']}"]]
+    loaders = compatible_loaders(pack["loader"], pack["minecraft"])
+    if loaders:
+        facets.append([f"categories:{l}" for l in loaders])
+    return facets
+
+
+def modrinth_version_by_hash(sha512):
+    """The Modrinth version this exact file belongs to, or None."""
+    try:
+        return modrinth_get(f"/version_file/{sha512}", {"algorithm": "sha512"})
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def modrinth_project(slug_or_url):
+    """Look up a project from a Modrinth URL, slug or id; None if it isn't one."""
+    m = re.search(r"modrinth\.com/(?:mod|project|plugin|datapack)/([\w.-]+)", slug_or_url)
+    slug = m.group(1) if m else slug_or_url.strip()
+    if not re.fullmatch(r"[\w.-]+", slug):
+        return None
+    try:
+        return modrinth_get(f"/project/{slug}")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def check_updates(pack):
+    """Newest compatible Modrinth version for each linked mod that isn't on it."""
+    linked = [m for m in pack["mods"] if m["mod_id"]]
+    loaders = compatible_loaders(pack["loader"], pack["minecraft"])
+    updates, unknown = {}, []
+    by_hash = {m["hash"].lower(): m for m in linked if m["hash_format"] == "sha512" and m["version_id"]}
+    if by_hash:
+        latest = modrinth_post("/version_files/update", {
+            "hashes": list(by_hash), "algorithm": "sha512",
+            "loaders": loaders, "game_versions": [pack["minecraft"]],
+        })
+        for file_hash, mod in by_hash.items():
+            if file_hash not in latest:
+                unknown.append(mod)
+            elif latest[file_hash]["id"] != mod["version_id"]:
+                updates[mod["stem"]] = latest[file_hash]
+    # Linked by hand, or a file Modrinth doesn't know: ask per project.
+    unknown += [m for m in linked if m not in by_hash.values()]
+    for mod in unknown:
+        versions = modrinth_get(f"/project/{mod['mod_id']}/version", {
+            "loaders": json.dumps(loaders), "game_versions": json.dumps([pack["minecraft"]])})
+        if versions and versions[0]["id"] != mod["version_id"]:
+            updates[mod["stem"]] = versions[0]
+    return updates
 
 
 _mc_versions_cache = []
@@ -590,8 +685,15 @@ def admin_index():
                 entry["packs"].append(pack["name"])
     shared = sorted((dict(e, mod_id=k) for k, e in shared.items() if len(e["packs"]) > 1),
                     key=lambda e: e["name"].lower())
+    update_counts = {}
+    for pack in packs:
+        try:
+            update_counts[pack["slug"]] = len(check_updates(pack))
+        except (OSError, ValueError):
+            update_counts[pack["slug"]] = None
     return render_template("admin_index.html", packs=packs, shared=shared, loaders=LOADERS,
-                           mc_versions=minecraft_versions(), pack_url=pack_url)
+                           mc_versions=minecraft_versions(), pack_url=pack_url,
+                           update_counts=update_counts)
 
 
 @admin_route("/admin/new", methods=["POST"])
@@ -662,24 +764,25 @@ def admin_pack(slug):
     query = request.args.get("q", "").strip()
     results, others, search_error = [], [], None
     if query:
-        loaders = compatible_loaders(pack["loader"], pack["minecraft"])
-        facets = [[f"versions:{pack['minecraft']}"]]
-        if loaders:
-            facets.append([f"categories:{l}" for l in loaders])
         try:
-            results = modrinth_search(query, facets)
+            results = modrinth_search(query, pack_facets(pack))
             # Close matches that have no build for this pack, so they don't just vanish.
             found = {hit["project_id"] for hit in results}
             others = [hit for hit in modrinth_search(query, [], limit=10)
                       if hit["project_id"] not in found][:5]
         except (OSError, ValueError) as e:
             search_error = f"Modrinth search failed: {e}"
+    try:
+        updates, update_error = check_updates(pack), None
+    except (OSError, ValueError) as e:
+        updates, update_error = {}, f"Checking Modrinth for updates failed: {e}"
     installed = {m["mod_id"] for m in pack["mods"] if m["mod_id"]}
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
     return render_template("admin_pack.html", pack=pack, query=query, results=results,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
-                           max_upload_mb=MAX_UPLOAD_MB)
+                           max_upload_mb=MAX_UPLOAD_MB, updates=updates,
+                           update_error=update_error)
 
 
 @admin_route("/admin/pack/<slug>/hosting", methods=["POST"])
@@ -745,12 +848,18 @@ def admin_upload(slug):
                 continue
             data = upload.read()
             try:
-                mod_id, name = jar_metadata(data, filename)
+                jar_id, name = jar_metadata(data, filename)
             except ActionError as e:
                 errors.append(e)
                 continue
-            sha = store_jar(data, filename)
-            changes += [write_upload(t, filename, sha, mod_id, name, side) for t in targets]
+            sha512 = hashlib.sha512(data).hexdigest()
+            try:
+                match = modrinth_version_by_hash(sha512)
+            except (OSError, ValueError):
+                match = None
+            sha256 = store_jar(data, filename)
+            changes += [write_upload(t, filename, sha256, sha512, jar_id, name, side, match)
+                        for t in targets]
         for t in targets:
             try:
                 packwiz(t, "refresh")
@@ -758,6 +867,81 @@ def admin_upload(slug):
                 errors.append(e)
         errors += after_change(*targets)
     flash_results(changes, errors, "Nothing uploaded.")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+def uploaded_mod(slug, stem):
+    mod = next((m for m in read_mods(slug) if m["stem"] == stem), None)
+    if not mod or mod["source"] != "uploaded":
+        abort(404)
+    return mod
+
+
+@admin_route("/admin/pack/<slug>/link/<stem>")
+def admin_link(slug, stem):
+    pack_dir(slug)
+    pack, mod = read_pack(slug), uploaded_mod(slug, stem)
+    query = request.args.get("q", mod["name"]).strip()
+    results, search_error, current = [], None, None
+    try:
+        if mod["mod_id"]:
+            current = modrinth_get(f"/project/{mod['mod_id']}")
+        if query:
+            results = modrinth_search(query, pack_facets(pack))
+            direct = modrinth_project(query)
+            if direct and direct["id"] not in {hit["project_id"] for hit in results}:
+                results.insert(0, dict(direct, project_id=direct["id"]))
+    except (OSError, ValueError) as e:
+        search_error = f"Modrinth lookup failed: {e}"
+    return render_template("admin_link.html", pack=pack, mod=mod, query=query,
+                           results=results, current=current, search_error=search_error)
+
+
+@admin_route("/admin/pack/<slug>/link/<stem>", methods=["POST"])
+def admin_link_save(slug, stem):
+    pack_dir(slug)
+    mod = uploaded_mod(slug, stem)
+    project_id = request.form.get("project_id", "")
+    if project_id and not re.match(r"^[A-Za-z0-9]{8}$", project_id):
+        abort(400)
+    with write_lock():
+        data = uploaded_jar_bytes(mod)
+        sha512 = hashlib.sha512(data).hexdigest()
+        version_id = ""
+        if project_id:
+            try:
+                match = modrinth_version_by_hash(sha512)
+            except (OSError, ValueError):
+                match = None
+            if match and match["project_id"] == project_id:
+                version_id = match["id"]
+        write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"],
+                          hashlib.sha256(data).hexdigest(), sha512, project_id, version_id)
+        try:
+            packwiz(slug, "refresh")
+        except ActionError as e:
+            flash(str(e), "error")
+    if project_id:
+        flash(f"{mod['name']} is linked to Modrinth. Updates show up on the pack page.", "ok")
+    else:
+        flash(f"{mod['name']} is no longer linked to Modrinth.", "ok")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+@admin_route("/admin/pack/<slug>/update-one", methods=["POST"])
+def admin_update_one(slug):
+    pack_dir(slug)
+    stem = request.form.get("stem", "")
+    if stem not in {m["stem"] for m in read_mods(slug)}:
+        abort(400)
+    changes, errors = [], []
+    with write_lock():
+        try:
+            changes = run_and_report(read_pack(slug), "update", stem)
+        except ActionError as e:
+            errors.append(e)
+        errors += after_change(slug)
+    flash_results(changes, errors)
     return redirect(url_for("admin_pack", slug=slug))
 
 

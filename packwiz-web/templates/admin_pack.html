@@ -9,9 +9,10 @@
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('admin_update_pack', slug=pack.slug) }}">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <button class="primary">Update all mods</button>
+    <button class="primary">Update all mods{% if updates %} ({{ updates|length }}){% endif %}</button>
   </form>
 </div>
+{% if update_error %}<div class="flash error">{{ update_error }}</div>{% endif %}
 
 <div class="copyrow"><span class="muted">Pack URL</span><code>{{ pack_url }}</code><button type="button" data-copy="{{ pack_url }}">Copy</button></div>
 
@@ -99,16 +100,16 @@
   </form>
   <p class="muted small">Up to {{ max_upload_mb }} MB per upload (Cloudflare allows 100 MB per request on the free plan).
     Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
-    Uploaded jars are skipped by "Update all mods"; upload the new version instead.</p>
+    If the exact jar is on Modrinth it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the mod list.</p>
 </section>
 
 <h2>Mods ({{ pack.mods|length }})</h2>
 <table>
-  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th></th></tr></thead>
+  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th>Update</th><th></th></tr></thead>
   <tbody>
   {% for mod in pack.mods %}
     <tr>
-      <td><b>{{ mod.name }}</b>{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
+      <td>{% if mod.mod_id %}<a href="https://modrinth.com/project/{{ mod.mod_id }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
         {% if mod.source != 'modrinth' %}<span class="tag small {{ mod.source }}">{{ mod.source }}</span>{% endif %}</td>
       <td class="muted small">{{ mod.filename }}</td>
       <td>
@@ -120,7 +121,19 @@
           </select>
         </form>
       </td>
+      <td class="update">
+        {% if mod.stem in updates %}
+        <form method="post" action="{{ url_for('admin_update_one', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <span class="small" title="{{ updates[mod.stem].name }}">{% if mod.source == 'uploaded' and not mod.version_id %}Modrinth has {% else %}→ {% endif %}{{ updates[mod.stem].version_number }}</span>
+          <button class="primary small">Update</button>
+        </form>
+        {% elif mod.mod_id %}<span class="muted small">up to date</span>
+        {% endif %}
+      </td>
       <td class="actions">
+        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}">{{ 'Link' if not mod.mod_id else 'Linked' }}</a>{% endif %}
         <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">
@@ -129,9 +142,10 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="4" class="muted">No mods yet. Search above to add some.</td></tr>
+    <tr><td colspan="5" class="muted">No mods yet. Search above to add some.</td></tr>
   {% endfor %}
   </tbody>
 </table>
-<p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.</p>
+<p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
+  Updating an uploaded jar swaps it for the Modrinth version.</p>
 {% endblock %}
