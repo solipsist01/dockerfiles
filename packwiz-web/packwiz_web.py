@@ -273,7 +273,8 @@ def packwiz(slug_or_path, *args):
 
 
 def file_versions(slug):
-    return {m["stem"]: m["filename"] for m in read_mods(slug)}
+    # Keyed by project where known, so a mod that moved to another file name still pairs up.
+    return {m["key"] or m["stem"]: m["filename"] for m in read_mods(slug)}
 
 
 def describe_changes(pack_name, before, after):
@@ -860,7 +861,8 @@ def curseforge_updates(pack, mods):
         if files:
             newest = max(files, key=lambda f: f["fileId"])
             if newest["fileId"] != mod["cf_file_id"]:
-                updates[mod["stem"]] = {"version_number": newest["filename"], "name": newest["filename"]}
+                updates[mod["stem"]] = {"id": newest["fileId"], "version_number": newest["filename"],
+                                        "name": newest["filename"]}
     return updates, restricted
 
 
@@ -1236,7 +1238,11 @@ def admin_add(slug):
             if any(str(m["key"]) == key for m in pack["mods"]):
                 continue
             try:
-                changes += run_and_report(pack, *command)
+                before, versions_before = {m["path"] for m in pack["mods"]}, file_versions(pack["slug"])
+                packwiz(pack["slug"], *command)
+                drop_duplicate_deps(pack["slug"], before, keep_key=key)
+                packwiz(pack["slug"], "refresh")
+                changes += describe_changes(pack["name"], versions_before, file_versions(pack["slug"]))
             except ActionError as e:
                 errors.append(f"{pack['name']}: {e}")
         errors += after_change(*(p["slug"] for p in targets))
@@ -1471,14 +1477,16 @@ def relink_mod(slug, mod, provider, project_id):
     changes, errors = [], []
     with write_lock():
         before = file_versions(slug)
+        paths_before = {m["path"] for m in read_mods(slug)}
         try:
             packwiz(slug, *command)
+            drop_duplicate_deps(slug, paths_before, keep_key=wanted)
             new = next((m for m in read_mods(slug) if m["key"] == wanted), None)
             if new and new["stem"] != mod["stem"]:
                 packwiz(slug, "remove", mod["stem"])
             if new:
                 set_side(new["path"], mod["side"])
-                packwiz(slug, "refresh")
+            packwiz(slug, "refresh")
             changes = describe_changes(pack["name"], before, file_versions(slug))
         except ActionError as e:
             errors.append(e)
@@ -1487,6 +1495,69 @@ def relink_mod(slug, mod, provider, project_id):
     if changes:
         flash(f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
+
+
+def drop_duplicate_deps(slug, before, keep_key=None):
+    """Remove projects that packwiz add just put in a second time.
+
+    packwiz spots existing dependencies by file name, so a dependency already
+    in the pack under another name (say, one named after an uploaded jar) gets
+    added again. Those new copies go; keep_key is the project being added.
+    """
+    mods = read_mods(slug)
+    old_keys = {m["key"] for m in mods if m["path"] in before and m["key"]}
+    for mod in mods:
+        if mod["path"] not in before and mod["key"] in old_keys and mod["key"] != keep_key:
+            mod["path"].unlink()
+
+
+def install_version(slug, mod, update):
+    """Put a mod on exactly the version the update check found, keeping its side.
+
+    packwiz update picks its own "latest", which can disagree with Modrinth (it
+    prefers an older file that lists more loaders, for one), so we name the
+    exact version instead. packwiz add writes to its own file name, so the copy
+    under the old name is removed. Call under write_lock; refresh afterwards.
+    """
+    if mod["provider"] == "modrinth":
+        command = ["modrinth", "add", "--project-id", mod["mod_id"], "--version-id", str(update["id"])]
+    else:
+        command = ["curseforge", "add", "--addon-id", str(mod["cf_id"]), "--file-id", str(update["id"])]
+    before = {m["path"] for m in read_mods(slug)}
+    packwiz(slug, *command)
+    mods = read_mods(slug)
+    new = next((m for m in mods if m["key"] == mod["key"] and m["path"] not in before), None)
+    new = new or next((m for m in mods if m["path"] == mod["path"]), None)
+    if new and new["path"] != mod["path"]:
+        mod["path"].unlink(missing_ok=True)
+    if new:
+        set_side(new["path"], mod["side"])
+    drop_duplicate_deps(slug, before, keep_key=mod["key"])
+
+
+def apply_updates(pack, only=None):
+    """Update the pack's mods (or just the stems in only) to what the check shows.
+
+    Returns (changes, errors). Call under write_lock. Falls back to packwiz's
+    own update if the check can't reach Modrinth/CurseForge.
+    """
+    slug = pack["slug"]
+    try:
+        updates, _ = check_updates(pack)
+    except (OSError, ValueError, ActionError):
+        args = ["update", *only] if only else ["update", "--all"]
+        return run_and_report(pack, *args), []
+    mods = {m["stem"]: m for m in pack["mods"]}
+    before, errors = file_versions(slug), []
+    for stem, update in updates.items():
+        if only is not None and stem not in only:
+            continue
+        try:
+            install_version(slug, mods[stem], update)
+        except ActionError as e:
+            errors.append(f"{pack['name']}: {mods[stem]['name']}: {e}")
+    packwiz(slug, "refresh")
+    return describe_changes(pack["name"], before, file_versions(slug)), errors
 
 
 @admin_route("/admin/pack/<slug>/update-one", methods=["POST"])
@@ -1498,7 +1569,7 @@ def admin_update_one(slug):
     changes, errors = [], []
     with write_lock():
         try:
-            changes = run_and_report(read_pack(slug), "update", stem)
+            changes, errors = apply_updates(read_pack(slug), only={stem})
         except ActionError as e:
             errors.append(e)
         errors += after_change(slug)
@@ -1546,7 +1617,7 @@ def admin_update_pack(slug):
     changes, errors = [], []
     with write_lock():
         try:
-            changes = run_and_report(read_pack(slug), "update", "--all")
+            changes, errors = apply_updates(read_pack(slug))
         except ActionError as e:
             errors.append(e)
         errors += after_change(slug)
@@ -1561,7 +1632,8 @@ def admin_update_all():
         packs = all_packs()
         for pack in packs:
             try:
-                changes += run_and_report(pack, "update", "--all")
+                pack_changes, pack_errors = apply_updates(pack)
+                changes, errors = changes + pack_changes, errors + pack_errors
             except ActionError as e:
                 errors.append(f"{pack['name']}: {e}")
         errors += after_change(*(p["slug"] for p in packs))
@@ -1579,7 +1651,8 @@ def admin_update_mod():
                 if key and mod["key"] == key:
                     touched.append(pack["slug"])
                     try:
-                        changes += run_and_report(pack, "update", mod["stem"])
+                        pack_changes, pack_errors = apply_updates(pack, only={mod["stem"]})
+                        changes, errors = changes + pack_changes, errors + pack_errors
                     except ActionError as e:
                         errors.append(f"{pack['name']}: {e}")
         errors += after_change(*touched)
