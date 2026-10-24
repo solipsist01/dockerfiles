@@ -165,3 +165,8 @@ a.button:hover { border-color: var(--muted); }
 button.small { padding: 3px 8px; font-size: 0.85rem; }
 td.update { white-space: nowrap; }
 img.icon { width: 40px; height: 40px; border-radius: 8px; }
+.progress { height: 8px; background: var(--code-bg); border-radius: 999px; overflow: hidden; margin: 12px 0 6px; }
+.progress .bar { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.upload-log { list-style: none; padding: 0; margin: 6px 0 0; max-height: 240px; overflow-y: auto; white-space: pre-wrap; }
+.upload-log li { padding: 2px 0; }
+.upload-log li.error { color: var(--danger); }

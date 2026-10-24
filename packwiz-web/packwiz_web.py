@@ -25,6 +25,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import time
 import tomllib
 import urllib.error
 import urllib.parse
@@ -43,6 +44,7 @@ DATA_DIR = Path(os.environ.get("PACKWIZ_DATA", str(BASE_DIR / "data")))
 PACKS_DIR = DATA_DIR / "packs"
 JARS_DIR = DATA_DIR / "jars"
 SETTINGS_DIR = DATA_DIR / "settings"
+UPLOADS_DIR = DATA_DIR / "uploads"
 BOOTSTRAP_JAR = BASE_DIR / "packwiz-installer-bootstrap.jar"
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
@@ -51,6 +53,10 @@ PACK_AUTHOR = os.environ.get("PACK_AUTHOR", "packwiz-web")
 ACCESS_TEAM_DOMAIN = os.environ.get("ACCESS_TEAM_DOMAIN", "").strip().rstrip("/")
 ACCESS_TEAM_DOMAIN = re.sub(r"^https?://", "", ACCESS_TEAM_DOMAIN)
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+# The browser uploads one file per request, in chunks of this size, to stay
+# far below Cloudflare's 100 MB request limit and its ~100 s timeout.
+UPLOAD_CHUNK_MB = 25
+MAX_FLASH_LINES = 30
 
 LOADERS = {
     "fabric": "Fabric",
@@ -66,7 +72,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 JAR_URL_RE = re.compile(r"/jars/([0-9a-f]{64})/")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR):
+for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR, UPLOADS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -240,6 +246,8 @@ def run_and_report(pack, *args):
 def flash_results(changes, errors, nothing="Nothing changed, everything is up to date."):
     for e in errors:
         flash(str(e), "error")
+    if len(changes) > MAX_FLASH_LINES:
+        changes = changes[:MAX_FLASH_LINES] + [f"… and {len(changes) - MAX_FLASH_LINES} more"]
     if changes:
         flash("\n".join(changes), "ok")
     elif not errors:
@@ -781,7 +789,7 @@ def admin_pack(slug):
     return render_template("admin_pack.html", pack=pack, query=query, results=results,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
-                           max_upload_mb=MAX_UPLOAD_MB, updates=updates,
+                           max_upload_mb=MAX_UPLOAD_MB, chunk_mb=UPLOAD_CHUNK_MB, updates=updates,
                            update_error=update_error)
 
 
@@ -825,16 +833,52 @@ def admin_add(slug):
     return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", "")))
 
 
-@admin_route("/admin/pack/<slug>/upload", methods=["POST"])
-def admin_upload(slug):
-    pack_dir(slug)
+def upload_targets(slug):
+    """The pack plus the "also add to" packs (same loader) from the upload form."""
     side = request.form.get("side", "both")
     if side not in SIDES:
         abort(400)
     loader = read_pack(slug)["loader"]
+    also = request.form.getlist("also")
     targets = [slug] + [p["slug"] for p in all_packs()
-                        if p["slug"] in request.form.getlist("also") and p["loader"] == loader
-                        and p["slug"] != slug]
+                        if p["slug"] in also and p["loader"] == loader and p["slug"] != slug]
+    return targets, side
+
+
+def process_jar(targets, original_name, data, side):
+    """Store one uploaded jar and add it to the target packs; returns messages.
+
+    Call under write_lock. Doesn't refresh: finish_upload does that once.
+    """
+    filename = safe_filename(original_name)
+    if not filename.lower().endswith(".jar"):
+        raise ActionError(f"{original_name}: only .jar files can be uploaded.")
+    jar_id, name = jar_metadata(data, filename)
+    sha512 = hashlib.sha512(data).hexdigest()
+    try:
+        match = modrinth_version_by_hash(sha512)
+    except (OSError, ValueError):
+        match = None
+    sha256 = store_jar(data, filename)
+    return [write_upload(t, filename, sha256, sha512, jar_id, name, side, match) for t in targets]
+
+
+def finish_upload(targets):
+    """Refresh the packs after uploads; call under write_lock. Returns errors."""
+    errors = []
+    for t in targets:
+        try:
+            packwiz(t, "refresh")
+        except ActionError as e:
+            errors.append(e)
+    return errors + after_change(*targets)
+
+
+@admin_route("/admin/pack/<slug>/upload", methods=["POST"])
+def admin_upload(slug):
+    """Plain form upload, for when JavaScript is off; fine for a few small jars."""
+    pack_dir(slug)
+    targets, side = upload_targets(slug)
     files = [f for f in request.files.getlist("jars") if f.filename]
     if not files:
         flash("Pick one or more .jar files first.", "error")
@@ -842,32 +886,70 @@ def admin_upload(slug):
     changes, errors = [], []
     with write_lock():
         for upload in files:
-            filename = safe_filename(upload.filename)
-            if not filename.lower().endswith(".jar"):
-                errors.append(f"{upload.filename}: only .jar files can be uploaded.")
-                continue
-            data = upload.read()
             try:
-                jar_id, name = jar_metadata(data, filename)
+                changes += process_jar(targets, upload.filename, upload.read(), side)
             except ActionError as e:
                 errors.append(e)
-                continue
-            sha512 = hashlib.sha512(data).hexdigest()
-            try:
-                match = modrinth_version_by_hash(sha512)
-            except (OSError, ValueError):
-                match = None
-            sha256 = store_jar(data, filename)
-            changes += [write_upload(t, filename, sha256, sha512, jar_id, name, side, match)
-                        for t in targets]
-        for t in targets:
-            try:
-                packwiz(t, "refresh")
-            except ActionError as e:
-                errors.append(e)
-        errors += after_change(*targets)
+        errors += finish_upload(targets)
     flash_results(changes, errors, "Nothing uploaded.")
     return redirect(url_for("admin_pack", slug=slug))
+
+
+@admin_route("/admin/pack/<slug>/upload/chunk", methods=["POST"])
+def admin_upload_chunk(slug):
+    """Receive one chunk of one file; the last chunk stores and adds the jar.
+
+    Chunks carry their byte offset, so a retried chunk that already arrived
+    is recognised and not appended twice.
+    """
+    pack_dir(slug)
+    upload_id = request.form.get("upload_id", "")
+    chunk = request.files.get("chunk")
+    try:
+        offset, last = int(request.form["offset"]), request.form["last"] == "1"
+    except (KeyError, ValueError):
+        abort(400)
+    if not re.fullmatch(r"[0-9a-f]{32}", upload_id) or chunk is None or offset < 0:
+        abort(400)
+    data = chunk.read()
+    part = UPLOADS_DIR / f"{upload_id}.part"
+    have = part.stat().st_size if part.is_file() else 0
+    if have == offset:
+        if offset + len(data) > MAX_UPLOAD_MB * 1024 * 1024:
+            part.unlink(missing_ok=True)
+            return {"ok": False, "message": f"bigger than {MAX_UPLOAD_MB} MB"}, 413
+        with open(part, "ab") as f:
+            f.write(data)
+    elif have != offset + len(data):
+        return {"ok": False, "message": "upload got out of step, try this file again"}, 409
+    if not last:
+        return {"ok": True}
+    targets, side = upload_targets(slug)
+    try:
+        with write_lock():
+            messages = process_jar(targets, request.form.get("filename", ""), part.read_bytes(), side)
+    except ActionError as e:
+        return {"ok": False, "message": str(e)}
+    finally:
+        part.unlink(missing_ok=True)
+    return {"ok": True, "message": "\n".join(messages)}
+
+
+@admin_route("/admin/pack/<slug>/upload/finish", methods=["POST"])
+def admin_upload_finish(slug):
+    pack_dir(slug)
+    targets, _ = upload_targets(slug)
+    with write_lock():
+        errors = finish_upload(targets)
+    # Leftovers of uploads that were abandoned halfway.
+    for part in UPLOADS_DIR.glob("*.part"):
+        if time.time() - part.stat().st_mtime > 86400:
+            part.unlink(missing_ok=True)
+    uploaded = int(request.form.get("uploaded", "0") or 0)
+    failed = request.form.getlist("failed")
+    flash_results([f"{uploaded} jar{'s' if uploaded != 1 else ''} uploaded."] if uploaded else [],
+                  failed[:MAX_FLASH_LINES] + errors, "Nothing uploaded.")
+    return {"ok": True}
 
 
 def uploaded_mod(slug, stem):

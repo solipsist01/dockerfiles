@@ -82,7 +82,9 @@
 
 <section class="card">
   <h2>Upload jars</h2>
-  <form method="post" action="{{ url_for('admin_upload', slug=pack.slug) }}" enctype="multipart/form-data">
+  <form method="post" action="{{ url_for('admin_upload', slug=pack.slug) }}" enctype="multipart/form-data"
+        id="upload-form" data-chunk-url="{{ url_for('admin_upload_chunk', slug=pack.slug) }}"
+        data-finish-url="{{ url_for('admin_upload_finish', slug=pack.slug) }}" data-chunk-mb="{{ chunk_mb }}">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <div class="row wrap">
       <input type="file" name="jars" accept=".jar" multiple required>
@@ -98,7 +100,13 @@
     </div>
     {% endif %}
   </form>
-  <p class="muted small">Up to {{ max_upload_mb }} MB per upload (Cloudflare allows 100 MB per request on the free plan).
+  <div id="upload-progress" hidden>
+    <div class="progress"><div class="bar"></div></div>
+    <div class="row"><span class="status small"></span></div>
+    <ul class="upload-log small"></ul>
+  </div>
+  <p class="muted small">Pick as many jars as you like; they're sent one by one, so there's no size limit for the batch
+    (up to {{ max_upload_mb }} MB per jar). Keep this page open until it's done.
     Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
     If the exact jar is on Modrinth it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the mod list.</p>
 </section>
@@ -149,3 +157,4 @@
 <p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
   Updating an uploaded jar swaps it for the Modrinth version.</p>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='upload.js') }}"></script>{% endblock %}

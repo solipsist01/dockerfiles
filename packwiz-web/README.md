@@ -34,7 +34,7 @@ jars, one copy per unique file), `settings/` (per-pack hosting mode) and the ses
 |---|---|---|
 | `PUBLIC_URL` | the request's own URL | Base URL baked into Prism zips and into the download URLs of self-hosted jars. **Set it**: behind the tunnel the request URL is `http://`, which Java won't follow to https |
 | `ACCESS_TEAM_DOMAIN` | *(off)* | e.g. `wenro.cloudflareaccess.com`. `/admin` then requires a valid Cloudflare Access JWT, so even if the Access app on `/admin` goes missing, the admin stays closed (403) |
-| `MAX_UPLOAD_MB` | `500` | Upload size limit (Cloudflare's free plan stops at 100 MB per request anyway) |
+| `MAX_UPLOAD_MB` | `500` | Size limit per jar. Uploads go one file per request in 25 MB chunks, so Cloudflare's 100 MB request limit doesn't apply to the batch |
 | `PACK_AUTHOR` | `packwiz-web` | Author written into new packs |
 | `SECRET_KEY` | generated into `/data/secret_key` | Flask session key |
 
@@ -61,6 +61,13 @@ greyed out underneath, so a mod never just silently disappears.
 - *Uploads* are always hosted here, in any mode. The mod name is read from the jar
   (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`). Uploading a newer jar of a mod that's
   already in the pack replaces it and keeps its side.
+
+**Uploading many jars:** pick as many as you like (45 is fine). The browser sends them one
+file per request, 3 at a time, splitting anything over 25 MB into chunks, with a progress bar and
+a per-file log. Every request is short, so neither Cloudflare's size limit nor its ~100 s timeout
+is hit. Failed chunks are retried, and a chunk that arrives twice isn't stored twice. One final
+request refreshes the packs, then the page reloads with a summary. Without JavaScript the
+form still works as a plain (single-request) upload.
 
 **Modrinth link and updates:**
 - Every pack page checks Modrinth for updates (one batch request, by file hash) and shows
