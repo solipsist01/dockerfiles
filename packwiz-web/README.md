@@ -1,5 +1,7 @@
 # packwiz-web (Flask + packwiz)
 
+Modrinth and CurseForge mods, plus your own uploaded jars.
+
 One container that manages [packwiz](https://packwiz.infra.link/) modpacks and
 hosts them. Update a mod once here; servers and Prism clients pick it up the
 next time they start.
@@ -34,6 +36,7 @@ jars, one copy per unique file), `settings/` (per-pack hosting mode) and the ses
 |---|---|---|
 | `PUBLIC_URL` | the request's own URL | Base URL baked into Prism zips and into the download URLs of self-hosted jars. **Set it**: behind the tunnel the request URL is `http://`, which Java won't follow to https |
 | `ACCESS_TEAM_DOMAIN` | *(off)* | e.g. `wenro.cloudflareaccess.com`. `/admin` then requires a valid Cloudflare Access JWT, so even if the Access app on `/admin` goes missing, the admin stays closed (403) |
+| `CURSEFORGE_API_KEY` | *(off)* | From console.curseforge.com. Enables CurseForge search, update notices, mirroring and recognising uploaded CurseForge jars. Without it, CurseForge mods can still be added by link. In compose, write every `$` in the key as `$$` |
 | `MAX_UPLOAD_MB` | `500` | Size limit per jar. Uploads go one file per request in 25 MB chunks, so Cloudflare's 100 MB request limit doesn't apply to the batch |
 | `PACK_AUTHOR` | `packwiz-web` | Author written into new packs |
 | `SECRET_KEY` | generated into `/data/secret_key` | Flask session key |
@@ -52,11 +55,24 @@ mods are included too (NeoForge 1.20.1 is a Forge fork and most mods there are o
 and Quilt packs include Fabric mods. Close matches without a build for the pack are listed
 greyed out underneath, so a mod never just silently disappears.
 
+**CurseForge:**
+- With `CURSEFORGE_API_KEY`: a Modrinth/CurseForge switch next to the search box, update
+  notices for CurseForge mods, and uploads are also matched by CurseForge fingerprint.
+- Always (no key needed): paste a CurseForge link or slug under the search results. packwiz adds
+  and updates CurseForge mods with its own built-in key.
+- CurseForge mods have no download URL in the pack; packwiz-installer asks CurseForge for it.
+- Some authors block third-party downloads. Those mods get a red **manual download** tag:
+  players' launchers ask them to download the jar by hand, and a headless server install stops
+  ("Update cancelled by user!"). Fix: download the jar from CurseForge and upload it here. It's
+  recognised and replaces that mod, keeping the CurseForge link for update notices. Such mods
+  are never mirrored.
+
 **Jar hosting** (per pack):
-- *Link to Modrinth* (default): Modrinth mods download from Modrinth's CDN.
-- *Host here (mirror)*: after every add/update, Modrinth jars are downloaded, checked against
-  their hash and served from `/jars/`. Updates keep working (the Modrinth link stays in the
-  `[update]` section). Switching back points them at Modrinth again. Note that this publicly
+- *Link to Modrinth/CurseForge* (default): mods download from Modrinth's CDN or via CurseForge.
+- *Host here (mirror)*: after every add/update, Modrinth and CurseForge jars are downloaded,
+  checked against their hash and served from `/jars/` (CurseForge needs the API key, and only
+  where the author allows third-party downloads). Updates keep working (the link stays in the
+  `[update]` section). Switching back points them at Modrinth/CurseForge again. Note that this publicly
   redistributes other people's mods; many mod licenses don't allow that.
 - *Uploads* are always hosted here, in any mode. The mod name is read from the jar
   (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`). Uploading a newer jar of a mod that's
@@ -73,10 +89,12 @@ form still works as a plain (single-request) upload.
 - Every pack page checks Modrinth for updates (one batch request, by file hash) and shows
   `→ new version` with an **Update** button per mod; **Update all mods (n)** does them all.
   The overview shows the number of available updates per pack.
-- An upload whose exact file is on Modrinth (sha512 lookup) is **linked automatically**.
-  Otherwise click **Link** next to it and pick the project (search, or paste a Modrinth
-  link/slug). A hand-linked custom build shows "Modrinth has X", since its own version is unknown.
-- **Update** on an uploaded jar swaps it for the Modrinth version; from then on it's a normal
+- An upload whose exact file is on Modrinth (sha512) or CurseForge (fingerprint) is **linked
+  automatically**. If it's on both, it keeps the provider of the mod it replaces. Otherwise
+  click **Link** next to it and pick the project (Modrinth or CurseForge search, or paste a
+  Modrinth link/slug). A hand-linked custom build shows "Modrinth has X" / "CurseForge has X",
+  since its own version is unknown.
+- **Update** on an uploaded jar swaps it for the Modrinth/CurseForge version; from then on it's a normal
   Modrinth mod that follows the pack's hosting mode (side is kept). So **Update all** also
   replaces linked uploads; unlinked uploads are never touched.
 - Uploaded jars carry `x-uploaded = true` in their `.pw.toml`. packwiz keeps that key on
@@ -93,7 +111,7 @@ Every launch runs packwiz-installer first and syncs the mods.
 
 ## Notes
 
-- Modrinth search only (plus uploads). There's no history or undo: removing a mod or updating is
+- There's no history or undo: removing a mod or updating is
   immediate, and clients/servers follow on their next start.
 - Mods packwiz-installer has already installed but that were removed from the
   pack are deleted by the installer on the next start.

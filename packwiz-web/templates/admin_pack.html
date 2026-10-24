@@ -32,7 +32,12 @@
 <section class="card">
   <h2>Add mods</h2>
   <form method="get" class="row">
-    <input name="q" value="{{ query }}" placeholder="Search Modrinth…" autofocus>
+    {% if cf_enabled %}
+    <select name="source" aria-label="Search on">
+      {% for key, label in provider_names.items() %}<option value="{{ key }}"{% if key == provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input name="q" value="{{ query }}" placeholder="Search {{ provider_names[provider] }}…" autofocus>
     <button>Search</button>
   </form>
   {% if search_error %}<div class="flash error">{{ search_error }}</div>{% endif %}
@@ -44,15 +49,17 @@
     <li>
       {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
       <div class="grow">
-        <a href="https://modrinth.com/mod/{{ hit.slug }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
-        <span class="muted small">{{ "{:,}".format(hit.downloads) }} downloads</span>
+        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <span class="muted small">{{ "{:,}".format(hit.downloads|int) }} downloads</span>
+        {% if hit.restricted %}<span class="tag small" title="Players' launchers download it from CurseForge (or ask for a manual download); it can't be mirrored.">no third-party downloads</span>{% endif %}
         <div class="muted small">{{ hit.description }}</div>
       </div>
-      {% if hit.project_id in installed %}
+      {% if hit.key in installed %}
         <span class="tag">In pack</span>
       {% else %}
         <form method="post" action="{{ url_for('admin_add', slug=pack.slug) }}" class="row">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="provider" value="{{ hit.provider }}">
           <input type="hidden" name="project_id" value="{{ hit.project_id }}">
           <input type="hidden" name="q" value="{{ query }}">
           <button class="primary">Add</button>
@@ -65,19 +72,24 @@
   {% endfor %}
   </ul>
   {% if others %}
-  <h3 class="muted small">Other matches, with no {{ pack.loader_name }} {{ pack.minecraft }} build on Modrinth</h3>
+  <h3 class="muted small">Other matches, with no {{ pack.loader_name }} {{ pack.minecraft }} build on {{ provider_names[provider] }}</h3>
   <ul class="results dim">
   {% for hit in others %}
     <li>
       {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
       <div class="grow">
-        <a href="https://modrinth.com/mod/{{ hit.slug }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
-        <div class="muted small">Has: {{ hit.versions[-4:]|join(', ') }} · {{ hit.categories|select('in', ['fabric','forge','neoforge','quilt'])|join(', ') }}</div>
+        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <div class="muted small">Has: {{ hit.versions[-4:]|join(', ') }} · {{ hit.loaders|join(', ') }}</div>
       </div>
     </li>
   {% endfor %}
   </ul>
   {% endif %}
+  <form method="post" action="{{ url_for('admin_add_link', slug=pack.slug) }}" class="row addlink">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input name="link" placeholder="…or paste a CurseForge link, e.g. https://www.curseforge.com/minecraft/mc-mods/jei">
+    <button>Add from CurseForge</button>
+  </form>
 </section>
 
 <section class="card">
@@ -108,7 +120,8 @@
   <p class="muted small">Pick as many jars as you like; they're sent one by one, so there's no size limit for the batch
     (up to {{ max_upload_mb }} MB per jar). Keep this page open until it's done.
     Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
-    If the exact jar is on Modrinth it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the mod list.</p>
+    If the exact jar is on Modrinth{% if cf_enabled %} or CurseForge{% endif %} it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the mod list.
+    A jar for a CurseForge mod that blocks third-party downloads replaces that mod, so players get it from here.</p>
 </section>
 
 <h2>Mods ({{ pack.mods|length }})</h2>
@@ -117,8 +130,9 @@
   <tbody>
   {% for mod in pack.mods %}
     <tr>
-      <td>{% if mod.mod_id %}<a href="https://modrinth.com/project/{{ mod.mod_id }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
-        {% if mod.source != 'modrinth' %}<span class="tag small {{ mod.source }}">{{ mod.source }}</span>{% endif %}</td>
+      <td>{% if mod.page_url %}<a href="{{ mod.page_url }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
+        {% if mod.source != 'modrinth' %}<span class="tag small {{ mod.source }}">{{ mod.source }}</span>{% endif %}
+        {% if mod.stem in restricted and mod.source == 'curseforge' %}<span class="tag small warn" title="The author blocks third-party downloads. Players' launchers ask them to download it by hand, and servers can't install it. Download the jar from CurseForge and upload it here to fix that.">manual download</span>{% endif %}</td>
       <td class="muted small">{{ mod.filename }}</td>
       <td>
         <form method="post" action="{{ url_for('admin_side', slug=pack.slug) }}">
@@ -134,14 +148,14 @@
         <form method="post" action="{{ url_for('admin_update_one', slug=pack.slug) }}" class="row">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">
-          <span class="small" title="{{ updates[mod.stem].name }}">{% if mod.source == 'uploaded' and not mod.version_id %}Modrinth has {% else %}→ {% endif %}{{ updates[mod.stem].version_number }}</span>
+          <span class="small" title="{{ updates[mod.stem].name }}">{% if mod.source == 'uploaded' and not (mod.version_id or mod.cf_file_id) %}{{ provider_names[mod.provider] }} has {% else %}→ {% endif %}{{ updates[mod.stem].version_number }}</span>
           <button class="primary small">Update</button>
         </form>
-        {% elif mod.mod_id %}<span class="muted small">up to date</span>
+        {% elif mod.provider == 'modrinth' or (mod.provider == 'curseforge' and cf_enabled) %}<span class="muted small">up to date</span>
         {% endif %}
       </td>
       <td class="actions">
-        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}">{{ 'Link' if not mod.mod_id else 'Linked' }}</a>{% endif %}
+        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}">{{ 'Link' if not mod.provider else 'Linked' }}</a>{% endif %}
         <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">
@@ -155,6 +169,6 @@
   </tbody>
 </table>
 <p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
-  Updating an uploaded jar swaps it for the Modrinth version.</p>
+  Updating an uploaded jar swaps it for the Modrinth/CurseForge version.</p>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='upload.js') }}"></script>{% endblock %}

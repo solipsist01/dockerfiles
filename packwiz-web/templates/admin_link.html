@@ -2,17 +2,17 @@
 {% block title %}Link {{ mod.name }} - Packwiz admin{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('admin_pack', slug=pack.slug) }}">← {{ pack.name }}</a></p>
-<h1>Link {{ mod.name }} to Modrinth</h1>
-<p class="muted">Uploaded file: <code>{{ mod.filename }}</code>. Linking it gives you update notices for this mod.
-  The jar you uploaded stays in use until you click <b>Update</b>.</p>
+<h1>Link {{ mod.name }}</h1>
+<p class="muted">Uploaded file: <code>{{ mod.filename }}</code>. Linking it to its Modrinth or CurseForge project gives you
+  update notices for this mod. The jar you uploaded stays in use until you click <b>Update</b>.</p>
 
 {% if current %}
 <section class="card">
-  <h2>Currently linked</h2>
+  <h2>Currently linked ({{ provider_names[mod.provider] }})</h2>
   <div class="row wrap">
     {% if current.icon_url %}<img class="icon" src="{{ current.icon_url }}" alt="">{% endif %}
     <div class="grow">
-      <a href="https://modrinth.com/project/{{ current.id }}" target="_blank" rel="noopener"><b>{{ current.title }}</b></a>
+      <a href="{{ current.url }}" target="_blank" rel="noopener"><b>{{ current.title }}</b></a>
       <div class="muted small">{{ current.description }}</div>
     </div>
     <form method="post">
@@ -27,26 +27,33 @@
 <section class="card">
   <h2>Find the project</h2>
   <form method="get" class="row">
-    <input name="q" value="{{ query }}" placeholder="Search, or paste a Modrinth link or slug" autofocus>
+    {% if cf_enabled %}
+    <select name="source" aria-label="Search on">
+      {% for key, label in provider_names.items() %}<option value="{{ key }}"{% if key == provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input name="q" value="{{ query }}" placeholder="Search{% if provider == 'modrinth' %}, or paste a Modrinth link or slug{% endif %}" autofocus>
     <button>Search</button>
   </form>
+  {% if not cf_enabled %}<p class="muted small">Linking to CurseForge needs a CurseForge API key (CURSEFORGE_API_KEY).</p>{% endif %}
   {% if search_error %}<div class="flash error">{{ search_error }}</div>{% endif %}
   {% if query and not results and not search_error %}
-    <p class="muted">Nothing found. Try another name, or paste the Modrinth link.</p>
+    <p class="muted">Nothing found. Try another name{% if provider == 'modrinth' %}, or paste the Modrinth link{% endif %}.</p>
   {% endif %}
   <ul class="results">
   {% for hit in results %}
     <li>
       {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
       <div class="grow">
-        <a href="https://modrinth.com/project/{{ hit.project_id }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
         <div class="muted small">{{ hit.description }}</div>
       </div>
-      {% if current and current.id == hit.project_id %}
+      {% if current and current.key == hit.key %}
         <span class="tag">Linked</span>
       {% else %}
       <form method="post">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="provider" value="{{ hit.provider }}">
         <input type="hidden" name="project_id" value="{{ hit.project_id }}">
         <button class="primary">Link</button>
       </form>

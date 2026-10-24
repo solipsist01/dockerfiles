@@ -4,13 +4,19 @@ Public (no login): the pack files under /packs/<slug>/ that packwiz-installer
 reads, self-hosted jars under /jars/, a Prism instance zip per pack, and an
 overview page for players.
 Admin (/admin, behind Cloudflare Access): create/copy/delete packs, add mods
-from Modrinth, upload jars, change sides, remove and update mods, across one
-or all packs.
+from Modrinth and CurseForge, upload jars, change sides, remove and update
+mods, across one or all packs.
 
 Jar hosting: uploaded jars are always served from /jars/. Modrinth mods link
-to Modrinth's CDN, unless the pack is set to mirror; then their jars are
-downloaded, hash-checked and served from /jars/ as well. Jars are stored once
-per content (sha256) and removed when no pack uses them anymore.
+to Modrinth's CDN and CurseForge mods are fetched from CurseForge by
+packwiz-installer, unless the pack is set to mirror; then their jars are
+downloaded, hash-checked and served from /jars/ as well (CurseForge only where
+the author allows it). Jars are stored once per content (sha256) and removed
+when no pack uses them anymore.
+
+CurseForge: packwiz adds and updates CurseForge mods with its own built-in key.
+Search, update notices, mirroring and recognising uploads need our own key in
+CURSEFORGE_API_KEY; without it, CurseForge mods can still be added by link.
 
 Every pack change goes through the packwiz binary, so the pack folders stay
 plain packwiz packs. All changes run under one global file lock.
@@ -24,6 +30,7 @@ import os
 import re
 import secrets
 import shutil
+import struct
 import subprocess
 import time
 import tomllib
@@ -66,6 +73,12 @@ LOADERS = {
 }
 SIDES = ("both", "client", "server")
 MODRINTH_API = "https://api.modrinth.com/v2"
+CURSEFORGE_API = os.environ.get("CURSEFORGE_API_URL", "https://api.curseforge.com/v1").rstrip("/")
+CURSEFORGE_API_KEY = os.environ.get("CURSEFORGE_API_KEY", "").strip()
+CF_MINECRAFT, CF_CLASS_MODS = 432, 6
+CF_LOADER_TYPES = {"forge": 1, "fabric": 4, "quilt": 5, "neoforge": 6}
+CF_LOADER_NAMES = {v: k for k, v in CF_LOADER_TYPES.items()}
+CF_URL_RE = re.compile(r"^https://(www\.)?curseforge\.com/minecraft/[\w-]+/[\w-]+(/files/\d+)?/?$")
 USER_AGENT = "packwiz-web (self-hosted packwiz admin)"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -135,15 +148,18 @@ def read_mods(slug):
     for meta_file in sorted(root.rglob("*.pw.toml")):
         with open(meta_file, "rb") as f:
             meta = tomllib.load(f)
-        modrinth = meta.get("update", {}).get("modrinth", {})
+        update = meta.get("update", {})
+        modrinth, curseforge = update.get("modrinth", {}), update.get("curseforge", {})
+        provider = "modrinth" if modrinth else "curseforge" if curseforge else None
         download = meta.get("download", {})
         url = download.get("url", "")
-        if meta.get("x-uploaded") or not modrinth:
+        if meta.get("x-uploaded") or not provider:
             source = "uploaded"
         elif JAR_URL_RE.search(url):
             source = "mirrored"
         else:
-            source = "modrinth"
+            source = provider
+        cf_id = curseforge.get("project-id")
         mods.append({
             "path": meta_file,
             "stem": meta_file.name[:-len(".pw.toml")],
@@ -151,8 +167,13 @@ def read_mods(slug):
             "name": meta.get("name", meta_file.stem),
             "filename": meta.get("filename", ""),
             "side": meta.get("side", "both"),
+            "provider": provider,
             "mod_id": modrinth.get("mod-id"),
             "version_id": modrinth.get("version"),
+            "cf_id": cf_id,
+            "cf_file_id": curseforge.get("file-id"),
+            "key": project_key(provider, modrinth.get("mod-id") or cf_id),
+            "page_url": project_page(provider, modrinth.get("mod-id") or cf_id),
             "url": url,
             "hash_format": download.get("hash-format", ""),
             "hash": download.get("hash", ""),
@@ -160,6 +181,21 @@ def read_mods(slug):
         })
     mods.sort(key=lambda m: m["name"].lower())
     return mods
+
+
+def project_key(provider, project_id):
+    """One id for a project across providers, e.g. "mr:AANobbMI" or "cf:238222"."""
+    if not provider or not project_id:
+        return None
+    return f"{'mr' if provider == 'modrinth' else 'cf'}:{project_id}"
+
+
+def project_page(provider, project_id):
+    if provider == "modrinth":
+        return f"https://modrinth.com/project/{project_id}"
+    if provider == "curseforge":
+        return f"https://www.curseforge.com/projects/{project_id}"
+    return None
 
 
 def all_packs():
@@ -279,16 +315,19 @@ def jar_url(sha, filename):
     return f"{public_base()}/jars/{sha}/{urllib.parse.quote(os.path.basename(filename))}"
 
 
-def set_download_url(meta_file, url):
+def set_download(meta_file, url):
+    """Point a .pw.toml at url; None means CurseForge metadata mode (no url)."""
     toml = meta_file.read_text()
-    toml = re.sub(r'^url = ".*"$', f"url = {json.dumps(url)}", toml, count=1, flags=re.M)
+    toml = re.sub(r'^(url|mode) = ".*"\n', "", toml, flags=re.M)
+    line = f"url = {json.dumps(url)}" if url else 'mode = "metadata:curseforge"'
+    toml = re.sub(r"^\[download\]\n", f"[download]\n{line}\n", toml, count=1, flags=re.M)
     meta_file.write_text(toml)
 
 
-def mirror_jar(mod):
-    """Download a Modrinth mod's jar, check its hash and store it."""
+def mirror_jar(mod, source_url):
+    """Download a mod's jar, check it against the hash packwiz recorded, store it."""
     try:
-        data = http_get(mod["url"], timeout=120)
+        data = http_get(source_url, timeout=120)
     except OSError as e:
         raise ActionError(f"Downloading {mod['filename']} failed: {e}")
     if mod["hash_format"] in hashlib.algorithms_available:
@@ -320,17 +359,24 @@ def sync_hosting(slug):
         try:
             if hosted and (mod["source"] == "uploaded" or mirror):
                 url = jar_url(hosted.group(1), mod["filename"])
+            elif hosted and mod["provider"] == "curseforge":
+                url = None  # packwiz-installer gets it from CurseForge again
             elif hosted:
                 url = modrinth_file_url(mod)
-            elif mirror and mod["mod_id"]:
-                url = jar_url(mirror_jar(mod), mod["filename"])
+            elif mirror and mod["provider"] == "modrinth":
+                url = jar_url(mirror_jar(mod, mod["url"]), mod["filename"])
+            elif mirror and mod["provider"] == "curseforge" and CURSEFORGE_API_KEY:
+                source_url = curseforge_download_url(mod)
+                if not source_url:
+                    continue  # the author doesn't allow it; it stays a CurseForge download
+                url = jar_url(mirror_jar(mod, source_url), mod["filename"])
             else:
                 continue
         except ActionError as e:
             errors.append(e)
             continue
-        if url != mod["url"]:
-            set_download_url(mod["path"], url)
+        if url != (mod["url"] or None):
+            set_download(mod["path"], url)
             changed = True
     if changed:
         packwiz(slug, "refresh")
@@ -389,12 +435,14 @@ def jar_metadata(data, filename):
     return None, None
 
 
-def write_upload_meta(meta_file, name, filename, side, sha256, sha512, mod_id=None, version_id=""):
-    """Write the .pw.toml of an uploaded jar, optionally linked to a Modrinth project.
+def write_upload_meta(meta_file, name, filename, side, sha256, sha512, link=None):
+    """Write the .pw.toml of an uploaded jar, optionally linked to a project.
 
-    x-uploaded marks the jar as ours: packwiz keeps unknown keys on refresh and
-    drops them when it updates the mod from Modrinth, so the mark lasts exactly
-    as long as the uploaded file is in use. sha512 lets Modrinth recognise it.
+    link is (provider, project id, version/file id); the version may be empty
+    when the jar isn't a known file of that project. x-uploaded marks the jar as
+    ours: packwiz keeps unknown keys on refresh and drops them when it updates
+    the mod from Modrinth or CurseForge, so the mark lasts exactly as long as the
+    uploaded file is in use. sha512 lets Modrinth recognise it.
     """
     lines = [
         f"name = {json.dumps(name)}",
@@ -407,35 +455,72 @@ def write_upload_meta(meta_file, name, filename, side, sha256, sha512, mod_id=No
         'hash-format = "sha512"',
         f'hash = "{sha512}"',
     ]
-    if mod_id:
+    if link and link[0] == "modrinth":
         lines += ["", "[update]", "[update.modrinth]",
-                  f"mod-id = {json.dumps(mod_id)}", f"version = {json.dumps(version_id or '')}"]
+                  f"mod-id = {json.dumps(link[1])}", f"version = {json.dumps(link[2] or '')}"]
+    elif link and link[0] == "curseforge":
+        lines += ["", "[update]", "[update.curseforge]",
+                  f"file-id = {int(link[2] or 0)}", f"project-id = {int(link[1])}"]
     meta_file.write_text("\n".join(lines) + "\n")
 
 
-def write_upload(slug, filename, sha256, sha512, jar_id, name, side, match):
-    """Create (or replace) the .pw.toml for an uploaded jar; returns a message."""
+def mod_link(mod, keep_version=True):
+    if not mod["provider"]:
+        return None
+    if mod["provider"] == "modrinth":
+        return ("modrinth", mod["mod_id"], mod["version_id"] if keep_version else "")
+    return ("curseforge", mod["cf_id"], mod["cf_file_id"] if keep_version else 0)
+
+
+def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches):
+    """Create (or replace) the .pw.toml for an uploaded jar; returns a message.
+
+    matches are the (provider, project id, file id) links found for this exact
+    file. A mod of the same project, or with the same name, is replaced, and
+    keeps its provider when the file is on both sites.
+    """
     pack_name = read_pack(slug)["name"]
     stem = slugify(jar_id or name or filename.rsplit(".", 1)[0]) or "upload"
-    existing = next((m for m in read_mods(slug) if m["stem"] == stem), None)
+    mods = read_mods(slug)
+    keys = {project_key(*m[:2]): m for m in matches}
+    existing = next((m for m in mods if m["key"] in keys), None)
+    match = keys[existing["key"]] if existing else None
+    existing = existing or next((m for m in mods if m["stem"] == stem), None)
+    if existing and not match:
+        match = next((m for m in matches if m[0] == existing["provider"]), None)
+    match = match or (matches[0] if matches else None)
     if existing:
         side = existing["side"]
         meta_file = existing["path"]
     else:
         meta_file = PACKS_DIR / slug / "mods" / f"{stem}.pw.toml"
         meta_file.parent.mkdir(exist_ok=True)
-    if match:
-        mod_id, version_id = match["project_id"], match["id"]
-    elif existing and existing["mod_id"]:
-        # A new build of a mod that was linked by hand: keep the link.
-        mod_id, version_id = existing["mod_id"], ""
-    else:
-        mod_id, version_id = None, ""
-    write_upload_meta(meta_file, name or filename, filename, side, sha256, sha512, mod_id, version_id)
-    note = "uploaded, matched on Modrinth" if match else "uploaded"
+    # Otherwise keep the link of the mod it replaces, minus the (now wrong) version.
+    link = match or (mod_link(existing, keep_version=False) if existing else None)
+    write_upload_meta(meta_file, name or filename, filename, side, sha256, sha512, link)
+    note = f"uploaded, matched on {PROVIDER_NAMES[match[0]]}" if match else "uploaded"
     if existing:
         return f"{pack_name}: {existing['filename']} → {filename} ({note})"
     return f"{pack_name}: added {filename} ({note})"
+
+
+def find_file_matches(data, sha512):
+    """(provider, project id, file id) for each site that has this exact file."""
+    matches = []
+    try:
+        version = modrinth_version_by_hash(sha512)
+        if version:
+            matches.append(("modrinth", version["project_id"], version["id"]))
+    except (OSError, ValueError):
+        pass
+    if CURSEFORGE_API_KEY:
+        try:
+            found = curseforge_file_by_fingerprint(curseforge_fingerprint(data))
+            if found:
+                matches.append(("curseforge", found["modId"], found["id"]))
+        except (OSError, ValueError, ActionError):
+            pass
+    return matches
 
 
 def uploaded_jar_bytes(mod):
@@ -512,8 +597,17 @@ def modrinth_project(slug_or_url):
 
 
 def check_updates(pack):
+    """Available updates per mod stem, and CurseForge mods that can't be mirrored."""
+    updates = modrinth_updates(pack)
+    cf_updates, restricted = curseforge_updates(
+        pack, [m for m in pack["mods"] if m["provider"] == "curseforge"])
+    updates.update(cf_updates)
+    return updates, restricted
+
+
+def modrinth_updates(pack):
     """Newest compatible Modrinth version for each linked mod that isn't on it."""
-    linked = [m for m in pack["mods"] if m["mod_id"]]
+    linked = [m for m in pack["mods"] if m["provider"] == "modrinth"]
     loaders = compatible_loaders(pack["loader"], pack["minecraft"])
     updates, unknown = {}, []
     by_hash = {m["hash"].lower(): m for m in linked if m["hash_format"] == "sha512" and m["version_id"]}
@@ -535,6 +629,145 @@ def check_updates(pack):
         if versions and versions[0]["id"] != mod["version_id"]:
             updates[mod["stem"]] = versions[0]
     return updates
+
+
+# --- CurseForge ---------------------------------------------------------------
+
+PROVIDER_NAMES = {"modrinth": "Modrinth", "curseforge": "CurseForge"}
+
+
+def curseforge_request(path, params=None, body=None):
+    if not CURSEFORGE_API_KEY:
+        raise ActionError("No CurseForge API key set (CURSEFORGE_API_KEY).")
+    url = f"{CURSEFORGE_API}{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    headers = {"x-api-key": CURSEFORGE_API_KEY, "Accept": "application/json", "User-Agent": USER_AGENT}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, json.dumps(body).encode() if body is not None else None, headers)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.load(resp)
+
+
+def curseforge_hit(mod):
+    """A CurseForge mod in the same shape as a Modrinth search hit."""
+    files = mod.get("latestFilesIndexes", [])
+    versions = sorted({f["gameVersion"] for f in files},
+                      key=lambda v: [int(x) if x.isdigit() else 0 for x in v.split(".")])
+    return {
+        "provider": "curseforge",
+        "project_id": str(mod["id"]),
+        "key": project_key("curseforge", mod["id"]),
+        "title": mod["name"],
+        "slug": mod["slug"],
+        "description": mod.get("summary", ""),
+        "icon_url": (mod.get("logo") or {}).get("thumbnailUrl"),
+        "downloads": int(mod.get("downloadCount", 0)),
+        "url": (mod.get("links") or {}).get("websiteUrl") or project_page("curseforge", mod["id"]),
+        "versions": versions,
+        "loaders": sorted({CF_LOADER_NAMES[f["modLoader"]] for f in files if f.get("modLoader") in CF_LOADER_NAMES}),
+        "restricted": mod.get("allowModDistribution") is False,
+    }
+
+
+def modrinth_hit(hit):
+    return dict(hit, provider="modrinth", key=project_key("modrinth", hit["project_id"]),
+                url=f"https://modrinth.com/mod/{hit['slug']}", restricted=False,
+                loaders=[c for c in hit.get("categories", []) if c in LOADERS])
+
+
+def curseforge_search(query, pack=None, limit=20):
+    params = {"gameId": CF_MINECRAFT, "classId": CF_CLASS_MODS, "searchFilter": query,
+              "sortField": 2, "sortOrder": "desc", "pageSize": limit}
+    if pack is None:
+        return [curseforge_hit(m) for m in curseforge_request("/mods/search", params)["data"]]
+    # One search per loader: the API's multi-loader filter gives poor results.
+    hits = {}
+    for loader in compatible_loaders(pack["loader"], pack["minecraft"]):
+        if loader in CF_LOADER_TYPES:
+            found = curseforge_request("/mods/search", dict(
+                params, gameVersion=pack["minecraft"], modLoaderType=CF_LOADER_TYPES[loader]))
+            for mod in found["data"]:
+                hits.setdefault(mod["id"], mod)
+    ranked = sorted(hits.values(), key=lambda m: -m.get("downloadCount", 0))[:limit]
+    return [curseforge_hit(m) for m in ranked]
+
+
+def search(provider, query, pack=None, limit=20):
+    if provider == "curseforge":
+        return curseforge_search(query, pack, limit)
+    return [modrinth_hit(h) for h in modrinth_search(query, pack_facets(pack) if pack else [], limit)]
+
+
+def curseforge_download_url(mod):
+    """Where CurseForge serves a mod's file, or None if the author doesn't allow it."""
+    try:
+        return curseforge_request(f"/mods/{mod['cf_id']}/files/{mod['cf_file_id']}/download-url")["data"]
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404):
+            return None
+        raise ActionError(f"Asking CurseForge for {mod['name']} failed: {e}")
+    except (OSError, ValueError) as e:
+        raise ActionError(f"Asking CurseForge for {mod['name']} failed: {e}")
+
+
+def curseforge_fingerprint(data):
+    """CurseForge's file fingerprint: MurmurHash2 (seed 1) of the file minus whitespace."""
+    data = data.translate(None, b"\t\n\r ")
+    m, mask = 0x5BD1E995, 0xFFFFFFFF
+    h = (1 ^ len(data)) & mask
+    n = len(data) // 4 * 4
+    for (k,) in struct.iter_unpack("<I", data[:n]):
+        k = (k * m) & mask
+        k ^= k >> 24
+        k = (k * m) & mask
+        h = ((h * m) & mask) ^ k
+    rest = data[n:]
+    if len(rest) == 3:
+        h ^= rest[2] << 16
+    if len(rest) >= 2:
+        h ^= rest[1] << 8
+    if rest:
+        h ^= rest[0]
+        h = (h * m) & mask
+    h ^= h >> 13
+    h = (h * m) & mask
+    return h ^ (h >> 15)
+
+
+def curseforge_file_by_fingerprint(fingerprint):
+    found = curseforge_request(f"/fingerprints/{CF_MINECRAFT}", body={"fingerprints": [fingerprint]})
+    matches = found["data"].get("exactMatches") or []
+    return matches[0]["file"] if matches else None
+
+
+def curseforge_project(project_id):
+    return curseforge_hit(curseforge_request(f"/mods/{int(project_id)}")["data"])
+
+
+def curseforge_updates(pack, mods):
+    """Updates for CurseForge mods, plus the ones whose author forbids mirroring."""
+    if not CURSEFORGE_API_KEY or not mods:
+        return {}, set()
+    found = curseforge_request("/mods", body={"modIds": [m["cf_id"] for m in mods], "filterPcOnly": True})
+    info = {m["id"]: m for m in found["data"]}
+    loaders = {CF_LOADER_TYPES[l] for l in compatible_loaders(pack["loader"], pack["minecraft"])
+               if l in CF_LOADER_TYPES}
+    updates, restricted = {}, set()
+    for mod in mods:
+        project = info.get(mod["cf_id"])
+        if not project:
+            continue
+        if project.get("allowModDistribution") is False:
+            restricted.add(mod["stem"])
+        files = [f for f in project.get("latestFilesIndexes", [])
+                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in loaders]
+        if files:
+            newest = max(files, key=lambda f: f["fileId"])
+            if newest["fileId"] != mod["cf_file_id"]:
+                updates[mod["stem"]] = {"version_number": newest["filename"], "name": newest["filename"]}
+    return updates, restricted
 
 
 _mc_versions_cache = []
@@ -688,16 +921,16 @@ def admin_index():
     shared = {}
     for pack in packs:
         for mod in pack["mods"]:
-            if mod["mod_id"]:
-                entry = shared.setdefault(mod["mod_id"], {"name": mod["name"], "packs": []})
+            if mod["key"]:
+                entry = shared.setdefault(mod["key"], {"name": mod["name"], "packs": []})
                 entry["packs"].append(pack["name"])
-    shared = sorted((dict(e, mod_id=k) for k, e in shared.items() if len(e["packs"]) > 1),
+    shared = sorted((dict(e, key=k) for k, e in shared.items() if len(e["packs"]) > 1),
                     key=lambda e: e["name"].lower())
     update_counts = {}
     for pack in packs:
         try:
-            update_counts[pack["slug"]] = len(check_updates(pack))
-        except (OSError, ValueError):
+            update_counts[pack["slug"]] = len(check_updates(pack)[0])
+        except (OSError, ValueError, ActionError):
             update_counts[pack["slug"]] = None
     return render_template("admin_index.html", packs=packs, shared=shared, loaders=LOADERS,
                            mc_versions=minecraft_versions(), pack_url=pack_url,
@@ -770,27 +1003,30 @@ def admin_pack(slug):
     pack_dir(slug)
     pack = read_pack(slug)
     query = request.args.get("q", "").strip()
+    provider = request.args.get("source", "modrinth")
+    if provider != "curseforge" or not CURSEFORGE_API_KEY:
+        provider = "modrinth"
     results, others, search_error = [], [], None
     if query:
         try:
-            results = modrinth_search(query, pack_facets(pack))
+            results = search(provider, query, pack)
             # Close matches that have no build for this pack, so they don't just vanish.
-            found = {hit["project_id"] for hit in results}
-            others = [hit for hit in modrinth_search(query, [], limit=10)
-                      if hit["project_id"] not in found][:5]
-        except (OSError, ValueError) as e:
-            search_error = f"Modrinth search failed: {e}"
+            found = {hit["key"] for hit in results}
+            others = [hit for hit in search(provider, query, limit=10) if hit["key"] not in found][:5]
+        except (OSError, ValueError, ActionError) as e:
+            search_error = f"{PROVIDER_NAMES[provider]} search failed: {e}"
     try:
-        updates, update_error = check_updates(pack), None
-    except (OSError, ValueError) as e:
-        updates, update_error = {}, f"Checking Modrinth for updates failed: {e}"
-    installed = {m["mod_id"] for m in pack["mods"] if m["mod_id"]}
+        (updates, restricted), update_error = check_updates(pack), None
+    except (OSError, ValueError, ActionError) as e:
+        updates, restricted, update_error = {}, set(), f"Checking for updates failed: {e}"
+    installed = {m["key"] for m in pack["mods"] if m["key"]}
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
     return render_template("admin_pack.html", pack=pack, query=query, results=results,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
                            max_upload_mb=MAX_UPLOAD_MB, chunk_mb=UPLOAD_CHUNK_MB, updates=updates,
-                           update_error=update_error)
+                           update_error=update_error, restricted=restricted, provider=provider,
+                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES)
 
 
 @admin_route("/admin/pack/<slug>/hosting", methods=["POST"])
@@ -803,18 +1039,24 @@ def admin_hosting(slug):
     for e in errors:
         flash(e, "error")
     if mirror:
-        flash("Modrinth jars are now hosted here.", "ok")
+        flash("Modrinth and CurseForge jars are now hosted here (where the author allows it).", "ok")
     else:
-        flash("Modrinth mods link to Modrinth again. Uploaded jars stay hosted here.", "ok")
+        flash("Mods download from Modrinth/CurseForge again. Uploaded jars stay hosted here.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
 
 
 @admin_route("/admin/pack/<slug>/add", methods=["POST"])
 def admin_add(slug):
     pack_dir(slug)
+    provider = request.form.get("provider", "modrinth")
     project_id = request.form.get("project_id", "")
-    if not re.match(r"^[A-Za-z0-9]{8}$", project_id):
+    if provider == "modrinth" and re.fullmatch(r"[A-Za-z0-9]{8}", project_id):
+        command = ["modrinth", "add", "--project-id", project_id]
+    elif provider == "curseforge" and re.fullmatch(r"[0-9]{1,10}", project_id):
+        command = ["curseforge", "add", "--addon-id", project_id]
+    else:
         abort(400)
+    key = project_key(provider, project_id)
     targets = [read_pack(slug)]
     if request.form.get("everywhere"):
         loader = targets[0]["loader"]
@@ -822,15 +1064,34 @@ def admin_add(slug):
     changes, errors = [], []
     with write_lock():
         for pack in targets:
-            if any(m["mod_id"] == project_id for m in pack["mods"]):
+            if any(str(m["key"]) == key for m in pack["mods"]):
                 continue
             try:
-                changes += run_and_report(pack, "modrinth", "add", "--project-id", project_id)
+                changes += run_and_report(pack, *command)
             except ActionError as e:
                 errors.append(f"{pack['name']}: {e}")
         errors += after_change(*(p["slug"] for p in targets))
     flash_results(changes, errors, "Already in the pack.")
-    return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", "")))
+    return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", ""), source=provider))
+
+
+@admin_route("/admin/pack/<slug>/add-link", methods=["POST"])
+def admin_add_link(slug):
+    """Add a CurseForge mod from its page link or slug; works without an API key."""
+    pack_dir(slug)
+    link = request.form.get("link", "").strip()
+    if not (CF_URL_RE.match(link) or re.fullmatch(r"[a-z0-9][a-z0-9-]*", link)):
+        flash("Paste a CurseForge mod link (https://www.curseforge.com/minecraft/mc-mods/...) or its slug.", "error")
+        return redirect(url_for("admin_pack", slug=slug))
+    changes, errors = [], []
+    with write_lock():
+        try:
+            changes = run_and_report(read_pack(slug), "curseforge", "add", link)
+        except ActionError as e:
+            errors.append(e)
+        errors += after_change(slug)
+    flash_results(changes, errors, f"No CurseForge mod found for '{link}' (or it's already in the pack).")
+    return redirect(url_for("admin_pack", slug=slug))
 
 
 def upload_targets(slug):
@@ -855,12 +1116,9 @@ def process_jar(targets, original_name, data, side):
         raise ActionError(f"{original_name}: only .jar files can be uploaded.")
     jar_id, name = jar_metadata(data, filename)
     sha512 = hashlib.sha512(data).hexdigest()
-    try:
-        match = modrinth_version_by_hash(sha512)
-    except (OSError, ValueError):
-        match = None
+    matches = find_file_matches(data, sha512)
     sha256 = store_jar(data, filename)
-    return [write_upload(t, filename, sha256, sha512, jar_id, name, side, match) for t in targets]
+    return [write_upload(t, filename, sha256, sha512, jar_id, name, side, matches) for t in targets]
 
 
 def finish_upload(targets):
@@ -964,49 +1222,59 @@ def admin_link(slug, stem):
     pack_dir(slug)
     pack, mod = read_pack(slug), uploaded_mod(slug, stem)
     query = request.args.get("q", mod["name"]).strip()
+    provider = request.args.get("source", mod["provider"] or "modrinth")
+    if provider != "curseforge" or not CURSEFORGE_API_KEY:
+        provider = "modrinth"
     results, search_error, current = [], None, None
     try:
-        if mod["mod_id"]:
-            current = modrinth_get(f"/project/{mod['mod_id']}")
+        if mod["provider"] == "modrinth":
+            project = modrinth_get(f"/project/{mod['mod_id']}")
+            current = {"title": project["title"], "description": project["description"],
+                       "icon_url": project.get("icon_url"), "url": mod["page_url"], "key": mod["key"]}
+        elif mod["provider"] == "curseforge":
+            current = (curseforge_project(mod["cf_id"]) if CURSEFORGE_API_KEY else
+                       {"title": f"CurseForge project {mod['cf_id']}", "description": "",
+                        "icon_url": None, "url": mod["page_url"], "key": mod["key"]})
         if query:
-            results = modrinth_search(query, pack_facets(pack))
-            direct = modrinth_project(query)
+            results = search(provider, query, pack)
+            direct = modrinth_project(query) if provider == "modrinth" else None
             if direct and direct["id"] not in {hit["project_id"] for hit in results}:
-                results.insert(0, dict(direct, project_id=direct["id"]))
-    except (OSError, ValueError) as e:
-        search_error = f"Modrinth lookup failed: {e}"
-    return render_template("admin_link.html", pack=pack, mod=mod, query=query,
-                           results=results, current=current, search_error=search_error)
+                results.insert(0, modrinth_hit(dict(direct, project_id=direct["id"])))
+    except (OSError, ValueError, ActionError) as e:
+        search_error = f"Lookup failed: {e}"
+    return render_template("admin_link.html", pack=pack, mod=mod, query=query, results=results,
+                           current=current, search_error=search_error, provider=provider,
+                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES)
 
 
 @admin_route("/admin/pack/<slug>/link/<stem>", methods=["POST"])
 def admin_link_save(slug, stem):
     pack_dir(slug)
     mod = uploaded_mod(slug, stem)
+    provider = request.form.get("provider", "")
     project_id = request.form.get("project_id", "")
-    if project_id and not re.match(r"^[A-Za-z0-9]{8}$", project_id):
+    if project_id and not ((provider == "modrinth" and re.fullmatch(r"[A-Za-z0-9]{8}", project_id)) or
+                           (provider == "curseforge" and re.fullmatch(r"[0-9]{1,10}", project_id))):
         abort(400)
     with write_lock():
         data = uploaded_jar_bytes(mod)
         sha512 = hashlib.sha512(data).hexdigest()
-        version_id = ""
+        link = None
         if project_id:
-            try:
-                match = modrinth_version_by_hash(sha512)
-            except (OSError, ValueError):
-                match = None
-            if match and match["project_id"] == project_id:
-                version_id = match["id"]
+            # Keep the exact version when this jar is a known file of that project.
+            wanted = project_key(provider, project_id)
+            link = next((m for m in find_file_matches(data, sha512) if project_key(*m[:2]) == wanted),
+                        (provider, project_id, ""))
         write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"],
-                          hashlib.sha256(data).hexdigest(), sha512, project_id, version_id)
+                          hashlib.sha256(data).hexdigest(), sha512, link)
         try:
             packwiz(slug, "refresh")
         except ActionError as e:
             flash(str(e), "error")
     if project_id:
-        flash(f"{mod['name']} is linked to Modrinth. Updates show up on the pack page.", "ok")
+        flash(f"{mod['name']} is linked to {PROVIDER_NAMES[provider]}. Updates show up on the pack page.", "ok")
     else:
-        flash(f"{mod['name']} is no longer linked to Modrinth.", "ok")
+        flash(f"{mod['name']} is no longer linked.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
 
 
@@ -1098,12 +1366,12 @@ def admin_update_all():
 
 @admin_route("/admin/update-mod", methods=["POST"])
 def admin_update_mod():
-    mod_id = request.form.get("mod_id", "")
+    key = request.form.get("key", "")
     changes, errors, touched = [], [], []
     with write_lock():
         for pack in all_packs():
             for mod in pack["mods"]:
-                if mod["mod_id"] == mod_id:
+                if key and mod["key"] == key:
                     touched.append(pack["slug"])
                     try:
                         changes += run_and_report(pack, "update", mod["stem"])

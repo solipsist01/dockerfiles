@@ -170,3 +170,6 @@ img.icon { width: 40px; height: 40px; border-radius: 8px; }
 .upload-log { list-style: none; padding: 0; margin: 6px 0 0; max-height: 240px; overflow-y: auto; white-space: pre-wrap; }
 .upload-log li { padding: 2px 0; }
 .upload-log li.error { color: var(--danger); }
+.tag.curseforge { color: #f16436; border-color: #f16436; }
+.tag.warn { color: var(--danger); border-color: var(--danger); }
+.addlink { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
