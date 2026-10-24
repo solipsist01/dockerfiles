@@ -1504,7 +1504,8 @@ def admin_pick_version(slug, stem):
         pack = read_pack(slug)
         before = file_versions(slug)
         try:
-            install_version(slug, mod, {"id": version_id})
+            if version_id != str(mod["version_id"] or mod["cf_file_id"]):
+                install_version(slug, mod, {"id": version_id})
             new = next((m for m in read_mods(slug) if m["key"] == mod["key"]), None)
             if new:
                 packwiz(slug, "pin", new["stem"])
