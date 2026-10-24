@@ -86,9 +86,14 @@ greyed out underneath, so a mod never just silently disappears.
   where the author allows third-party downloads). Updates keep working (the link stays in the
   `[update]` section). Switching back points them at Modrinth/CurseForge again. Note that this publicly
   redistributes other people's mods; many mod licenses don't allow that.
-- *Uploads* are always hosted here, in any mode. The mod name is read from the jar
-  (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`). Uploading a newer jar of a mod that's
-  already in the pack replaces it and keeps its side.
+- *Uploads*: what counts is whether a jar is **linked**. A jar that is a known Modrinth/CurseForge
+  file (recognised on upload or when linking) simply becomes that mod and follows the hosting
+  mode above. A jar that isn't linked, or a custom build linked by hand (its exact file isn't on
+  Modrinth/CurseForge), is always hosted here and shows **not linked** / no exact version.
+  The mod name is read from the jar (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`).
+  Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
+- The **Download** column shows per mod where players and servers get the file: *hosted here*,
+  *from Modrinth* or *via CurseForge*.
 
 **Uploading many jars:** pick as many as you like (45 is fine). The browser sends them one
 file per request, 3 at a time, splitting anything over 25 MB into chunks, with a progress bar and
@@ -109,8 +114,10 @@ form still works as a plain (single-request) upload.
 - **Update** on an uploaded jar swaps it for the Modrinth/CurseForge version; from then on it's a normal
   Modrinth mod that follows the pack's hosting mode (side is kept). So **Update all** also
   replaces linked uploads; unlinked uploads are never touched.
-- Uploaded jars carry `x-uploaded = true` in their `.pw.toml`. packwiz keeps that key on
-  refresh and drops it when it updates the mod from Modrinth.
+- Jars that can only be hosted here (not linked, or no exact remote file) carry
+  `x-uploaded = true` in their `.pw.toml`. packwiz keeps that key on refresh and drops it when
+  it updates the mod. Older uploads that turn out to be an exact Modrinth/CurseForge file lose
+  the mark automatically on the next change.
 
 Jars no pack refers to anymore are deleted automatically.
 

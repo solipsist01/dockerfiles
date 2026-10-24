@@ -364,7 +364,9 @@ def modrinth_file_url(mod):
     except (OSError, ValueError) as e:
         raise ActionError(f"Looking up {mod['name']} on Modrinth failed: {e}")
     files = version.get("files", [])
-    match = next((f for f in files if f["filename"] == mod["filename"]), None)
+    # The exact file first: an adopted upload may carry a different filename.
+    match = next((f for f in files if f.get("hashes", {}).get(mod["hash_format"]) == mod["hash"].lower()), None)
+    match = match or next((f for f in files if f["filename"] == mod["filename"]), None)
     match = match or next((f for f in files if f.get("primary")), files[0] if files else None)
     if not match:
         raise ActionError(f"Modrinth has no file for {mod['name']}.")
@@ -376,6 +378,12 @@ def sync_hosting(slug):
     mirror = load_settings(slug)["mirror"]
     changed, errors = False, []
     for mod in read_mods(slug):
+        if mod["source"] == "uploaded" and is_exact_link(mod):
+            # An upload that is a known Modrinth/CurseForge file is just that
+            # mod: drop the upload mark so it follows the hosting mode.
+            mod["path"].write_text(re.sub(r"^x-uploaded = true\n", "", mod["path"].read_text(), flags=re.M))
+            mod["source"] = "mirrored"
+            changed = True
         hosted = JAR_URL_RE.search(mod["url"])
         try:
             if hosted and (mod["source"] == "uploaded" or mirror):
@@ -456,20 +464,30 @@ def jar_metadata(data, filename):
     return None, None
 
 
+def is_exact_link(mod):
+    """Linked to a known file (not just a project), so it can be fetched remotely."""
+    return bool((mod["provider"] == "modrinth" and mod["version_id"]) or
+                (mod["provider"] == "curseforge" and mod["cf_file_id"]))
+
+
 def write_upload_meta(meta_file, name, filename, side, sha256, sha512, link=None):
     """Write the .pw.toml of an uploaded jar, optionally linked to a project.
 
-    link is (provider, project id, version/file id); the version may be empty
-    when the jar isn't a known file of that project. x-uploaded marks the jar as
-    ours: packwiz keeps unknown keys on refresh and drops them when it updates
-    the mod from Modrinth or CurseForge, so the mark lasts exactly as long as the
-    uploaded file is in use. sha512 lets Modrinth recognise it.
+    link is (provider, project id, version/file id); the version is empty when
+    the jar isn't a known file of that project. A jar that is a known file is
+    written as a normal Modrinth/CurseForge mod, so it follows the pack's hosting
+    mode. Any other jar gets x-uploaded: it can only be hosted here. packwiz keeps
+    unknown keys on refresh and drops them when it updates the mod, so the mark
+    lasts exactly as long as that jar is in use. sha512 lets Modrinth recognise it.
     """
     lines = [
         f"name = {json.dumps(name)}",
         f"filename = {json.dumps(filename)}",
         f'side = "{side}"',
-        "x-uploaded = true",
+    ]
+    if not (link and link[2]):
+        lines.append("x-uploaded = true")
+    lines += [
         "",
         "[download]",
         f"url = {json.dumps(jar_url(sha256, filename))}",

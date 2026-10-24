@@ -152,7 +152,7 @@
   {% for mod in pack.mods %}
     <tr>
       <td>{% if mod.page_url %}<a href="{{ mod.page_url }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
-        {% if mod.source == 'uploaded' %}<span class="tag small uploaded">uploaded</span>{% endif %}
+        {% if not mod.provider %}<span class="tag small warn-soft" title="No Modrinth/CurseForge project: no update notices, always hosted here">not linked</span>{% endif %}
         {% if mod.stem in restricted and mod.source == 'curseforge' %}<span class="tag small warn" title="The author blocks third-party downloads. Players' launchers ask them to download it by hand, and servers can't install it. Download the jar from CurseForge and upload it here to fix that.">manual download</span>{% endif %}</td>
       <td class="muted small">{{ mod.filename }}</td>
       <td>
