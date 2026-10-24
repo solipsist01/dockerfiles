@@ -165,7 +165,7 @@
         </form>
       </td>
       <td class="download">
-        {% if mod.download_from == 'here' %}<span class="tag small hosted" title="Players and servers download this jar from this site">hosted here</span>
+        {% if mod.download_from == 'here' %}<span class="tag small hosted" title="{% if mod.provider == 'curseforge' and mod.source == 'uploaded' %}The author blocks third-party downloads, so this jar stays hosted here{% else %}Players and servers download this jar from this site{% endif %}">hosted here</span>
         {% elif mod.download_from == 'CurseForge' %}<span class="tag small remote" title="packwiz-installer asks CurseForge for this file">via CurseForge</span>
         {% else %}<span class="tag small remote" title="Players and servers download this jar from {{ mod.download_from }}">from {{ mod.download_from }}</span>{% endif %}
       </td>

@@ -378,9 +378,10 @@ def sync_hosting(slug):
     mirror = load_settings(slug)["mirror"]
     changed, errors = False, []
     for mod in read_mods(slug):
-        if mod["source"] == "uploaded" and is_exact_link(mod):
+        if can_go_remote(mod):
             # An upload that is a known Modrinth/CurseForge file is just that
-            # mod: drop the upload mark so it follows the hosting mode.
+            # mod: drop the upload mark so it follows the hosting mode. CurseForge
+            # files whose author blocks third-party downloads stay ours.
             mod["path"].write_text(re.sub(r"^x-uploaded = true\n", "", mod["path"].read_text(), flags=re.M))
             mod["source"] = "mirrored"
             changed = True
@@ -468,6 +469,43 @@ def is_exact_link(mod):
     """Linked to a known file (not just a project), so it can be fetched remotely."""
     return bool((mod["provider"] == "modrinth" and mod["version_id"]) or
                 (mod["provider"] == "curseforge" and mod["cf_file_id"]))
+
+
+_cf_remote_allowed = {}
+
+
+def remote_allowed(mod):
+    """Can players and servers fetch this file remotely without a manual download?
+
+    Modrinth: always. CurseForge: only where the author allows third-party
+    downloads, and we can only tell with an API key; when in doubt, no.
+    """
+    if mod["provider"] == "modrinth":
+        return True
+    if mod["provider"] != "curseforge" or not CURSEFORGE_API_KEY:
+        return False
+    key = (mod["cf_id"], mod["cf_file_id"])
+    if key not in _cf_remote_allowed:
+        try:
+            _cf_remote_allowed[key] = curseforge_download_url(mod) is not None
+        except ActionError:
+            return False
+    return _cf_remote_allowed[key]
+
+
+def can_go_remote(mod):
+    """An upload that is a known remote file, which players can fetch themselves."""
+    return mod["source"] == "uploaded" and is_exact_link(mod) and remote_allowed(mod)
+
+
+def adopt_linked_uploads(*packs):
+    """Run the hosting sync for packs with uploads that should follow the hosting mode."""
+    stale = [p["slug"] for p in packs if any(can_go_remote(m) for m in p["mods"])]
+    if stale:
+        with write_lock():
+            for e in after_change(*stale):
+                flash(e, "error")
+    return stale
 
 
 def write_upload_meta(meta_file, name, filename, side, sha256, sha512, link=None):
@@ -988,6 +1026,8 @@ def admin_route(rule, **options):
 @admin_route("/admin")
 def admin_index():
     packs = all_packs()
+    if adopt_linked_uploads(*packs):
+        packs = all_packs()
     shared = {}
     for pack in packs:
         for mod in pack["mods"]:
@@ -1072,6 +1112,8 @@ def admin_delete(slug):
 def admin_pack(slug):
     pack_dir(slug)
     pack = read_pack(slug)
+    if adopt_linked_uploads(pack):
+        pack = read_pack(slug)
     query = request.args.get("q", "").strip()
     provider = request.args.get("source", "modrinth")
     if provider != "curseforge" or not CURSEFORGE_API_KEY:

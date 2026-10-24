@@ -90,6 +90,10 @@ greyed out underneath, so a mod never just silently disappears.
   file (recognised on upload or when linking) simply becomes that mod and follows the hosting
   mode above. A jar that isn't linked, or a custom build linked by hand (its exact file isn't on
   Modrinth/CurseForge), is always hosted here and shows **not linked** / no exact version.
+  Exception: a CurseForge file whose author blocks third-party downloads stays hosted here even
+  when linked, since players' launchers and servers can't fetch it themselves (needs the API key
+  to tell; without one such uploads stay hosted here). Opening the admin applies this to existing
+  uploads automatically.
   The mod name is read from the jar (`fabric.mod.json`, `quilt.mod.json`, `mods.toml`).
   Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
 - The **Download** column shows per mod where players and servers get the file: *hosted here*,
