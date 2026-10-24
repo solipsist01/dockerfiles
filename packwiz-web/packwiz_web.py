@@ -179,9 +179,24 @@ def read_mods(slug):
             "hash_format": download.get("hash-format", ""),
             "hash": download.get("hash", ""),
             "source": source,
+            "download_from": download_origin(url, download.get("mode", "")),
         })
     mods.sort(key=lambda m: m["name"].lower())
     return mods
+
+
+def download_origin(url, mode):
+    """Where players and servers get a mod's file: "here", or the remote site."""
+    if JAR_URL_RE.search(url):
+        return "here"
+    if mode == "metadata:curseforge":
+        return "CurseForge"
+    host = urllib.parse.urlparse(url).hostname or ""
+    if host.endswith("modrinth.com"):
+        return "Modrinth"
+    if host.endswith("forgecdn.net") or host.endswith("curseforge.com"):
+        return "CurseForge"
+    return host or "?"
 
 
 def project_key(provider, project_id):

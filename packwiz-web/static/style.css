@@ -175,3 +175,6 @@ img.icon { width: 40px; height: 40px; border-radius: 8px; }
 .addlink { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
 form.versions { margin-top: 10px; }
 form.versions input[name=minecraft] { flex: 0 1 140px; min-width: 110px; }
+.tag.hosted { color: var(--accent); border-color: var(--accent); }
+.tag.remote { color: var(--muted); }
+td.download { white-space: nowrap; }

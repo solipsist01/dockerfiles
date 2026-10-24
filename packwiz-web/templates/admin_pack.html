@@ -147,12 +147,12 @@
 
 <h2>Mods ({{ pack.mods|length }})</h2>
 <table>
-  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th>Update</th><th></th></tr></thead>
+  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th>Download</th><th>Update</th><th></th></tr></thead>
   <tbody>
   {% for mod in pack.mods %}
     <tr>
       <td>{% if mod.page_url %}<a href="{{ mod.page_url }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}
-        {% if mod.source != 'modrinth' %}<span class="tag small {{ mod.source }}">{{ mod.source }}</span>{% endif %}
+        {% if mod.source == 'uploaded' %}<span class="tag small uploaded">uploaded</span>{% endif %}
         {% if mod.stem in restricted and mod.source == 'curseforge' %}<span class="tag small warn" title="The author blocks third-party downloads. Players' launchers ask them to download it by hand, and servers can't install it. Download the jar from CurseForge and upload it here to fix that.">manual download</span>{% endif %}</td>
       <td class="muted small">{{ mod.filename }}</td>
       <td>
@@ -163,6 +163,11 @@
             {% for s in sides %}<option value="{{ s }}"{% if s == mod.side %} selected{% endif %}>{{ s }}</option>{% endfor %}
           </select>
         </form>
+      </td>
+      <td class="download">
+        {% if mod.download_from == 'here' %}<span class="tag small hosted" title="Players and servers download this jar from this site">hosted here</span>
+        {% elif mod.download_from == 'CurseForge' %}<span class="tag small remote" title="packwiz-installer asks CurseForge for this file">via CurseForge</span>
+        {% else %}<span class="tag small remote" title="Players and servers download this jar from {{ mod.download_from }}">from {{ mod.download_from }}</span>{% endif %}
       </td>
       <td class="update">
         {% if mod.stem in updates %}
@@ -186,7 +191,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="muted">No mods yet. Search above to add some.</td></tr>
+    <tr><td colspan="6" class="muted">No mods yet. Search above to add some.</td></tr>
   {% endfor %}
   </tbody>
 </table>
