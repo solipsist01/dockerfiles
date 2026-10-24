@@ -57,8 +57,8 @@
     {% endfor %}
     </tbody>
   </table>
-  <p class="muted small">Newest first, for {{ pack.loader_name }} {{ pack.minecraft }}. Picking an older version keeps it there
-    until you click Update{% if pack.stable %}; with "stable releases only" a newer beta is never suggested{% endif %}.</p>
+  <p class="muted small">Newest first, for {{ pack.loader_name }} {{ pack.minecraft }}. <b>Use</b> pins the mod to that version:
+    updates skip it until you click <b>Unpin</b> in the mod list.{% if mod.pinned %} It's pinned now.{% endif %}</p>
   {% endif %}
 </section>
 {% endif %}

@@ -170,6 +170,7 @@ def read_mods(slug):
             "name": meta.get("name", meta_file.stem),
             "filename": meta.get("filename", ""),
             "side": meta.get("side", "both"),
+            "pinned": bool(meta.get("pin", False)),
             "provider": provider,
             "mod_id": modrinth.get("mod-id"),
             "version_id": modrinth.get("version"),
@@ -699,7 +700,9 @@ def check_updates(pack):
     cf_updates, restricted = curseforge_updates(
         pack, [m for m in pack["mods"] if m["provider"] == "curseforge"])
     updates.update(cf_updates)
-    return updates, restricted
+    # Pinned mods stay on the version that was picked for them.
+    pinned = {m["stem"] for m in pack["mods"] if m["pinned"]}
+    return {stem: u for stem, u in updates.items() if stem not in pinned}, restricted
 
 
 def modrinth_versions(pack, project_id):
@@ -1502,12 +1505,31 @@ def admin_pick_version(slug, stem):
         before = file_versions(slug)
         try:
             install_version(slug, mod, {"id": version_id})
+            new = next((m for m in read_mods(slug) if m["key"] == mod["key"]), None)
+            if new:
+                packwiz(slug, "pin", new["stem"])
             packwiz(slug, "refresh")
         except ActionError as e:
             errors.append(e)
         changes = describe_changes(pack["name"], before, file_versions(slug))
+        if not errors:
+            changes.append(f"{mod['name']} is pinned to this version: updates skip it until you unpin it.")
         errors += after_change(slug)
     flash_results(changes, errors, f"{mod['name']} was already on that version.")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+@admin_route("/admin/pack/<slug>/unpin", methods=["POST"])
+def admin_unpin(slug):
+    pack_dir(slug)
+    mod = find_mod(slug, request.form.get("stem", ""))
+    with write_lock():
+        try:
+            packwiz(slug, "unpin", mod["stem"])
+            packwiz(slug, "refresh")
+            flash(f"{mod['name']} is unpinned: it gets updates again.", "ok")
+        except ActionError as e:
+            flash(str(e), "error")
     return redirect(url_for("admin_pack", slug=slug))
 
 

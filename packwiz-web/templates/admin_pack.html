@@ -181,7 +181,14 @@
         {% else %}<span class="tag small remote" title="Players and servers download this jar from {{ mod.download_from }}">from {{ mod.download_from }}</span>{% endif %}
       </td>
       <td class="update">
-        {% if mod.stem in updates %}
+        {% if mod.pinned %}
+        <form method="post" action="{{ url_for('admin_unpin', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <span class="tag small pinned" title="You picked this version; updates skip it">🔒 pinned</span>
+          <button class="small">Unpin</button>
+        </form>
+        {% elif mod.stem in updates %}
         <form method="post" action="{{ url_for('admin_update_one', slug=pack.slug) }}" class="row">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">
