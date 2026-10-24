@@ -33,6 +33,7 @@ import shutil
 import struct
 import subprocess
 import time
+import tempfile
 import tomllib
 import urllib.error
 import urllib.parse
@@ -1026,7 +1027,63 @@ def admin_pack(slug):
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
                            max_upload_mb=MAX_UPLOAD_MB, chunk_mb=UPLOAD_CHUNK_MB, updates=updates,
                            update_error=update_error, restricted=restricted, provider=provider,
-                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES)
+                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES,
+                           loaders=LOADERS, mc_versions=minecraft_versions())
+
+
+def resolve_versions(mc, loader, loader_version):
+    """The [versions] packwiz would write for this combination, checked by packwiz.
+
+    Runs packwiz init in a scratch folder, so packwiz validates the Minecraft
+    and loader version (and looks up "latest") exactly as it does for new packs.
+    """
+    version_flag = [f"--{loader}-latest"] if loader_version in ("", "latest") else [
+        f"--{loader}-version", loader_version]
+    with tempfile.TemporaryDirectory() as scratch:
+        output = packwiz(Path(scratch), "init", "--name", "check", "--author", "check",
+                         "--version", "1", "--mc-version", mc, "--modloader", loader, *version_flag)
+        try:
+            with open(Path(scratch) / "pack.toml", "rb") as f:
+                return tomllib.load(f)["versions"]
+        except (FileNotFoundError, KeyError):
+            # packwiz exits 0 on these; its last line says what was wrong.
+            raise ActionError(output.splitlines()[-1] if output else "packwiz couldn't create that combination.")
+
+
+@admin_route("/admin/pack/<slug>/versions", methods=["POST"])
+def admin_versions(slug):
+    path = pack_dir(slug)
+    mc = request.form.get("minecraft", "").strip()
+    loader = request.form.get("loader", "")
+    loader_version = request.form.get("loader_version", "").strip()
+    if (not re.fullmatch(r"[0-9][0-9a-z.\-]*", mc) or loader not in LOADERS
+            or not re.fullmatch(r"([0-9A-Za-z][0-9A-Za-z.+\-]*)?", loader_version)):
+        flash("Fill in a Minecraft version and a loader; leave the loader version empty for the newest.", "error")
+        return redirect(url_for("admin_pack", slug=slug))
+    old = read_pack(slug)
+    with write_lock():
+        try:
+            versions = resolve_versions(mc, loader, loader_version)
+        except ActionError as e:
+            flash(f"Not changed: {e}", "error")
+            return redirect(url_for("admin_pack", slug=slug))
+        block = "[versions]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in sorted(versions.items()))
+        toml = (path / "pack.toml").read_text()
+        toml = re.sub(r"^\[versions\]\n(?:[^\[\n].*\n?)*", block, toml, count=1, flags=re.M)
+        (path / "pack.toml").write_text(toml)
+        try:
+            packwiz(slug, "refresh")
+        except ActionError as e:
+            flash(str(e), "error")
+    new = read_pack(slug)
+    flash(f"{new['name']} is now {new['loader_name']} {new['loader_version']} on Minecraft {new['minecraft']} "
+          f"(was {old['loader_name']} {old['loader_version']} on {old['minecraft']}).\n"
+          "Reinstall the server with the same loader. Players: re-import the Prism zip, or change the "
+          "loader under Edit → Version in Prism; packwiz only syncs mods, not the loader.", "ok")
+    if new["minecraft"] != old["minecraft"]:
+        flash("The Minecraft version changed: mods stay on their current files until you update them. "
+              "Check the update column, and remove mods that have no build for the new version.", "error")
+    return redirect(url_for("admin_pack", slug=slug))
 
 
 @admin_route("/admin/pack/<slug>/hosting", methods=["POST"])

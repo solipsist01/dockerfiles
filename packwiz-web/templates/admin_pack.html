@@ -30,6 +30,27 @@
 </section>
 
 <section class="card">
+  <details>
+    <summary><b>Minecraft &amp; loader version</b> <span class="muted small">— now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}</span></summary>
+    <form method="post" action="{{ url_for('admin_versions', slug=pack.slug) }}" class="row wrap versions"
+          data-confirm="Change the Minecraft/loader version of {{ pack.name }}? The server needs a reinstall with the same loader, and players need to re-import the Prism zip or change the loader in Prism.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input name="minecraft" list="mc-versions" value="{{ pack.minecraft }}" required aria-label="Minecraft version">
+      <datalist id="mc-versions">{% for v in mc_versions %}<option value="{{ v }}">{% endfor %}</datalist>
+      <select name="loader" aria-label="Loader">
+        {% for key, label in loaders.items() %}<option value="{{ key }}"{% if key == pack.loader %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <input name="loader_version" placeholder="loader version (empty = newest)" aria-label="Loader version">
+      <button>Change</button>
+    </form>
+    <p class="muted small">packwiz checks the combination first; nothing changes if it doesn't exist.
+      Mods aren't touched: after changing the Minecraft version, update them (or remove the ones without a build).
+      The server needs a reinstall with the new loader, and players re-import the Prism zip or switch the loader in Prism (Edit → Version);
+      packwiz only syncs mods.</p>
+  </details>
+</section>
+
+<section class="card">
   <h2>Add mods</h2>
   <form method="get" class="row">
     {% if cf_enabled %}
@@ -155,7 +176,8 @@
         {% endif %}
       </td>
       <td class="actions">
-        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}">{{ 'Link' if not mod.provider else 'Linked' }}</a>{% endif %}
+        {% if mod.source == 'uploaded' %}<a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Link this jar to its Modrinth or CurseForge project' if not mod.provider else 'Linked to ' ~ provider_names[mod.provider] ~ '; click to change' }}">{{ 'Link' if not mod.provider else 'Linked' }}</a>
+        {% elif mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
         <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <input type="hidden" name="stem" value="{{ mod.stem }}">

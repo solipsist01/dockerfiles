@@ -50,6 +50,15 @@ loader. **Update all mods** / **Update all packs** / **Update everywhere** (per
 shared mod) show what changed as `old.jar → new.jar`. Set a mod to `client` or
 `server` so the other side skips it. **Copy** clones a pack as the start of a new one.
 
+**Minecraft & loader version:** on the pack page, open *Minecraft & loader version*, pick the
+Minecraft version, loader and loader version (empty = newest) and click **Change**. packwiz
+first checks the combination in a scratch pack; nothing changes if it doesn't exist. Mods aren't
+touched: after a Minecraft version change, update them (or remove the ones without a build).
+The server needs a reinstall with the new loader, and players re-import the Prism zip or switch
+the loader in Prism (Edit → Version), since packwiz only syncs mods.
+Tip for 1.20.1: use Forge (47.4.x), not NeoForge 47.1.x. NeoForge for 1.20.1 is an old fork
+that current 1.20.1 mods don't always load on.
+
 **Search:** filtered on the pack's Minecraft version and loader. On 1.20.1 NeoForge, Forge
 mods are included too (NeoForge 1.20.1 is a Forge fork and most mods there are only tagged Forge),
 and Quilt packs include Fabric mods. Close matches without a build for the pack are listed
