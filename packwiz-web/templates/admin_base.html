@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Packwiz admin{% endblock %}
+{% block home %}{{ url_for('admin_index') }}{% endblock %}
+{% block brand %}Packwiz admin{% endblock %}
+{% block nav %}
+  <a href="{{ url_for('index') }}">Public page</a>
+  {% if g.user %}<span class="muted">{{ g.user }}</span>{% endif %}
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "admin_base.html" %}
+{% block title %}{{ pack.name }} - Packwiz admin{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('admin_index') }}">← All packs</a></p>
+<div class="titlebar">
+  <h1>{{ pack.name }}</h1>
+  <span class="tag">Minecraft {{ pack.minecraft }}</span>
+  <span class="tag">{{ pack.loader_name }} {{ pack.loader_version }}</span>
+  <span class="spacer"></span>
+  <form method="post" action="{{ url_for('admin_update_pack', slug=pack.slug) }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="primary">Update all mods</button>
+  </form>
+</div>
+
+<div class="copyrow"><span class="muted">Pack URL</span><code>{{ pack_url }}</code><button type="button" data-copy="{{ pack_url }}">Copy</button></div>
+
+<section class="card">
+  <h2>Add mods</h2>
+  <form method="get" class="row">
+    <input name="q" value="{{ query }}" placeholder="Search Modrinth…" autofocus>
+    <button>Search</button>
+  </form>
+  {% if search_error %}<div class="flash error">{{ search_error }}</div>{% endif %}
+  {% if query and not results and not search_error %}
+    <p class="muted">Nothing found for {{ pack.loader_name }} {{ pack.minecraft }}.</p>
+  {% endif %}
+  <ul class="results">
+  {% for hit in results %}
+    <li>
+      {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
+      <div class="grow">
+        <a href="https://modrinth.com/mod/{{ hit.slug }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <span class="muted small">{{ "{:,}".format(hit.downloads) }} downloads</span>
+        <div class="muted small">{{ hit.description }}</div>
+      </div>
+      {% if hit.project_id in installed %}
+        <span class="tag">In pack</span>
+      {% else %}
+        <form method="post" action="{{ url_for('admin_add', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="project_id" value="{{ hit.project_id }}">
+          <input type="hidden" name="q" value="{{ query }}">
+          <button class="primary">Add</button>
+          {% if siblings %}
+          <button name="everywhere" value="1" title="{{ siblings|map(attribute='name')|join(', ') }}">+ all {{ pack.loader_name }} packs ({{ siblings|length + 1 }})</button>
+          {% endif %}
+        </form>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+
+<h2>Mods ({{ pack.mods|length }})</h2>
+<table>
+  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th></th></tr></thead>
+  <tbody>
+  {% for mod in pack.mods %}
+    <tr>
+      <td><b>{{ mod.name }}</b>{% if mod.folder != 'mods' %} <span class="tag small">{{ mod.folder }}</span>{% endif %}</td>
+      <td class="muted small">{{ mod.filename }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_side', slug=pack.slug) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <select name="side" onchange="this.form.submit()">
+            {% for s in sides %}<option value="{{ s }}"{% if s == mod.side %} selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+        </form>
+      </td>
+      <td class="actions">
+        <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <button class="danger">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">No mods yet. Search above to add some.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.</p>
+{% endblock %}

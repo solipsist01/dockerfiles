@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Modpacks{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <a class="brand" href="{% block home %}{{ url_for('index') }}{% endblock %}">{% block brand %}Modpacks{% endblock %}</a>
+  <span class="spacer"></span>
+  {% block nav %}{% endblock %}
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+document.addEventListener("click", function (e) {
+  var btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+  navigator.clipboard.writeText(btn.getAttribute("data-copy")).then(function () {
+    var old = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(function () { btn.textContent = old; }, 1200);
+  });
+});
+document.addEventListener("submit", function (e) {
+  var msg = e.target.getAttribute("data-confirm");
+  if (msg && !confirm(msg)) e.preventDefault();
+});
+</script>
+</body>
+</html>

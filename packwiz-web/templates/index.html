@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Modpacks</h1>
+<p class="muted">
+  Install a pack once in <a href="https://prismlauncher.org/">Prism Launcher</a>.
+  Every time you start it, mods are updated automatically.
+</p>
+
+{% for pack in packs %}
+<section class="card">
+  <div class="card-head">
+    <h2>{{ pack.name }}</h2>
+    <span class="tag">Minecraft {{ pack.minecraft }}</span>
+    <span class="tag">{{ pack.loader_name }} {{ pack.loader_version }}</span>
+    <span class="tag">{{ pack.mods|length }} mods</span>
+  </div>
+
+  {% set zip_url = base ~ url_for('download_prism', slug=pack.slug) %}
+  <ol class="steps">
+    <li>In Prism: <b>Add Instance</b> → <b>Import</b>.</li>
+    <li>Paste this link and press OK:
+      <div class="copyrow"><code>{{ zip_url }}</code><button type="button" data-copy="{{ zip_url }}">Copy</button></div>
+      <span class="muted">(or <a href="{{ zip_url }}">download the zip</a> and pick that file)</span>
+    </li>
+    <li>Start the instance. The first start downloads all mods.</li>
+  </ol>
+
+  <details>
+    <summary>Mod list</summary>
+    <ul class="modlist">
+      {% for mod in pack.mods %}
+      <li>{{ mod.name }}{% if mod.side != 'both' %} <span class="tag small">{{ mod.side }} only</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  <details>
+    <summary>For server admins</summary>
+    <div class="copyrow"><code>{{ pack_url(pack.slug) }}</code><button type="button" data-copy="{{ pack_url(pack.slug) }}">Copy</button></div>
+    <p class="muted">Run before starting the server (<a href="{{ url_for('bootstrap_jar') }}">bootstrap jar</a>):</p>
+    <code class="block">java -jar packwiz-installer-bootstrap.jar -g -s server {{ pack_url(pack.slug) }}</code>
+  </details>
+</section>
+{% else %}
+<p class="muted">No packs yet.</p>
+{% endfor %}
+{% endblock %}

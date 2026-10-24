@@ -1,0 +1,84 @@
+{% extends "admin_base.html" %}
+{% block content %}
+<div class="titlebar">
+  <h1>Packs</h1>
+  {% if packs %}
+  <form method="post" action="{{ url_for('admin_update_all') }}" data-confirm="Update every mod in every pack to its newest version?">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="primary">Update all packs</button>
+  </form>
+  {% endif %}
+</div>
+
+<table>
+  <thead><tr><th>Pack</th><th>Minecraft</th><th>Loader</th><th>Mods</th><th></th></tr></thead>
+  <tbody>
+  {% for pack in packs %}
+    <tr>
+      <td><a href="{{ url_for('admin_pack', slug=pack.slug) }}"><b>{{ pack.name }}</b></a></td>
+      <td>{{ pack.minecraft }}</td>
+      <td>{{ pack.loader_name }}</td>
+      <td>{{ pack.mods|length }}</td>
+      <td class="actions">
+        <details class="inline">
+          <summary>Copy</summary>
+          <form method="post" action="{{ url_for('admin_copy', slug=pack.slug) }}" class="row">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <input name="name" placeholder="Name of the copy" required>
+            <button>Copy</button>
+          </form>
+        </details>
+        <form method="post" action="{{ url_for('admin_delete', slug=pack.slug) }}" data-confirm="Delete pack '{{ pack.name }}'? Servers and players using it will stop getting updates.">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No packs yet. Create one below.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>New pack</h2>
+  <form method="post" action="{{ url_for('admin_new') }}" class="row wrap">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input name="name" placeholder="Name, e.g. Survival" required>
+    <input name="minecraft" list="mc-versions" placeholder="Minecraft version" required
+           value="{{ mc_versions[0] if mc_versions else '' }}">
+    <datalist id="mc-versions">
+      {% for v in mc_versions %}<option value="{{ v }}">{% endfor %}
+    </datalist>
+    <select name="loader">
+      {% for key, label in loaders.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+    </select>
+    <button class="primary">Create</button>
+  </form>
+  <p class="muted">The newest loader version is picked automatically.</p>
+</section>
+
+{% if shared %}
+<section class="card">
+  <h2>Mods in more than one pack</h2>
+  <table>
+    <thead><tr><th>Mod</th><th>Packs</th><th></th></tr></thead>
+    <tbody>
+    {% for mod in shared %}
+      <tr>
+        <td>{{ mod.name }}</td>
+        <td class="muted">{{ mod.packs|join(', ') }}</td>
+        <td class="actions">
+          <form method="post" action="{{ url_for('admin_update_mod') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <input type="hidden" name="mod_id" value="{{ mod.mod_id }}">
+            <button>Update everywhere</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}
