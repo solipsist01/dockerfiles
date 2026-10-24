@@ -1,8 +1,8 @@
 {% extends "admin_base.html" %}
-{% block title %}Link {{ mod.name }} - Packwiz admin{% endblock %}
+{% block title %}{{ mod.name }} - Packwiz admin{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('admin_pack', slug=pack.slug) }}">← {{ pack.name }}</a></p>
-<h1>Link {{ mod.name }}</h1>
+<h1>{{ mod.name }}</h1>
 <p class="muted">Current file: <code>{{ mod.filename }}</code>{% if mod.source == 'uploaded' %} (uploaded){% endif %}.
   {% if mod.source == 'uploaded' %}Linking it to its Modrinth or CurseForge project gives you update notices for this mod.
   The jar you uploaded stays in use until you click <b>Update</b>.
@@ -27,8 +27,44 @@
 </section>
 {% endif %}
 
+{% if mod.provider %}
 <section class="card">
-  <h2>Find the project</h2>
+  <h2>Version</h2>
+  {% if versions_error %}<div class="flash error">{{ versions_error }}</div>{% endif %}
+  {% if not versions and not versions_error %}
+    <p class="muted">{% if mod.provider == 'curseforge' and not cf_enabled %}Choosing a CurseForge version needs a CurseForge API key.{% else %}No versions for {{ pack.loader_name }} {{ pack.minecraft }}.{% endif %}</p>
+  {% endif %}
+  {% if versions %}
+  <table class="versions">
+    <tbody>
+    {% for v in versions[:30] %}
+      <tr{% if v.id|string == current_version|string %} class="current"{% endif %}>
+        <td><b>{{ v.version_number }}</b><div class="muted small">{{ v.filename }}</div></td>
+        <td><span class="tag small {{ 'hosted' if v.version_type == 'release' else 'warn-soft' }}">{{ v.version_type }}</span></td>
+        <td class="muted small">{{ v.date_published[:10] }}</td>
+        <td class="actions">
+          {% if v.id|string == current_version|string %}<span class="tag">current</span>
+          {% else %}
+          <form method="post" action="{{ url_for('admin_pick_version', slug=pack.slug, stem=mod.stem) }}"
+                data-confirm="Put {{ mod.name }} on {{ v.version_number }}?">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <input type="hidden" name="version_id" value="{{ v.id }}">
+            <button>Use</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">Newest first, for {{ pack.loader_name }} {{ pack.minecraft }}. Picking an older version keeps it there
+    until you click Update{% if pack.stable %}; with "stable releases only" a newer beta is never suggested{% endif %}.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>{{ 'Link to another project' if mod.provider else 'Find the project' }}</h2>
   <form method="get" class="row">
     {% if cf_enabled %}
     <select name="source" aria-label="Search on">

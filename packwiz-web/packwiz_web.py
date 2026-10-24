@@ -33,6 +33,7 @@ import shutil
 import struct
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 import tomllib
 import urllib.error
@@ -139,6 +140,7 @@ def read_pack(slug):
         "loader_name": LOADERS.get(loader, "Vanilla"),
         "loader_version": versions.get(loader, ""),
         "mirror": load_settings(slug)["mirror"],
+        "stable": load_settings(slug)["stable"],
         "mods": read_mods(slug),
     }
 
@@ -228,7 +230,7 @@ def load_settings(slug):
         settings = json.loads((SETTINGS_DIR / f"{slug}.json").read_text())
     except (FileNotFoundError, ValueError):
         settings = {}
-    return {"mirror": bool(settings.get("mirror", False))}
+    return {"mirror": bool(settings.get("mirror", False)), "stable": bool(settings.get("stable", False))}
 
 
 def save_settings(slug, settings):
@@ -700,11 +702,42 @@ def check_updates(pack):
     return updates, restricted
 
 
+def modrinth_versions(pack, project_id):
+    """A project's versions for this pack's Minecraft version and loaders, newest first."""
+    return modrinth_get(f"/project/{project_id}/version", {
+        "loaders": json.dumps(compatible_loaders(pack["loader"], pack["minecraft"])),
+        "game_versions": json.dumps([pack["minecraft"]])})
+
+
+def newer_release(versions, current_id):
+    """The newest release in versions if it's newer than the current version, else None."""
+    release = next((v for v in versions if v["version_type"] == "release"), None)
+    if not release or release["id"] == current_id:
+        return None
+    current = next((v for v in versions if v["id"] == current_id), None)
+    # Don't offer an older release to someone who picked a newer beta on purpose.
+    if current and current["date_published"] >= release["date_published"]:
+        return None
+    return release
+
+
 def modrinth_updates(pack):
-    """Newest compatible Modrinth version for each linked mod that isn't on it."""
+    """Newest compatible Modrinth version for each linked mod that isn't on it.
+
+    With the pack's "stable releases only" setting, betas and alphas are skipped.
+    """
     linked = [m for m in pack["mods"] if m["provider"] == "modrinth"]
     loaders = compatible_loaders(pack["loader"], pack["minecraft"])
     updates, unknown = {}, []
+    if pack.get("stable"):
+        # The batch endpoint can't filter on release type, so ask per project.
+        with ThreadPoolExecutor(8) as pool:
+            found = pool.map(lambda m: (m, modrinth_versions(pack, m["mod_id"])), linked)
+            for mod, versions in found:
+                release = newer_release(versions, mod["version_id"])
+                if release:
+                    updates[mod["stem"]] = release
+        return updates
     by_hash = {m["hash"].lower(): m for m in linked if m["hash_format"] == "sha512" and m["version_id"]}
     if by_hash:
         latest = modrinth_post("/version_files/update", {
@@ -719,8 +752,7 @@ def modrinth_updates(pack):
     # Linked by hand, or a file Modrinth doesn't know: ask per project.
     unknown += [m for m in linked if m not in by_hash.values()]
     for mod in unknown:
-        versions = modrinth_get(f"/project/{mod['mod_id']}/version", {
-            "loaders": json.dumps(loaders), "game_versions": json.dumps([pack["minecraft"]])})
+        versions = modrinth_versions(pack, mod["mod_id"])
         if versions and versions[0]["id"] != mod["version_id"]:
             updates[mod["stem"]] = versions[0]
     return updates
@@ -837,6 +869,32 @@ def curseforge_file_by_fingerprint(fingerprint):
     return matches[0]["file"] if matches else None
 
 
+def curseforge_versions(pack, project_id):
+    """A project's files for this pack, newest first, shaped like Modrinth versions."""
+    files = {}
+    for loader in compatible_loaders(pack["loader"], pack["minecraft"]):
+        if loader in CF_LOADER_TYPES:
+            found = curseforge_request(f"/mods/{int(project_id)}/files", {
+                "gameVersion": pack["minecraft"], "modLoaderType": CF_LOADER_TYPES[loader], "pageSize": 50})
+            for f in found["data"]:
+                files.setdefault(f["id"], f)
+    types = {1: "release", 2: "beta", 3: "alpha"}
+    return [{"id": f["id"], "version_number": f.get("displayName") or f["fileName"], "filename": f["fileName"],
+             "version_type": types.get(f.get("releaseType"), "?"), "date_published": f.get("fileDate", "")}
+            for f in sorted(files.values(), key=lambda f: f.get("fileDate", ""), reverse=True)]
+
+
+def mod_versions(pack, mod):
+    """The versions to choose from on a mod's edit page."""
+    if mod["provider"] == "modrinth":
+        return [{"id": v["id"], "version_number": v["version_number"], "filename": v["files"][0]["filename"] if v["files"] else "",
+                 "version_type": v["version_type"], "date_published": v["date_published"]}
+                for v in modrinth_versions(pack, mod["mod_id"])]
+    if mod["provider"] == "curseforge" and CURSEFORGE_API_KEY:
+        return curseforge_versions(pack, mod["cf_id"])
+    return []
+
+
 def curseforge_project(project_id):
     return curseforge_hit(curseforge_request(f"/mods/{int(project_id)}")["data"])
 
@@ -857,10 +915,12 @@ def curseforge_updates(pack, mods):
         if project.get("allowModDistribution") is False:
             restricted.add(mod["stem"])
         files = [f for f in project.get("latestFilesIndexes", [])
-                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in loaders]
+                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in loaders
+                 and (f.get("releaseType") == 1 or not pack.get("stable"))]
         if files:
             newest = max(files, key=lambda f: f["fileId"])
-            if newest["fileId"] != mod["cf_file_id"]:
+            # File ids only go up, so a lower one is older: never suggest going back.
+            if newest["fileId"] > (mod["cf_file_id"] or 0):
                 updates[mod["stem"]] = {"id": newest["fileId"], "version_number": newest["filename"],
                                         "name": newest["filename"]}
     return updates, restricted
@@ -1071,7 +1131,7 @@ def admin_new():
             shutil.rmtree(path, ignore_errors=True)
             flash(str(e), "error")
             return redirect(url_for("admin_index"))
-        save_settings(slug, {"mirror": bool(request.form.get("mirror"))})
+        save_settings(slug, {"mirror": bool(request.form.get("mirror")), "stable": False})
     flash(f"Pack '{name}' created.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
 
@@ -1205,7 +1265,7 @@ def admin_hosting(slug):
     pack_dir(slug)
     mirror = request.form.get("mirror") == "1"
     with write_lock():
-        save_settings(slug, {"mirror": mirror})
+        save_settings(slug, dict(load_settings(slug), mirror=mirror))
         errors = after_change(slug)
     for e in errors:
         flash(e, "error")
@@ -1417,9 +1477,49 @@ def admin_link(slug, stem):
                 results.insert(0, modrinth_hit(dict(direct, project_id=direct["id"])))
     except (OSError, ValueError, ActionError) as e:
         search_error = f"Lookup failed: {e}"
+    try:
+        versions, versions_error = mod_versions(pack, mod), None
+    except (OSError, ValueError, ActionError) as e:
+        versions, versions_error = [], f"Couldn't load the versions: {e}"
     return render_template("admin_link.html", pack=pack, mod=mod, query=query, results=results,
                            current=current, search_error=search_error, provider=provider,
-                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES)
+                           cf_enabled=bool(CURSEFORGE_API_KEY), provider_names=PROVIDER_NAMES,
+                           versions=versions, versions_error=versions_error,
+                           current_version=mod["version_id"] or mod["cf_file_id"])
+
+
+@admin_route("/admin/pack/<slug>/version/<stem>", methods=["POST"])
+def admin_pick_version(slug, stem):
+    """Put a mod on the version picked on its edit page (older, newer or a beta)."""
+    pack_dir(slug)
+    mod = find_mod(slug, stem)
+    version_id = request.form.get("version_id", "")
+    if not mod["provider"] or not re.fullmatch(r"[A-Za-z0-9]{1,16}", version_id):
+        abort(400)
+    changes, errors = [], []
+    with write_lock():
+        pack = read_pack(slug)
+        before = file_versions(slug)
+        try:
+            install_version(slug, mod, {"id": version_id})
+            packwiz(slug, "refresh")
+        except ActionError as e:
+            errors.append(e)
+        changes = describe_changes(pack["name"], before, file_versions(slug))
+        errors += after_change(slug)
+    flash_results(changes, errors, f"{mod['name']} was already on that version.")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+@admin_route("/admin/pack/<slug>/stable", methods=["POST"])
+def admin_stable(slug):
+    pack_dir(slug)
+    stable = request.form.get("stable") == "1"
+    with write_lock():
+        save_settings(slug, dict(load_settings(slug), stable=stable))
+    flash("Updates now only offer stable releases." if stable else
+          "Updates now offer the newest version, betas included.", "ok")
+    return redirect(url_for("admin_pack", slug=slug))
 
 
 @admin_route("/admin/pack/<slug>/link/<stem>", methods=["POST"])

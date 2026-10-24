@@ -179,3 +179,5 @@ form.versions input[name=minecraft] { flex: 0 1 140px; min-width: 110px; }
 .tag.remote { color: var(--muted); }
 td.download { white-space: nowrap; }
 .tag.warn-soft { color: #c98a1a; border-color: #c98a1a; }
+table.versions tr.current td { background: var(--ok-bg); }
+table.versions td { padding: 6px 10px; }

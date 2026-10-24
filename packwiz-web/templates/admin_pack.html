@@ -30,6 +30,17 @@
 </section>
 
 <section class="card">
+  <h2>Updates</h2>
+  <form method="post" action="{{ url_for('admin_stable', slug=pack.slug) }}" class="row wrap">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label class="choice"><input type="radio" name="stable" value="0"{% if not pack.stable %} checked{% endif %}> Newest version (betas included)</label>
+    <label class="choice"><input type="radio" name="stable" value="1"{% if pack.stable %} checked{% endif %}> Stable releases only</label>
+    <button>Save</button>
+  </form>
+  <p class="muted small">Applies to the update column, Update and Update all. To pick a specific version (older, or a beta), use ✎ next to the mod.</p>
+</section>
+
+<section class="card">
   <details>
     <summary><b>Minecraft &amp; loader version</b> <span class="muted small">— now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}</span></summary>
     <form method="post" action="{{ url_for('admin_versions', slug=pack.slug) }}" class="row wrap versions"
