@@ -33,7 +33,7 @@
   <details>
     <summary><b>Minecraft &amp; loader version</b> <span class="muted small">— now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}</span></summary>
     <form method="post" action="{{ url_for('admin_versions', slug=pack.slug) }}" class="row wrap versions"
-          data-confirm="Change the Minecraft/loader version of {{ pack.name }}? The server needs a reinstall with the same loader, and players need to re-import the Prism zip or change the loader in Prism.">
+          data-confirm="Change the Minecraft/loader version of {{ pack.name }}? Players' Prism instances follow automatically (they click Update and start once more); the server needs a reinstall with the same loader.">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <input name="minecraft" list="mc-versions" value="{{ pack.minecraft }}" required aria-label="Minecraft version">
       <datalist id="mc-versions">{% for v in mc_versions %}<option value="{{ v }}">{% endfor %}</datalist>
@@ -45,8 +45,8 @@
     </form>
     <p class="muted small">packwiz checks the combination first; nothing changes if it doesn't exist.
       Mods aren't touched: after changing the Minecraft version, update them (or remove the ones without a build).
-      The server needs a reinstall with the new loader, and players re-import the Prism zip or switch the loader in Prism (Edit → Version);
-      packwiz only syncs mods.</p>
+      Players' Prism instances follow by themselves: on the next start packwiz-installer shows the old and new versions and offers
+      <b>Update</b>; after that they start once more. The server needs a reinstall with the new loader.</p>
   </details>
 </section>
 

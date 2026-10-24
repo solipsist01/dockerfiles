@@ -54,8 +54,11 @@ shared mod) show what changed as `old.jar → new.jar`. Set a mod to `client` or
 Minecraft version, loader and loader version (empty = newest) and click **Change**. packwiz
 first checks the combination in a scratch pack; nothing changes if it doesn't exist. Mods aren't
 touched: after a Minecraft version change, update them (or remove the ones without a build).
-The server needs a reinstall with the new loader, and players re-import the Prism zip or switch
-the loader in Prism (Edit → Version), since packwiz only syncs mods.
+Players' Prism instances follow automatically: packwiz-installer compares the instance's
+`mmc-pack.json` with `pack.toml` on every start, shows the old and new versions and offers
+**Update** (default). It rewrites the instance's loader/Minecraft version, but that launch still
+uses the old one, so players start once more. The server needs a reinstall with the new loader:
+packwiz-installer only does this for Prism/MultiMC instances.
 Tip for 1.20.1: use Forge (47.4.x), not NeoForge 47.1.x. NeoForge for 1.20.1 is an old fork
 that current 1.20.1 mods don't always load on.
 

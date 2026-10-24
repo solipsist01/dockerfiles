@@ -1078,8 +1078,9 @@ def admin_versions(slug):
     new = read_pack(slug)
     flash(f"{new['name']} is now {new['loader_name']} {new['loader_version']} on Minecraft {new['minecraft']} "
           f"(was {old['loader_name']} {old['loader_version']} on {old['minecraft']}).\n"
-          "Reinstall the server with the same loader. Players: re-import the Prism zip, or change the "
-          "loader under Edit → Version in Prism; packwiz only syncs mods, not the loader.", "ok")
+          "Players' Prism instances follow automatically: on their next start packwiz-installer offers to "
+          "update the loader (Update), then they start once more. Reinstall the server with the same loader; "
+          "packwiz-installer only does this for Prism/MultiMC instances.", "ok")
     if new["minecraft"] != old["minecraft"]:
         flash("The Minecraft version changed: mods stay on their current files until you update them. "
               "Check the update column, and remove mods that have no build for the new version.", "error")
