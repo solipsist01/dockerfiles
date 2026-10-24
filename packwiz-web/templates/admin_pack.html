@@ -193,4 +193,4 @@
 <p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
   Updating an uploaded jar swaps it for the Modrinth/CurseForge version.</p>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='upload.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ asset_url('upload.js') }}"></script>{% endblock %}

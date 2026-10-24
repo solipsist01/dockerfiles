@@ -917,6 +917,20 @@ def csrf_token():
 app.jinja_env.globals["csrf_token"] = csrf_token
 
 
+_asset_versions = {}
+
+
+def asset_url(filename):
+    """Static URL with a content hash, so a deploy reaches browsers and Cloudflare at once."""
+    if filename not in _asset_versions:
+        data = (Path(app.static_folder) / filename).read_bytes()
+        _asset_versions[filename] = hashlib.sha256(data).hexdigest()[:10]
+    return url_for("static", filename=filename, v=_asset_versions[filename])
+
+
+app.jinja_env.globals["asset_url"] = asset_url
+
+
 def admin_route(rule, **options):
     def decorator(view):
         @wraps(view)
