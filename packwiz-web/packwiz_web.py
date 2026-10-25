@@ -156,6 +156,9 @@ def read_pack(slug):
         "servers_once": load_settings(slug)["servers_once"],
         "default_packs": load_settings(slug)["default_packs"],
         "options_extra": load_settings(slug)["options_extra"],
+        "mem_min": load_settings(slug)["mem_min"],
+        "mem_max": load_settings(slug)["mem_max"],
+        "jvm_args": load_settings(slug)["jvm_args"],
         "mods": read_mods(slug),
     }
 
@@ -248,7 +251,9 @@ def load_settings(slug):
         settings = {}
     return {"mirror": bool(settings.get("mirror", False)), "stable": bool(settings.get("stable", False)),
             "servers": list(settings.get("servers", [])), "servers_once": bool(settings.get("servers_once", False)),
-            "default_packs": list(settings.get("default_packs", [])), "options_extra": settings.get("options_extra", "")}
+            "default_packs": list(settings.get("default_packs", [])), "options_extra": settings.get("options_extra", ""),
+            "mem_min": int(settings.get("mem_min", 0)), "mem_max": int(settings.get("mem_max", 0)),
+            "jvm_args": settings.get("jvm_args", "")}
 
 
 def save_settings(slug, settings):
@@ -1037,7 +1042,7 @@ def ini_string(value):
 
 def prism_zip(pack):
     pre_launch = f'"$INST_JAVA" -jar packwiz-installer-bootstrap.jar {pack_url(pack["slug"])}'
-    instance_cfg = "\n".join([
+    lines = [
         "[General]",
         "ConfigVersion=1.3",
         "InstanceType=OneSix",
@@ -1045,8 +1050,13 @@ def prism_zip(pack):
         "iconKey=default",
         "OverrideCommands=true",
         f"PreLaunchCommand={ini_string(pre_launch)}",
-        "",
-    ])
+    ]
+    if pack["mem_max"]:
+        lines += ["OverrideMemory=true", f"MaxMemAlloc={pack['mem_max']}",
+                  f"MinMemAlloc={pack['mem_min'] or min(512, pack['mem_max'])}"]
+    if pack["jvm_args"]:
+        lines += ["OverrideJavaArgs=true", f"JvmArgs={ini_string(pack['jvm_args'])}"]
+    instance_cfg = "\n".join(lines + [""])
     mmc_pack = {"components": mmc_pack_components(pack), "formatVersion": 1}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1690,6 +1700,28 @@ def admin_defaults(slug):
         except ActionError as e:
             flash(str(e), "error")
     flash("Default settings saved. They apply to new installs (players without an options.txt yet).", "ok")
+    return back_to_pack(slug)
+
+
+@admin_route("/admin/pack/<slug>/memory", methods=["POST"])
+def admin_memory(slug):
+    """Java memory and arguments for the Prism instance in the pack's zip."""
+    pack_dir(slug)
+    try:
+        mem_min = int(request.form.get("mem_min") or 0)
+        mem_max = int(request.form.get("mem_max") or 0)
+    except ValueError:
+        flash("Memory must be a number of MB, e.g. 8192.", "error")
+        return back_to_pack(slug)
+    jvm_args = " ".join(request.form.get("jvm_args", "").split())[:1000]
+    if mem_max and not 512 <= mem_max <= 262144 or mem_min < 0 or (mem_max and mem_min > mem_max):
+        flash("Pick a maximum between 512 and 262144 MB, and a minimum no higher than the maximum.", "error")
+        return back_to_pack(slug)
+    with write_lock():
+        save_settings(slug, dict(load_settings(slug), mem_min=mem_min if mem_max else 0, mem_max=mem_max,
+                                 jvm_args=jvm_args))
+    flash(f"Java settings saved ({f'{mem_max} MB' if mem_max else 'Prism default memory'}). "
+          "They're in the Prism zip, so they apply to new imports.", "ok")
     return back_to_pack(slug)
 
 

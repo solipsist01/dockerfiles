@@ -74,6 +74,12 @@ has no `options.txt` yet, so new installs start with it and existing players kee
 settings. Minecraft fills in everything else with its defaults. When a resource pack's file name
 changes (update, other version), `options.txt` follows automatically.
 
+**Java memory (Prism):** Settings tab → maximum/minimum memory (MB) and optional extra Java
+arguments. They're written into the Prism instance in the pack's zip (`OverrideMemory`,
+`MaxMemAlloc`, `MinMemAlloc`, `JvmArgs` in `instance.cfg`), so new imports start with them.
+Existing instances can't be changed this way (Prism starts Java before packwiz runs): players
+set it once under Edit → Settings → Java, or re-import. The public page mentions the memory.
+
 **Server list:** on the pack page, fill in name + address (optionally "accept the server's
 resource pack"). The app writes `servers.dat` (Minecraft's NBT format) into the pack, so every
 player has the servers in their multiplayer list. *Keep in sync* resets the list on every start

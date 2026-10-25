@@ -290,6 +290,20 @@
   </section>
 
   <section class="card">
+    <h2>Java memory (Prism)</h2>
+    <form method="post" action="{{ url_for('admin_memory', slug=pack.slug) }}" class="row wrap memory">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="choice">Maximum <input name="mem_max" type="number" min="512" step="512" value="{{ pack.mem_max or '' }}" placeholder="e.g. 8192"> MB</label>
+      <label class="choice">Minimum <input name="mem_min" type="number" min="0" step="256" value="{{ pack.mem_min or '' }}" placeholder="512"> MB</label>
+      <button>Save</button>
+      <input name="jvm_args" value="{{ pack.jvm_args }}" placeholder="Extra Java arguments (optional), e.g. -XX:+UseG1GC" class="wide">
+    </form>
+    <p class="muted small">Built into the Prism instance (<code>instance.cfg</code> in the zip on the public page), so players who import it
+      start with this memory. Prism has already started Java before packwiz runs, so existing instances can't be changed this way:
+      players set it once under Edit → Settings → Java, or re-import the zip. Leave the maximum empty for Prism's own default.</p>
+  </section>
+
+  <section class="card">
     <h2>Minecraft &amp; loader version</h2>
     <p class="muted small">Now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}.</p>
     <form method="post" action="{{ url_for('admin_versions', slug=pack.slug) }}" class="row wrap versions"

@@ -23,6 +23,7 @@
       <span class="muted">(or <a href="{{ zip_url }}">download the zip</a> and pick that file)</span>
     </li>
     <li>Start the instance. The first start downloads all mods.</li>
+    {% if pack.mem_max %}<li class="muted">The instance is set to {{ (pack.mem_max / 1024)|round(1)|string|replace('.0', '') }} GB of memory. Already have it? Set it under Edit → Settings → Java.</li>{% endif %}
   </ol>
 
   {% if pack.servers %}
