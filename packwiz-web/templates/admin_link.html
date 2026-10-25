@@ -1,7 +1,7 @@
 {% extends "admin_base.html" %}
 {% block title %}{{ mod.name }} - Packwiz admin{% endblock %}
 {% block content %}
-<p><a href="{{ url_for('admin_pack', slug=pack.slug) }}">← {{ pack.name }}</a></p>
+<p><a href="{{ url_for('admin_pack', slug=pack.slug, tab='resourcepacks' if mod.folder == 'resourcepacks' else 'mods') }}">← {{ pack.name }}</a></p>
 <h1>{{ mod.name }}</h1>
 <p class="muted">Current file: <code>{{ mod.filename }}</code>{% if mod.source == 'uploaded' %} (uploaded){% endif %}.
   {% if mod.source == 'uploaded' %}Linking it to its Modrinth or CurseForge project gives you update notices for this mod.

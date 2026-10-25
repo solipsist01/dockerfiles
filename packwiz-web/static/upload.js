@@ -122,6 +122,6 @@
       await fetch(form.dataset.finishUrl, { method: "POST", body: fd, credentials: "same-origin" });
     } catch (e) { /* the pack page shows the state either way */ }
     busy = false;
-    location.href = location.pathname;
+    location.replace(location.pathname + location.search);   // back to the same tab
   });
 })();

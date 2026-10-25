@@ -1,6 +1,172 @@
 {% extends "admin_base.html" %}
 {% block title %}{{ pack.name }} - Packwiz admin{% endblock %}
+
+{% macro search_card(kind) %}
+<section class="card">
+  <h2>Add {{ kinds[kind].label|lower }}</h2>
+  <form method="get" class="row">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    {% if cf_enabled %}
+    <select name="source" aria-label="Search on">
+      {% for key, label in provider_names.items() %}<option value="{{ key }}"{% if key == provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input name="q" value="{{ query }}" placeholder="Search {{ kinds[kind].label|lower }} on {{ provider_names[provider] }}…" autofocus>
+    <button>Search</button>
+  </form>
+  {% if search_error %}<div class="flash error">{{ search_error }}</div>{% endif %}
+  {% if query and not results and not search_error %}
+    <p class="muted">Nothing found for {{ pack.loader_name if kind == 'mod' else 'Minecraft' }} {{ pack.minecraft }}.</p>
+  {% endif %}
+  <ul class="results">
+  {% for hit in results %}
+    <li>
+      {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
+      <div class="grow">
+        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <span class="muted small">{{ "{:,}".format(hit.downloads|int) }} downloads</span>
+        {% if hit.restricted %}<span class="tag small" title="Players' launchers download it from CurseForge (or ask for a manual download); it can't be mirrored.">no third-party downloads</span>{% endif %}
+        <div class="muted small">{{ hit.description }}</div>
+      </div>
+      {% if hit.key in installed %}
+        <span class="tag">In pack</span>
+      {% else %}
+        <form method="post" action="{{ url_for('admin_add', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="provider" value="{{ hit.provider }}">
+          <input type="hidden" name="project_id" value="{{ hit.project_id }}">
+          <button class="primary">Add</button>
+          {% if siblings %}
+          <button name="everywhere" value="1" title="{{ siblings|map(attribute='name')|join(', ') }}">+ all {{ pack.loader_name }} packs ({{ siblings|length + 1 }})</button>
+          {% endif %}
+        </form>
+      {% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+  {% if others %}
+  <h3 class="muted small">Other matches, with no {{ pack.loader_name if kind == 'mod' else 'Minecraft' }} {{ pack.minecraft }} build on {{ provider_names[provider] }}</h3>
+  <ul class="results dim">
+  {% for hit in others %}
+    <li>
+      {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
+      <div class="grow">
+        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
+        <div class="muted small">Has: {{ hit.versions[-4:]|join(', ') }}{% if hit.loaders %} · {{ hit.loaders|join(', ') }}{% endif %}</div>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="{{ url_for('admin_add_link', slug=pack.slug) }}" class="row addlink">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input name="link" placeholder="…or paste a CurseForge link, e.g. https://www.curseforge.com/minecraft/{{ 'mc-mods/jei' if kind == 'mod' else 'texture-packs/faithful-32x' }}">
+    <button>Add from CurseForge</button>
+  </form>
+</section>
+{% endmacro %}
+
+{% macro upload_card(kind) %}
+<section class="card">
+  <h2>Upload {{ kinds[kind].label|lower }}</h2>
+  <form method="post" action="{{ url_for('admin_upload', slug=pack.slug) }}" enctype="multipart/form-data"
+        id="upload-form" data-chunk-url="{{ url_for('admin_upload_chunk', slug=pack.slug) }}"
+        data-finish-url="{{ url_for('admin_upload_finish', slug=pack.slug) }}" data-chunk-mb="{{ chunk_mb }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="row wrap">
+      <input type="file" name="jars" accept="{{ kinds[kind].ext }}" multiple required>
+      {% if kind == 'mod' %}
+      <select name="side">
+        {% for s in sides %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+      {% else %}
+      <input type="hidden" name="side" value="client">
+      {% endif %}
+      <button class="primary">Upload</button>
+    </div>
+    {% if siblings %}
+    <div class="row wrap checks">
+      <span class="muted small">Also add to:</span>
+      {% for p in siblings %}<label class="choice small"><input type="checkbox" name="also" value="{{ p.slug }}"> {{ p.name }}</label>{% endfor %}
+    </div>
+    {% endif %}
+  </form>
+  <div id="upload-progress" hidden>
+    <div class="progress"><div class="bar"></div></div>
+    <div class="row"><span class="status small"></span></div>
+    <ul class="upload-log small"></ul>
+  </div>
+  <p class="muted small">
+    {% if kind == 'mod' %}<b>.jar</b> files.{% else %}<b>.zip</b> resource packs (with a <code>pack.mcmeta</code>); always client side.{% endif %}
+    Pick as many as you like; they're sent one by one (up to {{ max_upload_mb }} MB each). Keep this page open until it's done.
+    A newer file of something already in the pack replaces it{% if kind == 'mod' %} and keeps its side{% endif %}.
+    If the exact file is on Modrinth{% if cf_enabled %} or CurseForge{% endif %} it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the list.
+    {% if kind == 'mod' %}A jar for a CurseForge mod that blocks third-party downloads replaces that mod, so players get it from here.{% endif %}</p>
+</section>
+{% endmacro %}
+
+{% macro content_table(items, noun) %}
+<table class="content">
+  <thead><tr><th>{{ noun }}</th><th>File</th><th>Side</th><th>Download</th><th>Update</th><th></th></tr></thead>
+  <tbody>
+  {% for mod in items %}
+    <tr>
+      <td>{% if mod.page_url %}<a href="{{ mod.page_url }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}
+        {% if not mod.provider %}<span class="tag small warn-soft" title="No Modrinth/CurseForge project: no update notices, always hosted here">not linked</span>{% endif %}
+        {% if mod.stem in restricted and mod.source == 'curseforge' %}<span class="tag small warn" title="The author blocks third-party downloads. Players' launchers ask them to download it by hand, and servers can't install it. Download the file from CurseForge and upload it here to fix that.">manual download</span>{% endif %}</td>
+      <td class="muted small">{{ mod.filename }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_side', slug=pack.slug) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <select name="side" onchange="this.form.submit()">
+            {% for s in sides %}<option value="{{ s }}"{% if s == mod.side %} selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+        </form>
+      </td>
+      <td class="download">
+        {% if mod.download_from == 'here' %}<span class="tag small hosted" title="{% if mod.provider == 'curseforge' and mod.source == 'uploaded' %}The author blocks third-party downloads, so this file stays hosted here{% else %}Players and servers download this file from this site{% endif %}">hosted here</span>
+        {% elif mod.download_from == 'CurseForge' %}<span class="tag small remote" title="packwiz-installer asks CurseForge for this file">via CurseForge</span>
+        {% else %}<span class="tag small remote" title="Players and servers download this file from {{ mod.download_from }}">from {{ mod.download_from }}</span>{% endif %}
+      </td>
+      <td class="update">
+        {% if mod.pinned %}
+        <form method="post" action="{{ url_for('admin_unpin', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <span class="tag small pinned" title="You picked this version; updates skip it">🔒 pinned</span>
+          <button class="small">Unpin</button>
+        </form>
+        {% elif mod.stem in updates %}
+        <form method="post" action="{{ url_for('admin_update_one', slug=pack.slug) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <span class="small" title="{{ updates[mod.stem].name }}">{% if mod.source == 'uploaded' and not (mod.version_id or mod.cf_file_id) %}{{ provider_names[mod.provider] }} has {% else %}→ {% endif %}{{ updates[mod.stem].version_number }}</span>
+          <button class="primary small">Update</button>
+        </form>
+        {% elif mod.provider == 'modrinth' or (mod.provider == 'curseforge' and cf_enabled) %}<span class="muted small">up to date</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
+        <a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Change or remove the link, or pick a version' if mod.provider else 'Link this file to its Modrinth or CurseForge project' }}">{{ '✎' if mod.provider else 'Link' }}</a>
+        <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <button class="danger">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">Nothing here yet. Search or upload above to add some.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
 {% block content %}
+{% set mods = pack.mods|selectattr('folder', 'equalto', 'mods')|list %}
+{% set rps = pack.mods|selectattr('folder', 'equalto', 'resourcepacks')|list %}
 <p><a href="{{ url_for('admin_index') }}">← All packs</a></p>
 <div class="titlebar">
   <h1>{{ pack.name }}</h1>
@@ -9,40 +175,78 @@
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('admin_update_pack', slug=pack.slug) }}">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <button class="primary">Update all mods{% if updates %} ({{ updates|length }}){% endif %}</button>
+    <button class="primary" title="Mods and resource packs">Update all{% if updates %} ({{ updates|length }}){% endif %}</button>
   </form>
 </div>
 {% if update_error %}<div class="flash error">{{ update_error }}</div>{% endif %}
 
 <div class="copyrow"><span class="muted">Pack URL</span><code>{{ pack_url }}</code><button type="button" data-copy="{{ pack_url }}">Copy</button></div>
 
-<section class="card">
-  <h2>Jar hosting</h2>
-  <form method="post" action="{{ url_for('admin_hosting', slug=pack.slug) }}" class="row wrap"
-        data-confirm="Change jar hosting for {{ pack.name }}? Switching to 'host here' downloads every Modrinth jar, which can take a while.">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label class="choice"><input type="radio" name="mirror" value="0"{% if not pack.mirror %} checked{% endif %}> Link to Modrinth</label>
-    <label class="choice"><input type="radio" name="mirror" value="1"{% if pack.mirror %} checked{% endif %}> Host Modrinth jars here (mirror)</label>
-    <button>Save</button>
-  </form>
-  <p class="muted small">Uploaded jars are always hosted here. Mirroring keeps the pack working if Modrinth is down or a version gets pulled,
-    but it means publicly redistributing other people's mods, which many mod licenses don't allow.</p>
-</section>
+{% set mod_updates = mods|selectattr('stem', 'in', updates)|list|length %}
+{% set rp_updates = rps|selectattr('stem', 'in', updates)|list|length %}
+<nav class="tabs">
+  <a href="{{ url_for('admin_pack', slug=pack.slug, tab='mods') }}"{% if tab == 'mods' %} class="active"{% endif %}>Mods <span class="count">{{ mods|length }}</span>{% if mod_updates %} <span class="dot" title="{{ mod_updates }} update(s)">{{ mod_updates }}</span>{% endif %}</a>
+  <a href="{{ url_for('admin_pack', slug=pack.slug, tab='resourcepacks') }}"{% if tab == 'resourcepacks' %} class="active"{% endif %}>Resource packs <span class="count">{{ rps|length }}</span>{% if rp_updates %} <span class="dot" title="{{ rp_updates }} update(s)">{{ rp_updates }}</span>{% endif %}</a>
+  <a href="{{ url_for('admin_pack', slug=pack.slug, tab='settings') }}"{% if tab == 'settings' %} class="active"{% endif %}>Settings</a>
+</nav>
 
-<section class="card">
-  <h2>Updates</h2>
-  <form method="post" action="{{ url_for('admin_stable', slug=pack.slug) }}" class="row wrap">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <label class="choice"><input type="radio" name="stable" value="0"{% if not pack.stable %} checked{% endif %}> Newest version (betas included)</label>
-    <label class="choice"><input type="radio" name="stable" value="1"{% if pack.stable %} checked{% endif %}> Stable releases only</label>
-    <button>Save</button>
-  </form>
-  <p class="muted small">Applies to the update column, Update and Update all. To pick a specific version (older, or a beta), use ✎ next to the mod.</p>
-</section>
+{% if tab == 'mods' %}
+  {{ search_card('mod') }}
+  {{ upload_card('mod') }}
+  <h2>Mods ({{ mods|length }})</h2>
+  {{ content_table(mods, 'Mod') }}
+  <p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
+    Updating an uploaded jar swaps it for the Modrinth/CurseForge version.</p>
 
-<section class="card">
-  <details{% if pack.servers %} open{% endif %}>
-    <summary><b>Server list</b> <span class="muted small">— {{ pack.servers|length }} server{{ '' if pack.servers|length == 1 else 's' }} in players' multiplayer list</span></summary>
+{% elif tab == 'resourcepacks' %}
+  {{ search_card('resourcepack') }}
+  {{ upload_card('resourcepack') }}
+  <section class="card">
+    <h2>Switched on for new players</h2>
+    {% if rps %}
+    <form method="post" action="{{ url_for('admin_defaults', slug=pack.slug) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="section" value="packs">
+      <div class="checks-col">
+        {% for m in rps %}<label class="choice"><input type="checkbox" name="pack" value="{{ m.stem }}"{% if m.stem in pack.default_packs %} checked{% endif %}> {{ m.name }}</label>{% endfor %}
+      </div>
+      <div class="row"><span class="spacer"></span><button class="primary">Save</button></div>
+    </form>
+    {% else %}<p class="muted small">No resource packs in this pack yet.</p>{% endif %}
+    <p class="muted small">Ticked packs start switched on for new installs (through an <code>options.txt</code> that packwiz only installs
+      when a player doesn't have one yet). Existing players switch packs on themselves under Options → Resource Packs.
+      The first ticked pack ends up on top.</p>
+  </section>
+  <h2>Resource packs ({{ rps|length }})</h2>
+  {{ content_table(rps, 'Resource pack') }}
+
+{% else %}
+  <section class="card">
+    <h2>Jar hosting</h2>
+    <form method="post" action="{{ url_for('admin_hosting', slug=pack.slug) }}" class="row wrap"
+          data-confirm="Change jar hosting for {{ pack.name }}? Switching to 'host here' downloads every Modrinth/CurseForge file, which can take a while.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="choice"><input type="radio" name="mirror" value="0"{% if not pack.mirror %} checked{% endif %}> Link to Modrinth/CurseForge</label>
+      <label class="choice"><input type="radio" name="mirror" value="1"{% if pack.mirror %} checked{% endif %}> Host files here (mirror)</label>
+      <button>Save</button>
+    </form>
+    <p class="muted small">Unlinked uploads are always hosted here. Mirroring keeps the pack working if Modrinth is down or a version gets pulled,
+      but it means publicly redistributing other people's work, which many licenses don't allow.</p>
+  </section>
+
+  <section class="card">
+    <h2>Updates</h2>
+    <form method="post" action="{{ url_for('admin_stable', slug=pack.slug) }}" class="row wrap">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label class="choice"><input type="radio" name="stable" value="0"{% if not pack.stable %} checked{% endif %}> Newest version (betas included)</label>
+      <label class="choice"><input type="radio" name="stable" value="1"{% if pack.stable %} checked{% endif %}> Stable releases only</label>
+      <button>Save</button>
+    </form>
+    <p class="muted small">Applies to the update column, Update and Update all, for mods and resource packs. To pick a specific version (older, or a beta), use ✎ in the list.</p>
+  </section>
+
+  <section class="card">
+    <h2>Server list</h2>
     {% set rows = pack.servers + [{}, {}] %}
     <form method="post" action="{{ url_for('admin_servers', slug=pack.slug) }}" class="servers">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -70,34 +274,24 @@
     <p class="muted small"><b>Keep in sync</b>: every start resets the list to this one (servers players added themselves disappear).
       <b>Install once</b>: players keep their own servers, but later changes here only reach new installs.
       Fill in the empty rows to add servers.</p>
-  </details>
-</section>
+  </section>
 
-{% set rps = pack.mods|selectattr('folder', 'equalto', 'resourcepacks')|list %}
-<section class="card">
-  <details{% if pack.default_packs or pack.options_extra %} open{% endif %}>
-    <summary><b>Default settings (first start)</b> <span class="muted small">— {{ pack.default_packs|length }} resource pack{{ '' if pack.default_packs|length == 1 else 's' }} on by default</span></summary>
+  <section class="card">
+    <h2>Default options (first start)</h2>
     <form method="post" action="{{ url_for('admin_defaults', slug=pack.slug) }}">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <h3>Resource packs switched on</h3>
-      {% if rps %}
-      <div class="checks-col">
-        {% for m in rps %}<label class="choice"><input type="checkbox" name="pack" value="{{ m.stem }}"{% if m.stem in pack.default_packs %} checked{% endif %}> {{ m.name }}</label>{% endfor %}
-      </div>
-      {% else %}<p class="muted small">No resource packs in this pack yet.</p>{% endif %}
-      <h3>Other options</h3>
+      <input type="hidden" name="section" value="options">
       <textarea name="extra" rows="4" placeholder="One per line, as in options.txt, e.g.&#10;lang:nl_nl&#10;renderDistance:12&#10;guiScale:3">{{ pack.options_extra }}</textarea>
-      <div class="row"><span class="spacer"></span><button class="primary">Save default settings</button></div>
+      <div class="row"><span class="spacer"></span><button class="primary">Save default options</button></div>
     </form>
-    <p class="muted small">This becomes an <code>options.txt</code> that packwiz only installs when a player doesn't have one yet:
-      new installs (importing the Prism zip) start with it, existing players keep their own settings.
+    <p class="muted small">Goes into the same <code>options.txt</code> as the resource packs switched on (see the Resource packs tab):
+      only installed when a player doesn't have one yet, so new installs start with it and existing players keep their own settings.
       Anything not set here gets Minecraft's normal default.</p>
-  </details>
-</section>
+  </section>
 
-<section class="card">
-  <details>
-    <summary><b>Minecraft &amp; loader version</b> <span class="muted small">— now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}</span></summary>
+  <section class="card">
+    <h2>Minecraft &amp; loader version</h2>
+    <p class="muted small">Now {{ pack.loader_name }} {{ pack.loader_version }} on Minecraft {{ pack.minecraft }}.</p>
     <form method="post" action="{{ url_for('admin_versions', slug=pack.slug) }}" class="row wrap versions"
           data-confirm="Change the Minecraft/loader version of {{ pack.name }}? Players' Prism instances follow automatically (they click Update and start once more); the server needs a reinstall with the same loader.">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -112,174 +306,8 @@
     <p class="muted small">packwiz checks the combination first; nothing changes if it doesn't exist.
       Mods aren't touched: after changing the Minecraft version, update them (or remove the ones without a build).
       Players' Prism instances follow by themselves: on the next start packwiz-installer shows the old and new versions and offers
-      <b>Update</b>; after that they start once more. The server needs a reinstall with the new loader.</p>
-  </details>
-</section>
-
-<section class="card">
-  <h2>Add mods</h2>
-  <form method="get" class="row">
-    {% if cf_enabled %}
-    <select name="source" aria-label="Search on">
-      {% for key, label in provider_names.items() %}<option value="{{ key }}"{% if key == provider %} selected{% endif %}>{{ label }}</option>{% endfor %}
-    </select>
-    {% endif %}
-    <select name="kind" aria-label="What to search">
-      {% for key, k in kinds.items() %}<option value="{{ key }}"{% if key == kind %} selected{% endif %}>{{ k.label }}</option>{% endfor %}
-    </select>
-    <input name="q" value="{{ query }}" placeholder="Search {{ kinds[kind].label|lower }} on {{ provider_names[provider] }}…" autofocus>
-    <button>Search</button>
-  </form>
-  {% if search_error %}<div class="flash error">{{ search_error }}</div>{% endif %}
-  {% if query and not results and not search_error %}
-    <p class="muted">Nothing found for {{ pack.loader_name }} {{ pack.minecraft }}.</p>
-  {% endif %}
-  <ul class="results">
-  {% for hit in results %}
-    <li>
-      {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
-      <div class="grow">
-        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
-        <span class="muted small">{{ "{:,}".format(hit.downloads|int) }} downloads</span>
-        {% if hit.restricted %}<span class="tag small" title="Players' launchers download it from CurseForge (or ask for a manual download); it can't be mirrored.">no third-party downloads</span>{% endif %}
-        <div class="muted small">{{ hit.description }}</div>
-      </div>
-      {% if hit.key in installed %}
-        <span class="tag">In pack</span>
-      {% else %}
-        <form method="post" action="{{ url_for('admin_add', slug=pack.slug) }}" class="row">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="provider" value="{{ hit.provider }}">
-          <input type="hidden" name="project_id" value="{{ hit.project_id }}">
-          <input type="hidden" name="kind" value="{{ kind }}">
-          <input type="hidden" name="q" value="{{ query }}">
-          <button class="primary">Add</button>
-          {% if siblings %}
-          <button name="everywhere" value="1" title="{{ siblings|map(attribute='name')|join(', ') }}">+ all {{ pack.loader_name }} packs ({{ siblings|length + 1 }})</button>
-          {% endif %}
-        </form>
-      {% endif %}
-    </li>
-  {% endfor %}
-  </ul>
-  {% if others %}
-  <h3 class="muted small">Other matches, with no {{ pack.loader_name }} {{ pack.minecraft }} build on {{ provider_names[provider] }}</h3>
-  <ul class="results dim">
-  {% for hit in others %}
-    <li>
-      {% if hit.icon_url %}<img src="{{ hit.icon_url }}" alt="" loading="lazy">{% else %}<span class="noicon"></span>{% endif %}
-      <div class="grow">
-        <a href="{{ hit.url }}" target="_blank" rel="noopener"><b>{{ hit.title }}</b></a>
-        <div class="muted small">Has: {{ hit.versions[-4:]|join(', ') }} · {{ hit.loaders|join(', ') }}</div>
-      </div>
-    </li>
-  {% endfor %}
-  </ul>
-  {% endif %}
-  <form method="post" action="{{ url_for('admin_add_link', slug=pack.slug) }}" class="row addlink">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <input name="link" placeholder="…or paste a CurseForge link, e.g. https://www.curseforge.com/minecraft/mc-mods/jei">
-    <button>Add from CurseForge</button>
-  </form>
-</section>
-
-<section class="card">
-  <h2>Upload mods &amp; resource packs</h2>
-  <form method="post" action="{{ url_for('admin_upload', slug=pack.slug) }}" enctype="multipart/form-data"
-        id="upload-form" data-chunk-url="{{ url_for('admin_upload_chunk', slug=pack.slug) }}"
-        data-finish-url="{{ url_for('admin_upload_finish', slug=pack.slug) }}" data-chunk-mb="{{ chunk_mb }}">
-    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <div class="row wrap">
-      <input type="file" name="jars" accept=".jar,.zip" multiple required>
-      <select name="side">
-        {% for s in sides %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
-      </select>
-      <button class="primary">Upload</button>
-    </div>
-    {% if siblings %}
-    <div class="row wrap checks">
-      <span class="muted small">Also add to:</span>
-      {% for p in siblings %}<label class="choice small"><input type="checkbox" name="also" value="{{ p.slug }}"> {{ p.name }}</label>{% endfor %}
-    </div>
-    {% endif %}
-  </form>
-  <div id="upload-progress" hidden>
-    <div class="progress"><div class="bar"></div></div>
-    <div class="row"><span class="status small"></span></div>
-    <ul class="upload-log small"></ul>
-  </div>
-  <p class="muted small"><b>.jar</b> files become mods, <b>.zip</b> files resource packs (always client side).
-    Pick as many as you like; they're sent one by one, so there's no size limit for the batch
-    (up to {{ max_upload_mb }} MB per jar). Keep this page open until it's done.
-    Uploading a newer jar of a mod that's already in the pack replaces it and keeps its side.
-    If the exact jar is on Modrinth{% if cf_enabled %} or CurseForge{% endif %} it's linked automatically, so you get update notices; otherwise use <b>Link</b> in the mod list.
-    A jar for a CurseForge mod that blocks third-party downloads replaces that mod, so players get it from here.</p>
-</section>
-
-<h2>Mods &amp; resource packs ({{ pack.mods|length }})</h2>
-<table>
-  <thead><tr><th>Mod</th><th>File</th><th>Side</th><th>Download</th><th>Update</th><th></th></tr></thead>
-  <tbody>
-  {% set grouped = pack.mods|groupby('folder') %}
-  {% for group in grouped %}
-    {% if grouped|length > 1 or group.grouper != 'mods' %}
-    <tr class="group"><th colspan="6">{{ folder_labels.get(group.grouper, group.grouper) }} ({{ group.list|length }})</th></tr>
-    {% endif %}
-  {% for mod in group.list %}
-    <tr>
-      <td>{% if mod.page_url %}<a href="{{ mod.page_url }}" target="_blank" rel="noopener"><b>{{ mod.name }}</b></a>{% else %}<b>{{ mod.name }}</b>{% endif %}
-        {% if not mod.provider %}<span class="tag small warn-soft" title="No Modrinth/CurseForge project: no update notices, always hosted here">not linked</span>{% endif %}
-        {% if mod.stem in restricted and mod.source == 'curseforge' %}<span class="tag small warn" title="The author blocks third-party downloads. Players' launchers ask them to download it by hand, and servers can't install it. Download the jar from CurseForge and upload it here to fix that.">manual download</span>{% endif %}</td>
-      <td class="muted small">{{ mod.filename }}</td>
-      <td>
-        <form method="post" action="{{ url_for('admin_side', slug=pack.slug) }}">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="stem" value="{{ mod.stem }}">
-          <select name="side" onchange="this.form.submit()">
-            {% for s in sides %}<option value="{{ s }}"{% if s == mod.side %} selected{% endif %}>{{ s }}</option>{% endfor %}
-          </select>
-        </form>
-      </td>
-      <td class="download">
-        {% if mod.download_from == 'here' %}<span class="tag small hosted" title="{% if mod.provider == 'curseforge' and mod.source == 'uploaded' %}The author blocks third-party downloads, so this jar stays hosted here{% else %}Players and servers download this jar from this site{% endif %}">hosted here</span>
-        {% elif mod.download_from == 'CurseForge' %}<span class="tag small remote" title="packwiz-installer asks CurseForge for this file">via CurseForge</span>
-        {% else %}<span class="tag small remote" title="Players and servers download this jar from {{ mod.download_from }}">from {{ mod.download_from }}</span>{% endif %}
-      </td>
-      <td class="update">
-        {% if mod.pinned %}
-        <form method="post" action="{{ url_for('admin_unpin', slug=pack.slug) }}" class="row">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="stem" value="{{ mod.stem }}">
-          <span class="tag small pinned" title="You picked this version; updates skip it">🔒 pinned</span>
-          <button class="small">Unpin</button>
-        </form>
-        {% elif mod.stem in updates %}
-        <form method="post" action="{{ url_for('admin_update_one', slug=pack.slug) }}" class="row">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="stem" value="{{ mod.stem }}">
-          <span class="small" title="{{ updates[mod.stem].name }}">{% if mod.source == 'uploaded' and not (mod.version_id or mod.cf_file_id) %}{{ provider_names[mod.provider] }} has {% else %}→ {% endif %}{{ updates[mod.stem].version_number }}</span>
-          <button class="primary small">Update</button>
-        </form>
-        {% elif mod.provider == 'modrinth' or (mod.provider == 'curseforge' and cf_enabled) %}<span class="muted small">up to date</span>
-        {% endif %}
-      </td>
-      <td class="actions">
-        {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
-        <a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Change or remove the link' if mod.provider else 'Link this jar to its Modrinth or CurseForge project' }}">{{ '✎' if mod.provider else 'Link' }}</a>
-        <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
-          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <input type="hidden" name="stem" value="{{ mod.stem }}">
-          <button class="danger">Remove</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
-  {% else %}
-    <tr><td colspan="6" class="muted">No mods yet. Search above to add some.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-<p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
-  Updating an uploaded jar swaps it for the Modrinth/CurseForge version.</p>
+      <b>Update</b>; after that they start once more. Servers on the packwiz egg install the new loader on their next restart.</p>
+  </section>
+{% endif %}
 {% endblock %}
-{% block scripts %}<script src="{{ asset_url('upload.js') }}"></script>{% endblock %}
+{% block scripts %}{% if tab != 'settings' %}<script src="{{ asset_url('upload.js') }}"></script>{% endif %}{% endblock %}

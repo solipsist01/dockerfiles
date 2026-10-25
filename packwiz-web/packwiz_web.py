@@ -1168,7 +1168,7 @@ def admin_new():
             return redirect(url_for("admin_index"))
         save_settings(slug, dict(load_settings(slug), mirror=bool(request.form.get("mirror"))))
     flash(f"Pack '{name}' created.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/copy", methods=["POST"])
@@ -1215,9 +1215,10 @@ def admin_pack(slug):
     provider = request.args.get("source", "modrinth")
     if provider != "curseforge" or not CURSEFORGE_API_KEY:
         provider = "modrinth"
-    kind = request.args.get("kind", "mod")
-    if kind not in KINDS:
-        kind = "mod"
+    tab = request.args.get("tab", "mods")
+    if tab not in TABS:
+        tab = "mods"
+    kind = TABS[tab] or "mod"
     results, others, search_error = [], [], None
     if query:
         try:
@@ -1233,7 +1234,7 @@ def admin_pack(slug):
         updates, restricted, update_error = {}, set(), f"Checking for updates failed: {e}"
     installed = {m["key"] for m in pack["mods"] if m["key"]}
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
-    return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS,
+    return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS, tab=tab,
                            folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
@@ -1271,14 +1272,14 @@ def admin_versions(slug):
     if (not re.fullmatch(r"[0-9][0-9a-z.\-]*", mc) or loader not in LOADERS
             or not re.fullmatch(r"([0-9A-Za-z][0-9A-Za-z.+\-]*)?", loader_version)):
         flash("Fill in a Minecraft version and a loader; leave the loader version empty for the newest.", "error")
-        return redirect(url_for("admin_pack", slug=slug))
+        return back_to_pack(slug)
     old = read_pack(slug)
     with write_lock():
         try:
             versions = resolve_versions(mc, loader, loader_version)
         except ActionError as e:
             flash(f"Not changed: {e}", "error")
-            return redirect(url_for("admin_pack", slug=slug))
+            return back_to_pack(slug)
         block = "[versions]\n" + "".join(f"{k} = {json.dumps(v)}\n" for k, v in sorted(versions.items()))
         toml = (path / "pack.toml").read_text()
         toml = re.sub(r"^\[versions\]\n(?:[^\[\n].*\n?)*", block, toml, count=1, flags=re.M)
@@ -1296,7 +1297,7 @@ def admin_versions(slug):
     if new["minecraft"] != old["minecraft"]:
         flash("The Minecraft version changed: mods stay on their current files until you update them. "
               "Check the update column, and remove mods that have no build for the new version.", "error")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/hosting", methods=["POST"])
@@ -1312,7 +1313,7 @@ def admin_hosting(slug):
         flash("Modrinth and CurseForge jars are now hosted here (where the author allows it).", "ok")
     else:
         flash("Mods download from Modrinth/CurseForge again. Uploaded jars stay hosted here.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/add", methods=["POST"])
@@ -1349,8 +1350,7 @@ def admin_add(slug):
                 errors.append(f"{pack['name']}: {e}")
         errors += after_change(*(p["slug"] for p in targets))
     flash_results(changes, errors, "Already in the pack.")
-    return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", ""), source=provider,
-                            kind=request.form.get("kind", "mod")))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/add-link", methods=["POST"])
@@ -1360,7 +1360,7 @@ def admin_add_link(slug):
     link = request.form.get("link", "").strip()
     if not (CF_URL_RE.match(link) or re.fullmatch(r"[a-z0-9][a-z0-9-]*", link)):
         flash("Paste a CurseForge mod link (https://www.curseforge.com/minecraft/mc-mods/...) or its slug.", "error")
-        return redirect(url_for("admin_pack", slug=slug))
+        return back_to_pack(slug)
     changes, errors = [], []
     with write_lock():
         try:
@@ -1369,7 +1369,7 @@ def admin_add_link(slug):
             errors.append(e)
         errors += after_change(slug)
     flash_results(changes, errors, f"No CurseForge mod found for '{link}' (or it's already in the pack).")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 def upload_targets(slug):
@@ -1431,7 +1431,7 @@ def admin_upload(slug):
     files = [f for f in request.files.getlist("jars") if f.filename]
     if not files:
         flash("Pick one or more .jar files first.", "error")
-        return redirect(url_for("admin_pack", slug=slug))
+        return back_to_pack(slug)
     changes, errors = [], []
     with write_lock():
         for upload in files:
@@ -1441,7 +1441,7 @@ def admin_upload(slug):
                 errors.append(e)
         errors += finish_upload(targets)
     flash_results(changes, errors, "Nothing uploaded.")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/upload/chunk", methods=["POST"])
@@ -1499,6 +1499,22 @@ def admin_upload_finish(slug):
     flash_results([f"{uploaded} jar{'s' if uploaded != 1 else ''} uploaded."] if uploaded else [],
                   failed[:MAX_FLASH_LINES] + errors, "Nothing uploaded.")
     return {"ok": True}
+
+
+TABS = {"mods": "mod", "resourcepacks": "resourcepack", "settings": None}
+
+
+def tab_of(mod):
+    return "resourcepacks" if mod["folder"] == "resourcepacks" else "mods"
+
+
+def back_to_pack(slug, tab=None):
+    """Back to the pack page, on the tab (and search) the form was sent from."""
+    base = url_for("admin_pack", slug=slug)
+    referrer = request.referrer or ""
+    if tab is None and urllib.parse.urlparse(referrer).path == base:
+        return redirect(referrer)
+    return redirect(url_for("admin_pack", slug=slug, tab=tab) if tab else base)
 
 
 def find_mod(slug, stem):
@@ -1570,7 +1586,7 @@ def admin_pick_version(slug, stem):
             changes.append(f"{mod['name']} is pinned to this version: updates skip it until you unpin it.")
         errors += after_change(slug)
     flash_results(changes, errors, f"{mod['name']} was already on that version.")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug, tab_of(mod))
 
 
 @admin_route("/admin/pack/<slug>/unpin", methods=["POST"])
@@ -1584,7 +1600,7 @@ def admin_unpin(slug):
             flash(f"{mod['name']} is unpinned: it gets updates again.", "ok")
         except ActionError as e:
             flash(str(e), "error")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/servers", methods=["POST"])
@@ -1598,7 +1614,7 @@ def admin_servers(slug):
             continue
         if not re.fullmatch(r"[A-Za-z0-9.\-_:\[\]]{1,255}", address):
             flash(f"'{address}' isn't a server address (host or host:port).", "error")
-            return redirect(url_for("admin_pack", slug=slug))
+            return back_to_pack(slug)
         servers.append({"name": name or address, "address": address,
                         "accept_textures": bool(request.form.get(f"textures_{i}"))})
     with write_lock():
@@ -1610,27 +1626,30 @@ def admin_servers(slug):
             flash(str(e), "error")
     flash(f"Server list saved ({len(servers)} server{'s' if len(servers) != 1 else ''}); "
           "players get it on their next start." if servers else "Server list removed from the pack.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/defaults", methods=["POST"])
 def admin_defaults(slug):
     pack_dir(slug)
+    settings = load_settings(slug)
     packs = {m["stem"] for m in read_mods(slug) if m["folder"] == "resourcepacks"}
-    chosen = [stem for stem in request.form.getlist("pack") if stem in packs]
-    extra = request.form.get("extra", "")[:4000]
+    if request.form.get("section") == "packs":
+        chosen, extra = [stem for stem in request.form.getlist("pack") if stem in packs], settings["options_extra"]
+    else:
+        chosen, extra = settings["default_packs"], request.form.get("extra", "")[:4000]
     bad = [l for l in extra.splitlines() if l.strip() and not OPTION_LINE_RE.match(l.strip())]
     if bad:
         flash(f"Not an option line (expected key:value): {bad[0]}", "error")
-        return redirect(url_for("admin_pack", slug=slug))
+        return back_to_pack(slug)
     with write_lock():
-        save_settings(slug, dict(load_settings(slug), default_packs=chosen, options_extra=extra))
+        save_settings(slug, dict(settings, default_packs=chosen, options_extra=extra))
         try:
             sync_options(slug)
         except ActionError as e:
             flash(str(e), "error")
     flash("Default settings saved. They apply to new installs (players without an options.txt yet).", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/stable", methods=["POST"])
@@ -1641,7 +1660,7 @@ def admin_stable(slug):
         save_settings(slug, dict(load_settings(slug), stable=stable))
     flash("Updates now only offer stable releases." if stable else
           "Updates now offer the newest version, betas included.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/link/<stem>", methods=["POST"])
@@ -1661,7 +1680,7 @@ def admin_link_save(slug, stem):
             data = mod_jar_bytes(mod)
         except ActionError as e:
             flash(str(e), "error")
-            return redirect(url_for("admin_pack", slug=slug))
+            return back_to_pack(slug, tab_of(mod))
         sha512 = hashlib.sha512(data).hexdigest()
         link = None
         if project_id:
@@ -1684,7 +1703,7 @@ def admin_link_save(slug, stem):
         flash(f"{mod['name']} is unlinked: {mod['filename']} is now hosted here and won't be updated.", "ok")
     else:
         flash(f"{mod['name']} is no longer linked.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug, tab_of(mod))
 
 
 def relink_mod(slug, mod, provider, project_id):
@@ -1692,7 +1711,7 @@ def relink_mod(slug, mod, provider, project_id):
     wanted = project_key(provider, project_id)
     if wanted == mod["key"]:
         flash(f"{mod['name']} is already linked to that project.", "ok")
-        return redirect(url_for("admin_pack", slug=slug))
+        return back_to_pack(slug, tab_of(mod))
     command = (["modrinth", "add", "--project-id", project_id] if provider == "modrinth"
                else ["curseforge", "add", "--addon-id", project_id])
     pack = read_pack(slug)
@@ -1716,7 +1735,7 @@ def relink_mod(slug, mod, provider, project_id):
     flash_results(changes, errors, f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.")
     if changes:
         flash(f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.", "ok")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug, tab_of(mod))
 
 
 def nbt_string(text):
@@ -1881,7 +1900,7 @@ def admin_update_one(slug):
             errors.append(e)
         errors += after_change(slug)
     flash_results(changes, errors)
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/remove", methods=["POST"])
@@ -1898,7 +1917,7 @@ def admin_remove(slug):
         except ActionError as e:
             flash(str(e), "error")
         collect_garbage()
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/side", methods=["POST"])
@@ -1915,7 +1934,7 @@ def admin_side(slug):
             flash(f"{mods[stem]['name']} is now '{side}'.", "ok")
         except ActionError as e:
             flash(str(e), "error")
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/pack/<slug>/update", methods=["POST"])
@@ -1929,7 +1948,7 @@ def admin_update_pack(slug):
             errors.append(e)
         errors += after_change(slug)
     flash_results(changes, errors)
-    return redirect(url_for("admin_pack", slug=slug))
+    return back_to_pack(slug)
 
 
 @admin_route("/admin/update-all", methods=["POST"])

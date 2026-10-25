@@ -133,7 +133,7 @@ code.block { display: block; padding: 8px 10px; margin: 4px 0; }
 @media (max-width: 600px) {
   .modlist { columns: 1; }
   td.actions { white-space: normal; }
-  th:nth-child(2), td:nth-child(2) { display: none; }
+  table.content th:nth-child(2), table.content td:nth-child(2) { display: none; }
 }
 
 .results { list-style: none; padding: 0; margin: 12px 0 0; }
@@ -187,3 +187,9 @@ form.servers table { margin-top: 10px; }
 form.servers input:not([type=checkbox]) { width: 100%; }
 .checks-col { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
 textarea { font: inherit; font-family: ui-monospace, monospace; font-size: 0.85rem; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; width: 100%; margin: 6px 0 10px; }
+nav.tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+nav.tabs a { padding: 8px 14px; color: var(--muted); text-decoration: none; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; margin-bottom: -1px; }
+nav.tabs a:hover { color: var(--text); }
+nav.tabs a.active { color: var(--text); background: var(--surface); border-color: var(--border); font-weight: 600; }
+nav.tabs .count { color: var(--muted); font-weight: normal; font-size: 0.85rem; }
+nav.tabs .dot { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 0.75rem; text-align: center; }
