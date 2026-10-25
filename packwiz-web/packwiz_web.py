@@ -253,7 +253,9 @@ def load_settings(slug):
             "servers": list(settings.get("servers", [])), "servers_once": bool(settings.get("servers_once", False)),
             "default_packs": list(settings.get("default_packs", [])), "options_extra": settings.get("options_extra", ""),
             "mem_min": int(settings.get("mem_min", 0)), "mem_max": int(settings.get("mem_max", 0)),
-            "jvm_args": settings.get("jvm_args", "")}
+            "jvm_args": settings.get("jvm_args", ""),
+            # Resource packs seen so far (stem -> project key); None until first looked at.
+            "known_packs": settings.get("known_packs")}
 
 
 def save_settings(slug, settings):
@@ -1258,6 +1260,10 @@ def admin_pack(slug):
     pack = read_pack(slug)
     if adopt_linked_uploads(pack):
         pack = read_pack(slug)
+    if load_settings(slug)["known_packs"] is None:
+        # Remember the resource packs already there, so only later ones get switched on.
+        with write_lock():
+            switch_on_new_resource_packs(slug)
     query = request.args.get("q", "").strip()
     provider = request.args.get("source", "modrinth")
     if provider != "curseforge" or not CURSEFORGE_API_KEY:
@@ -1887,8 +1893,32 @@ def options_txt(slug):
     return ("\n".join(lines) + "\n").encode() if lines else None
 
 
+def switch_on_new_resource_packs(slug):
+    """Tick newly added resource packs for new players; they can be unticked after.
+
+    A pack whose file got a new name (same project) keeps its old tick. The very
+    first time a pack is looked at, its existing packs are only remembered.
+    """
+    settings = load_settings(slug)
+    current = {m["stem"]: m["key"] for m in read_mods(slug) if m["folder"] == "resourcepacks"}
+    known = settings["known_packs"]
+    enabled = list(settings["default_packs"])
+    if known is not None:
+        gone = {stem: key for stem, key in known.items() if stem not in current}
+        for stem, key in current.items():
+            if stem in known:
+                continue
+            renamed = next((old for old, old_key in gone.items() if key and old_key == key), None)
+            if renamed is None or renamed in enabled:
+                enabled.append(stem)
+        enabled = [stem for stem in enabled if stem in current]
+    if known != current or enabled != settings["default_packs"]:
+        save_settings(slug, dict(settings, known_packs=current, default_packs=enabled))
+
+
 def sync_options(slug):
     """Keep options.txt in line with the settings and the current resource pack files."""
+    switch_on_new_resource_packs(slug)
     wanted = options_txt(slug)
     target = PACKS_DIR / slug / "options.txt"
     current = target.read_bytes() if target.exists() else None
