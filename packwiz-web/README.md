@@ -37,7 +37,7 @@ jars, one copy per unique file), `settings/` (per-pack hosting mode) and the ses
 | `PUBLIC_URL` | the request's own URL | Base URL baked into Prism zips and into the download URLs of self-hosted jars. **Set it**: behind the tunnel the request URL is `http://`, which Java won't follow to https |
 | `ACCESS_TEAM_DOMAIN` | *(off)* | e.g. `wenro.cloudflareaccess.com`. `/admin` then requires a valid Cloudflare Access JWT, so even if the Access app on `/admin` goes missing, the admin stays closed (403) |
 | `CURSEFORGE_API_KEY` | *(off)* | From console.curseforge.com. Enables CurseForge search, update notices, mirroring and recognising uploaded CurseForge jars. Without it, CurseForge mods can still be added by link. In compose, write every `$` in the key as `$$` |
-| `MAX_UPLOAD_MB` | `500` | Size limit per jar. Uploads go one file per request in 25 MB chunks, so Cloudflare's 100 MB request limit doesn't apply to the batch |
+| `MAX_UPLOAD_MB` | `4096` | Size limit per file. Uploads go in 25 MB chunks, so Cloudflare's 100 MB request limit doesn't apply; files are hashed and moved on disk, never held in memory. Above 256 MB the CurseForge fingerprint is skipped (Modrinth matching still works) to keep the last request short |
 | `PACK_AUTHOR` | `packwiz-web` | Author written into new packs |
 | `SECRET_KEY` | generated into `/data/secret_key` | Flask session key |
 

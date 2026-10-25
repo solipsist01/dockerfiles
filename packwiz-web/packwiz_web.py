@@ -61,7 +61,10 @@ PACK_AUTHOR = os.environ.get("PACK_AUTHOR", "packwiz-web")
 # e.g. "wenro.cloudflareaccess.com". When set, /admin requires a valid Access JWT.
 ACCESS_TEAM_DOMAIN = os.environ.get("ACCESS_TEAM_DOMAIN", "").strip().rstrip("/")
 ACCESS_TEAM_DOMAIN = re.sub(r"^https?://", "", ACCESS_TEAM_DOMAIN)
-MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "4096"))
+# CurseForge fingerprints are computed in Python (~0.1 s/MB); above this size we
+# skip them so the last upload request stays well inside Cloudflare's timeout.
+FINGERPRINT_MAX_MB = 256
 # The browser uploads one file per request, in chunks of this size, to stay
 # far below Cloudflare's 100 MB request limit and its ~100 s timeout.
 UPLOAD_CHUNK_MB = 25
@@ -345,6 +348,28 @@ def store_jar(data, filename):
     return sha
 
 
+def hash_file(path):
+    """(sha256, sha512) of a file, read in blocks so big files don't fill memory."""
+    sha256, sha512 = hashlib.sha256(), hashlib.sha512()
+    with open(path, "rb") as f:
+        while block := f.read(8 * 1024 * 1024):
+            sha256.update(block)
+            sha512.update(block)
+    return sha256.hexdigest(), sha512.hexdigest()
+
+
+def store_file(path, filename, sha256):
+    """Move an uploaded file into the jar store (same disk, so no copying)."""
+    filename = os.path.basename(filename)
+    target = JARS_DIR / sha256 / filename
+    if target.is_file():
+        Path(path).unlink(missing_ok=True)
+    else:
+        target.parent.mkdir(exist_ok=True)
+        os.replace(path, target)
+    return sha256
+
+
 def jar_url(sha, filename):
     return f"{public_base()}/jars/{sha}/{urllib.parse.quote(os.path.basename(filename))}"
 
@@ -459,10 +484,10 @@ def safe_filename(name):
     return re.sub(r"[^A-Za-z0-9._+-]", "_", name).lstrip(".")
 
 
-def jar_metadata(data, filename):
+def jar_metadata(path, filename):
     """Mod id and display name from the jar's loader metadata, if it has any."""
     try:
-        jar = zipfile.ZipFile(io.BytesIO(data))
+        jar = zipfile.ZipFile(path)
     except zipfile.BadZipFile:
         raise ActionError(f"{filename} is not a valid jar.")
     names = set(jar.namelist())
@@ -600,7 +625,7 @@ def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches, fo
     return f"{pack_name}: added {filename} ({note})"
 
 
-def find_file_matches(data, sha512):
+def find_file_matches(path, sha512):
     """(provider, project id, file id) for each site that has this exact file."""
     matches = []
     try:
@@ -609,9 +634,9 @@ def find_file_matches(data, sha512):
             matches.append(("modrinth", version["project_id"], version["id"]))
     except (OSError, ValueError):
         pass
-    if CURSEFORGE_API_KEY:
+    if CURSEFORGE_API_KEY and os.path.getsize(path) <= FINGERPRINT_MAX_MB * 1024 * 1024:
         try:
-            found = curseforge_file_by_fingerprint(curseforge_fingerprint(data))
+            found = curseforge_file_by_fingerprint(curseforge_fingerprint(Path(path).read_bytes()))
             if found:
                 matches.append(("curseforge", found["modId"], found["id"]))
         except (OSError, ValueError, ActionError):
@@ -619,11 +644,23 @@ def find_file_matches(data, sha512):
     return matches
 
 
-def mod_jar_bytes(mod):
-    """The jar a mod uses right now: stored here, or fetched from Modrinth/CurseForge."""
+def mod_jar_path(mod):
+    """A copy of the file a mod uses right now, in the uploads folder.
+
+    Stored here: copied from the jar store. Otherwise fetched from
+    Modrinth/CurseForge. The caller moves or deletes it.
+    """
+    target = UPLOADS_DIR / f"{secrets.token_hex(16)}.part"
     hosted = JAR_URL_RE.search(mod["url"])
     if hosted:
-        return (JARS_DIR / hosted.group(1) / os.path.basename(mod["filename"])).read_bytes()
+        shutil.copyfile(JARS_DIR / hosted.group(1) / os.path.basename(mod["filename"]), target)
+    else:
+        target.write_bytes(mod_jar_bytes(mod))
+    return target
+
+
+def mod_jar_bytes(mod):
+    """The jar a mod uses right now, fetched from Modrinth/CurseForge."""
     if mod["url"]:
         return fetch_jar(mod, mod["url"])
     if mod["provider"] == "curseforge" and CURSEFORGE_API_KEY:
@@ -1384,30 +1421,30 @@ def upload_targets(slug):
     return targets, side
 
 
-def process_jar(targets, original_name, data, side):
+def process_jar(targets, original_name, path, side):
     """Store one uploaded jar and add it to the target packs; returns messages.
 
     Call under write_lock. Doesn't refresh: finish_upload does that once.
     """
     filename = safe_filename(original_name)
     if filename.lower().endswith(".jar"):
-        jar_id, name = jar_metadata(data, filename)
+        jar_id, name = jar_metadata(path, filename)
         folder = "mods"
     elif filename.lower().endswith(".zip"):
-        if not is_resource_pack(data):
+        if not is_resource_pack(path):
             raise ActionError(f"{original_name}: not a resource pack (no pack.mcmeta in it).")
         jar_id, name, folder, side = None, filename[:-4], "resourcepacks", "client"
     else:
         raise ActionError(f"{original_name}: upload .jar mods or .zip resource packs.")
-    sha512 = hashlib.sha512(data).hexdigest()
-    matches = find_file_matches(data, sha512)
-    sha256 = store_jar(data, filename)
+    sha256, sha512 = hash_file(path)
+    matches = find_file_matches(path, sha512)
+    store_file(path, filename, sha256)
     return [write_upload(t, filename, sha256, sha512, jar_id, name, side, matches, folder) for t in targets]
 
 
-def is_resource_pack(data):
+def is_resource_pack(path):
     try:
-        return "pack.mcmeta" in zipfile.ZipFile(io.BytesIO(data)).namelist()
+        return "pack.mcmeta" in zipfile.ZipFile(path).namelist()
     except zipfile.BadZipFile:
         return False
 
@@ -1435,10 +1472,14 @@ def admin_upload(slug):
     changes, errors = [], []
     with write_lock():
         for upload in files:
+            path = UPLOADS_DIR / f"{secrets.token_hex(16)}.part"
+            upload.save(path)
             try:
-                changes += process_jar(targets, upload.filename, upload.read(), side)
+                changes += process_jar(targets, upload.filename, path, side)
             except ActionError as e:
                 errors.append(e)
+            finally:
+                path.unlink(missing_ok=True)
         errors += finish_upload(targets)
     flash_results(changes, errors, "Nothing uploaded.")
     return back_to_pack(slug)
@@ -1476,7 +1517,7 @@ def admin_upload_chunk(slug):
     targets, side = upload_targets(slug)
     try:
         with write_lock():
-            messages = process_jar(targets, request.form.get("filename", ""), part.read_bytes(), side)
+            messages = process_jar(targets, request.form.get("filename", ""), part, side)
     except ActionError as e:
         return {"ok": False, "message": str(e)}
     finally:
@@ -1677,18 +1718,18 @@ def admin_link_save(slug, stem):
     with write_lock():
         try:
             # Unlinking a Modrinth/CurseForge mod keeps its exact file as our own jar.
-            data = mod_jar_bytes(mod)
+            path = mod_jar_path(mod)
         except ActionError as e:
             flash(str(e), "error")
             return back_to_pack(slug, tab_of(mod))
-        sha512 = hashlib.sha512(data).hexdigest()
+        sha256, sha512 = hash_file(path)
         link = None
         if project_id:
             # Keep the exact version when this jar is a known file of that project.
             wanted = project_key(provider, project_id)
-            link = next((m for m in find_file_matches(data, sha512) if project_key(*m[:2]) == wanted),
+            link = next((m for m in find_file_matches(path, sha512) if project_key(*m[:2]) == wanted),
                         (provider, project_id, ""))
-        sha256 = store_jar(data, mod["filename"])
+        store_file(path, mod["filename"], sha256)
         write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"], sha256, sha512, link)
         try:
             packwiz(slug, "refresh")
