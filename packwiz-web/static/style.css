@@ -193,5 +193,7 @@ nav.tabs a:hover { color: var(--text); }
 nav.tabs a.active { color: var(--text); background: var(--surface); border-color: var(--border); font-weight: 600; }
 nav.tabs .count { color: var(--muted); font-weight: normal; font-size: 0.85rem; }
 nav.tabs .dot { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 0.75rem; text-align: center; }
-form.memory input[type=number] { width: 110px; flex: none; min-width: 0; }
-form.memory input.wide { flex: 1 1 100%; }
+form.memory .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 8px 0 10px; }
+form.memory .fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+form.memory .fields label.wide { grid-column: 1 / -1; }
+.current-setting { margin: 4px 0; }

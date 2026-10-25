@@ -291,12 +291,16 @@
 
   <section class="card">
     <h2>Java memory (Prism)</h2>
-    <form method="post" action="{{ url_for('admin_memory', slug=pack.slug) }}" class="row wrap memory">
+    <p class="current-setting">Now:
+      {% if pack.mem_max %}<b>{{ pack.mem_max }} MB</b> maximum, <b>{{ pack.mem_min or [512, pack.mem_max]|min }} MB</b> minimum{% else %}<b>Prism's default memory</b>{% endif %}{% if pack.jvm_args %}, Java arguments <code>{{ pack.jvm_args }}</code>{% endif %}.</p>
+    <form method="post" action="{{ url_for('admin_memory', slug=pack.slug) }}" class="memory">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-      <label class="choice">Maximum <input name="mem_max" type="number" min="512" step="512" value="{{ pack.mem_max or '' }}" placeholder="e.g. 8192"> MB</label>
-      <label class="choice">Minimum <input name="mem_min" type="number" min="0" step="256" value="{{ pack.mem_min or '' }}" placeholder="512"> MB</label>
-      <button>Save</button>
-      <input name="jvm_args" value="{{ pack.jvm_args }}" placeholder="Extra Java arguments (optional), e.g. -XX:+UseG1GC" class="wide">
+      <div class="fields">
+        <label>Maximum memory (MB)<input name="mem_max" type="number" min="512" step="any" value="{{ pack.mem_max or '' }}" placeholder="e.g. 8192 (empty = Prism default)"></label>
+        <label>Minimum memory (MB)<input name="mem_min" type="number" min="0" step="any" value="{{ pack.mem_min or '' }}" placeholder="512"></label>
+        <label class="wide">Extra Java arguments (optional)<input name="jvm_args" value="{{ pack.jvm_args }}" placeholder="e.g. -XX:+UseG1GC"></label>
+      </div>
+      <div class="row"><span class="spacer"></span><button class="primary">Save Java settings</button></div>
     </form>
     <p class="muted small">Built into the Prism instance (<code>instance.cfg</code> in the zip on the public page), so players who import it
       start with this memory. Prism has already started Java before packwiz runs, so existing instances can't be changed this way:
