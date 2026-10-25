@@ -1,0 +1,54 @@
+{
+    "_comment": "Minecraft server that follows a packwiz modpack: Minecraft version, loader and mods all come from the pack URL. Import via Pterodactyl admin panel -> Nests -> Import Egg.",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-10-25T16:51:20.468325+00:00",
+    "name": "Minecraft (packwiz modpack)",
+    "author": "wesselingronald@gmail.com",
+    "description": "Give it a packwiz pack URL (\u2026/pack.toml) and it installs the Minecraft version and loader (Forge, NeoForge, Fabric or Quilt) the pack asks for, then syncs the server-side mods. On every start it checks the pack again: a new loader version is installed automatically and mods are updated. Pick the Docker image with the Java version your Minecraft version needs (26.1+: Java 25, 1.20.5-1.21.x: Java 21, 1.18-1.20.4: Java 17).",
+    "features": [
+        "eula",
+        "java_version",
+        "pid_limit"
+    ],
+    "docker_images": {
+        "Java 21": "ghcr.io/ptero-eggs/yolks:java_21",
+        "Java 25": "ghcr.io/ptero-eggs/yolks:java_25",
+        "Java 24": "ghcr.io/ptero-eggs/yolks:java_24",
+        "Java 23": "ghcr.io/ptero-eggs/yolks:java_23",
+        "Java 22": "ghcr.io/ptero-eggs/yolks:java_22",
+        "Java 17": "ghcr.io/ptero-eggs/yolks:java_17",
+        "Java 16": "ghcr.io/ptero-eggs/yolks:java_16",
+        "Java 11": "ghcr.io/ptero-eggs/yolks:java_11",
+        "Java 8": "ghcr.io/ptero-eggs/yolks:java_8"
+    },
+    "file_denylist": [],
+    "startup": "$( bash packwiz-sync.sh \"{{PACKWIZ_URL}}\" 1>&2 ) java -Xms128M -Xmx{{SERVER_MEMORY}}M -Dterminal.jline=false -Dterminal.ansi=true $( [[ ! -f unix_args.txt ]] && printf %s \"-jar server.jar\" || printf %s \"@unix_args.txt\" )",
+    "config": {
+        "files": "{\n    \"server.properties\": {\n        \"parser\": \"properties\",\n        \"find\": {\n            \"server-ip\": \"0.0.0.0\",\n            \"server-port\": \"{{server.build.default.port}}\",\n            \"query.port\": \"{{server.build.default.port}}\"\n        }\n    }\n}",
+        "startup": "{\n    \"done\": \")! For help, type \"\n}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Puts packwiz-sync.sh and the packwiz bootstrap on the server. Minecraft and\n# the loader are installed by packwiz-sync.sh on the first start (this\n# installer image has no Java), and kept in line with the pack on every start.\nmkdir -p /mnt/server\ncd /mnt/server\ncat > packwiz-sync.sh <<'PACKWIZ_SYNC'\n#!/bin/bash\n# packwiz-sync.sh <pack.toml URL>\n#\n# Runs before every server start (see the egg's startup command). Reads the\n# pack's [versions], installs that Minecraft version + loader when it isn't\n# installed yet or has changed, then syncs the mods with packwiz-installer.\n# If something fails it says so and the server starts with what it has.\n#\n# Afterwards the server folder holds either unix_args.txt (Forge/NeoForge\n# 1.17+) or server.jar (Fabric, Quilt, older Forge), which is what the\n# startup command launches.\n\nset -u\nPACK_URL=\"${1:-}\"\nBOOTSTRAP_URL=\"https://github.com/packwiz/packwiz-installer-bootstrap/releases/latest/download/packwiz-installer-bootstrap.jar\"\nMARKER=\".packwiz-loader\"\n\nlog() { echo \"[packwiz] $*\"; }\n\nif [ -z \"$PACK_URL\" ]; then\n    log \"No pack URL set; starting without syncing.\"\n    exit 0\nfi\n\npack=$(curl -fsSL --retry 2 \"$PACK_URL\") || {\n    log \"Couldn't fetch $PACK_URL; starting with the current install.\"\n    exit 0\n}\nversions=$(printf '%s\\n' \"$pack\" | sed -n '/^\\[versions\\]/,/^\\[/p')\nget() { printf '%s\\n' \"$versions\" | sed -n \"s/^$1 *= *\\\"\\(.*\\)\\\"/\\1/p\" | head -1; }\n\nmc=$(get minecraft)\nloader=\"\" ver=\"\"\nfor name in neoforge forge fabric quilt; do\n    ver=$(get \"$name\")\n    if [ -n \"$ver\" ]; then loader=$name; break; fi\ndone\n\n# --- Java version check (warn only: the Docker image decides the Java version)\nversion_ge() { [ \"$(printf '%s\\n%s\\n' \"$2\" \"$1\" | sort -V | head -1)\" = \"$2\" ]; }\nif [ -n \"$mc\" ]; then\n    if version_ge \"$mc\" 26.1; then need=25\n    elif version_ge \"$mc\" 1.20.5; then need=21\n    elif version_ge \"$mc\" 1.18; then need=17\n    elif version_ge \"$mc\" 1.17; then need=16\n    else need=8; fi\n    have=$(java -version 2>&1 | sed -n 's/.*version \"\\([0-9]*\\)\\(\\.[0-9]*\\)*.*/\\1/p' | head -1)\n    [ \"$have\" = \"1\" ] && have=8\n    if [ -n \"$have\" ] && { [ \"$have\" -lt \"$need\" ] || { [ \"$need\" = 8 ] && [ \"$have\" -gt 8 ]; }; }; then\n        log \"WARNING: Minecraft $mc needs Java $need, this server runs Java $have.\"\n        log \"         Pick the Java $need image under Startup -> Docker Image.\"\n    fi\nfi\n\n# --- Loader install ---------------------------------------------------------\n\nforge_like() {  # <maven base> <group path> <artifact> <version>\n    local url=\"$1/$2/$3/$4/$3-$4-installer.jar\"\n    curl -fsSL -o installer.jar \"$url\" || { log \"Download failed: $url\"; return 1; }\n    log \"Running the $3 $4 installer (takes a minute)...\"\n    if ! java -jar installer.jar --installServer >installer-output.log 2>&1; then\n        tail -n 15 installer-output.log\n        return 1\n    fi\n    rm -f installer.jar installer.jar.log installer-output.log unix_args.txt server.jar\n    local args=\"libraries/$2/$3/$4/unix_args.txt\"\n    if [ -f \"$args\" ]; then\n        ln -s \"$args\" unix_args.txt\n    else\n        # Before Minecraft 1.17 the installer leaves a runnable jar instead.\n        local jar\n        jar=$(ls \"$3-$4\"*.jar 2>/dev/null | grep -v installer | head -1)\n        [ -n \"$jar\" ] || { log \"The installer left no server jar.\"; return 1; }\n        mv \"$jar\" server.jar\n    fi\n}\n\ninstall_fabric() {\n    local installer\n    installer=$(curl -fsSL https://meta.fabricmc.net/v2/versions/installer |\n        grep -o '\"version\": *\"[^\"]*\"' | head -1 | sed 's/.*\"\\([^\"]*\\)\"$/\\1/')\n    [ -n \"$installer\" ] || { log \"Couldn't look up the Fabric installer version.\"; return 1; }\n    rm -f unix_args.txt\n    curl -fsSL -o server.jar \"https://meta.fabricmc.net/v2/versions/loader/$mc/$ver/$installer/server/jar\" ||\n        { log \"Couldn't download the Fabric server launcher.\"; return 1; }\n}\n\ninstall_quilt() {\n    curl -fsSL -o quilt-installer.jar https://quiltmc.org/api/v1/download-latest-installer/java-universal ||\n        { log \"Couldn't download the Quilt installer.\"; return 1; }\n    rm -f unix_args.txt server.jar quilt-server-launch.jar\n    if ! java -jar quilt-installer.jar install server \"$mc\" \"$ver\" --download-server --install-dir=. >installer-output.log 2>&1; then\n        tail -n 15 installer-output.log\n        return 1\n    fi\n    rm -f quilt-installer.jar installer-output.log\n    # The launcher becomes server.jar, so the vanilla jar moves aside.\n    mv server.jar vanilla-server.jar\n    echo \"serverJar=vanilla-server.jar\" > quilt-server-launcher.properties\n    mv quilt-server-launch.jar server.jar\n}\n\nloader_present() {\n    case \"$loader\" in\n        forge|neoforge) [ -e unix_args.txt ] || [ -f server.jar ] ;;\n        *) [ -f server.jar ] ;;\n    esac\n}\n\nwant=\"$loader $ver minecraft $mc\"\nif [ -z \"$loader\" ]; then\n    log \"pack.toml names no loader; leaving the server install as it is.\"\nelif [ \"$want\" != \"$(cat \"$MARKER\" 2>/dev/null)\" ] || ! loader_present; then\n    log \"Installing $loader $ver for Minecraft $mc (was: $(cat \"$MARKER\" 2>/dev/null || echo nothing))\"\n    case \"$loader\" in\n        forge) forge_like https://maven.minecraftforge.net net/minecraftforge forge \"$mc-$ver\" ;;\n        neoforge)\n            # NeoForge for 1.20.1 still used Forge's artifact name and versioning.\n            if [ \"$mc\" = \"1.20.1\" ]; then\n                forge_like https://maven.neoforged.net/releases net/neoforged forge \"1.20.1-$ver\"\n            else\n                forge_like https://maven.neoforged.net/releases net/neoforged neoforge \"$ver\"\n            fi ;;\n        fabric) install_fabric ;;\n        quilt) install_quilt ;;\n    esac\n    if [ $? -eq 0 ]; then\n        echo \"$want\" > \"$MARKER\"\n        log \"Installed $loader $ver for Minecraft $mc.\"\n    else\n        log \"Installing $loader $ver failed; starting with the current install.\"\n    fi\nelse\n    log \"$loader $ver for Minecraft $mc is installed.\"\nfi\n\n# --- Mods -------------------------------------------------------------------\n\nif [ ! -f packwiz-installer-bootstrap.jar ]; then\n    curl -fsSL -o packwiz-installer-bootstrap.jar \"$BOOTSTRAP_URL\" || log \"Couldn't download packwiz-installer-bootstrap.\"\nfi\njava -jar packwiz-installer-bootstrap.jar -g -s server \"$PACK_URL\" ||\n    log \"Mod sync failed; starting with the current mods.\"\nexit 0\nPACKWIZ_SYNC\nchmod +x packwiz-sync.sh\ncurl -fsSL -o packwiz-installer-bootstrap.jar https://github.com/packwiz/packwiz-installer-bootstrap/releases/latest/download/packwiz-installer-bootstrap.jar\necho \"Installed. Minecraft, the loader and the mods are set up on the first start from: ${PACKWIZ_URL}\"\n",
+            "container": "ghcr.io/ptero-eggs/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Pack URL",
+            "description": "The packwiz pack.toml URL, e.g. https://packwiz.ofnie.org/packs/mtr/pack.toml. Minecraft version, loader and mods all come from this pack.",
+            "env_variable": "PACKWIZ_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|url",
+            "field_type": "text"
+        }
+    ]
+}

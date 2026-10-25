@@ -182,3 +182,8 @@ td.download { white-space: nowrap; }
 table.versions tr.current td { background: var(--ok-bg); }
 table.versions td { padding: 6px 10px; }
 .tag.pinned { color: var(--text); }
+tr.group th { background: var(--code-bg); color: var(--text); text-transform: none; letter-spacing: 0; font-size: 0.9rem; }
+form.servers table { margin-top: 10px; }
+form.servers input:not([type=checkbox]) { width: 100%; }
+.checks-col { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
+textarea { font: inherit; font-family: ui-monospace, monospace; font-size: 0.85rem; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; width: 100%; margin: 6px 0 10px; }

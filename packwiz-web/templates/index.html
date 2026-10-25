@@ -25,6 +25,10 @@
     <li>Start the instance. The first start downloads all mods.</li>
   </ol>
 
+  {% if pack.servers %}
+  <p class="muted small">Servers in your multiplayer list:
+    {% for server in pack.servers %}<b>{{ server.name }}</b> ({{ server.address }}){{ ', ' if not loop.last }}{% endfor %}</p>
+  {% endif %}
   <details>
     <summary>Mod list</summary>
     <ul class="modlist">

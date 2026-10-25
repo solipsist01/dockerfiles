@@ -62,6 +62,25 @@ packwiz-installer only does this for Prism/MultiMC instances.
 Tip for 1.20.1: use Forge (47.4.x), not NeoForge 47.1.x. NeoForge for 1.20.1 is an old fork
 that current 1.20.1 mods don't always load on.
 
+**Resource packs:** switch the search to *Resource packs* (Modrinth or CurseForge) and click
+**Add**, or upload your own `.zip` (it needs a `pack.mcmeta`). They land in `resourcepacks/`,
+are always client side (servers skip them) and get update notices, versions and pinning like
+mods. Uploaded packs that are on Modrinth/CurseForge are linked automatically.
+
+**Default settings (first start):** tick which resource packs start switched on and add other
+`options.txt` lines (`lang:nl_nl`, `renderDistance:12`, …). The app writes a partial
+`options.txt` with packwiz's `preserve` flag: packwiz-installer only installs it when the player
+has no `options.txt` yet, so new installs start with it and existing players keep their own
+settings. Minecraft fills in everything else with its defaults. When a resource pack's file name
+changes (update, other version), `options.txt` follows automatically.
+
+**Server list:** on the pack page, fill in name + address (optionally "accept the server's
+resource pack"). The app writes `servers.dat` (Minecraft's NBT format) into the pack, so every
+player has the servers in their multiplayer list. *Keep in sync* resets the list on every start
+(servers players added themselves disappear); *Install once* uses packwiz's `preserve` flag so
+players keep their own servers, but later changes only reach new installs. The servers are
+also listed on the public page.
+
 **Search:** filtered on the pack's Minecraft version and loader. On 1.20.1 NeoForge, Forge
 mods are included too (NeoForge 1.20.1 is a Forge fork and most mods there are only tagged Forge),
 and Quilt packs include Fabric mods. Close matches without a build for the pack are listed

@@ -77,7 +77,15 @@ SIDES = ("both", "client", "server")
 MODRINTH_API = "https://api.modrinth.com/v2"
 CURSEFORGE_API = os.environ.get("CURSEFORGE_API_URL", "https://api.curseforge.com/v1").rstrip("/")
 CURSEFORGE_API_KEY = os.environ.get("CURSEFORGE_API_KEY", "").strip()
-CF_MINECRAFT, CF_CLASS_MODS = 432, 6
+CF_MINECRAFT = 432
+# What can be searched and uploaded: folder in the pack, Modrinth project type,
+# CurseForge class, and the upload file extension.
+KINDS = {
+    "mod": {"label": "Mods", "folder": "mods", "modrinth": "mod", "cf_class": 6, "ext": ".jar"},
+    "resourcepack": {"label": "Resource packs", "folder": "resourcepacks", "modrinth": "resourcepack",
+                     "cf_class": 12, "ext": ".zip"},
+}
+FOLDER_LABELS = {k["folder"]: k["label"] for k in KINDS.values()}
 CF_LOADER_TYPES = {"forge": 1, "fabric": 4, "quilt": 5, "neoforge": 6}
 CF_LOADER_NAMES = {v: k for k, v in CF_LOADER_TYPES.items()}
 CF_URL_RE = re.compile(r"^https://(www\.)?curseforge\.com/minecraft/[\w-]+/[\w-]+(/files/\d+)?/?$")
@@ -141,6 +149,10 @@ def read_pack(slug):
         "loader_version": versions.get(loader, ""),
         "mirror": load_settings(slug)["mirror"],
         "stable": load_settings(slug)["stable"],
+        "servers": load_settings(slug)["servers"],
+        "servers_once": load_settings(slug)["servers_once"],
+        "default_packs": load_settings(slug)["default_packs"],
+        "options_extra": load_settings(slug)["options_extra"],
         "mods": read_mods(slug),
     }
 
@@ -231,7 +243,9 @@ def load_settings(slug):
         settings = json.loads((SETTINGS_DIR / f"{slug}.json").read_text())
     except (FileNotFoundError, ValueError):
         settings = {}
-    return {"mirror": bool(settings.get("mirror", False)), "stable": bool(settings.get("stable", False))}
+    return {"mirror": bool(settings.get("mirror", False)), "stable": bool(settings.get("stable", False)),
+            "servers": list(settings.get("servers", [])), "servers_once": bool(settings.get("servers_once", False)),
+            "default_packs": list(settings.get("default_packs", [])), "options_extra": settings.get("options_extra", "")}
 
 
 def save_settings(slug, settings):
@@ -433,6 +447,7 @@ def after_change(*slugs):
     for slug in dict.fromkeys(slugs):
         try:
             errors += [f"{read_pack(slug)['name']}: {e}" for e in sync_hosting(slug)]
+            sync_options(slug)    # a resource pack update can change its file name
         except ActionError as e:
             errors.append(f"{slug}: {e}")
     collect_garbage()
@@ -553,7 +568,7 @@ def mod_link(mod, keep_version=True):
     return ("curseforge", mod["cf_id"], mod["cf_file_id"] if keep_version else 0)
 
 
-def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches):
+def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches, folder="mods"):
     """Create (or replace) the .pw.toml for an uploaded jar; returns a message.
 
     matches are the (provider, project id, file id) links found for this exact
@@ -562,7 +577,7 @@ def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches):
     """
     pack_name = read_pack(slug)["name"]
     stem = slugify(jar_id or name or filename.rsplit(".", 1)[0]) or "upload"
-    mods = read_mods(slug)
+    mods = [m for m in read_mods(slug) if m["folder"] == folder]
     keys = {project_key(*m[:2]): m for m in matches}
     existing = next((m for m in mods if m["key"] in keys), None)
     match = keys[existing["key"]] if existing else None
@@ -574,7 +589,7 @@ def write_upload(slug, filename, sha256, sha512, jar_id, name, side, matches):
         side = existing["side"]
         meta_file = existing["path"]
     else:
-        meta_file = PACKS_DIR / slug / "mods" / f"{stem}.pw.toml"
+        meta_file = PACKS_DIR / slug / folder / f"{stem}.pw.toml"
         meta_file.parent.mkdir(exist_ok=True)
     # Otherwise keep the link of the mod it replaces, minus the (now wrong) version.
     link = match or (mod_link(existing, keep_version=False) if existing else None)
@@ -654,18 +669,18 @@ def modrinth_post(path, body):
         return json.load(resp)
 
 
-def modrinth_search(query, facets, limit=20):
+def modrinth_search(query, facets, limit=20, kind="mod"):
     data = modrinth_get("/search", {
-        "query": query, "facets": json.dumps([["project_type:mod"], *facets]),
+        "query": query, "facets": json.dumps([[f"project_type:{KINDS[kind]['modrinth']}"], *facets]),
         "limit": limit, "index": "relevance",
     })
     return data.get("hits", [])
 
 
-def pack_facets(pack):
+def pack_facets(pack, kind="mod"):
     facets = [[f"versions:{pack['minecraft']}"]]
     loaders = compatible_loaders(pack["loader"], pack["minecraft"])
-    if loaders:
+    if loaders and kind == "mod":
         facets.append([f"categories:{l}" for l in loaders])
     return facets
 
@@ -705,10 +720,17 @@ def check_updates(pack):
     return {stem: u for stem, u in updates.items() if stem not in pinned}, restricted
 
 
-def modrinth_versions(pack, project_id):
+def content_loaders(pack, mod=None):
+    """Modrinth loaders to accept: the pack's for mods, "minecraft" for resource packs."""
+    if mod is not None and mod["folder"] != "mods":
+        return ["minecraft"]
+    return compatible_loaders(pack["loader"], pack["minecraft"])
+
+
+def modrinth_versions(pack, project_id, mod=None):
     """A project's versions for this pack's Minecraft version and loaders, newest first."""
     return modrinth_get(f"/project/{project_id}/version", {
-        "loaders": json.dumps(compatible_loaders(pack["loader"], pack["minecraft"])),
+        "loaders": json.dumps(content_loaders(pack, mod)),
         "game_versions": json.dumps([pack["minecraft"]])})
 
 
@@ -735,7 +757,7 @@ def modrinth_updates(pack):
     if pack.get("stable"):
         # The batch endpoint can't filter on release type, so ask per project.
         with ThreadPoolExecutor(8) as pool:
-            found = pool.map(lambda m: (m, modrinth_versions(pack, m["mod_id"])), linked)
+            found = pool.map(lambda m: (m, modrinth_versions(pack, m["mod_id"], m)), linked)
             for mod, versions in found:
                 release = newer_release(versions, mod["version_id"])
                 if release:
@@ -745,7 +767,7 @@ def modrinth_updates(pack):
     if by_hash:
         latest = modrinth_post("/version_files/update", {
             "hashes": list(by_hash), "algorithm": "sha512",
-            "loaders": loaders, "game_versions": [pack["minecraft"]],
+            "loaders": loaders + ["minecraft"], "game_versions": [pack["minecraft"]],
         })
         for file_hash, mod in by_hash.items():
             if file_hash not in latest:
@@ -755,7 +777,7 @@ def modrinth_updates(pack):
     # Linked by hand, or a file Modrinth doesn't know: ask per project.
     unknown += [m for m in linked if m not in by_hash.values()]
     for mod in unknown:
-        versions = modrinth_versions(pack, mod["mod_id"])
+        versions = modrinth_versions(pack, mod["mod_id"], mod)
         if versions and versions[0]["id"] != mod["version_id"]:
             updates[mod["stem"]] = versions[0]
     return updates
@@ -803,15 +825,19 @@ def curseforge_hit(mod):
 
 def modrinth_hit(hit):
     return dict(hit, provider="modrinth", key=project_key("modrinth", hit["project_id"]),
-                url=f"https://modrinth.com/mod/{hit['slug']}", restricted=False,
+                url=f"https://modrinth.com/{hit.get('project_type') or 'mod'}/{hit['slug']}", restricted=False,
                 loaders=[c for c in hit.get("categories", []) if c in LOADERS])
 
 
-def curseforge_search(query, pack=None, limit=20):
-    params = {"gameId": CF_MINECRAFT, "classId": CF_CLASS_MODS, "searchFilter": query,
+def curseforge_search(query, pack=None, limit=20, kind="mod"):
+    params = {"gameId": CF_MINECRAFT, "classId": KINDS[kind]["cf_class"], "searchFilter": query,
               "sortField": 2, "sortOrder": "desc", "pageSize": limit}
     if pack is None:
         return [curseforge_hit(m) for m in curseforge_request("/mods/search", params)["data"]]
+    if kind != "mod":
+        # Resource packs have no loader on CurseForge.
+        found = curseforge_request("/mods/search", dict(params, gameVersion=pack["minecraft"]))
+        return [curseforge_hit(m) for m in found["data"]]
     # One search per loader: the API's multi-loader filter gives poor results.
     hits = {}
     for loader in compatible_loaders(pack["loader"], pack["minecraft"]):
@@ -824,10 +850,11 @@ def curseforge_search(query, pack=None, limit=20):
     return [curseforge_hit(m) for m in ranked]
 
 
-def search(provider, query, pack=None, limit=20):
+def search(provider, query, pack=None, limit=20, kind="mod"):
     if provider == "curseforge":
-        return curseforge_search(query, pack, limit)
-    return [modrinth_hit(h) for h in modrinth_search(query, pack_facets(pack) if pack else [], limit)]
+        return curseforge_search(query, pack, limit, kind)
+    facets = pack_facets(pack, kind) if pack else []
+    return [modrinth_hit(h) for h in modrinth_search(query, facets, limit, kind)]
 
 
 def curseforge_download_url(mod):
@@ -872,10 +899,13 @@ def curseforge_file_by_fingerprint(fingerprint):
     return matches[0]["file"] if matches else None
 
 
-def curseforge_versions(pack, project_id):
+def curseforge_versions(pack, project_id, is_mod=True):
     """A project's files for this pack, newest first, shaped like Modrinth versions."""
     files = {}
-    for loader in compatible_loaders(pack["loader"], pack["minecraft"]):
+    if not is_mod:
+        found = curseforge_request(f"/mods/{int(project_id)}/files", {"gameVersion": pack["minecraft"], "pageSize": 50})
+        files = {f["id"]: f for f in found["data"]}
+    for loader in compatible_loaders(pack["loader"], pack["minecraft"]) if is_mod else []:
         if loader in CF_LOADER_TYPES:
             found = curseforge_request(f"/mods/{int(project_id)}/files", {
                 "gameVersion": pack["minecraft"], "modLoaderType": CF_LOADER_TYPES[loader], "pageSize": 50})
@@ -892,9 +922,9 @@ def mod_versions(pack, mod):
     if mod["provider"] == "modrinth":
         return [{"id": v["id"], "version_number": v["version_number"], "filename": v["files"][0]["filename"] if v["files"] else "",
                  "version_type": v["version_type"], "date_published": v["date_published"]}
-                for v in modrinth_versions(pack, mod["mod_id"])]
+                for v in modrinth_versions(pack, mod["mod_id"], mod)]
     if mod["provider"] == "curseforge" and CURSEFORGE_API_KEY:
-        return curseforge_versions(pack, mod["cf_id"])
+        return curseforge_versions(pack, mod["cf_id"], is_mod=mod["folder"] == "mods")
     return []
 
 
@@ -917,8 +947,10 @@ def curseforge_updates(pack, mods):
             continue
         if project.get("allowModDistribution") is False:
             restricted.add(mod["stem"])
+        # Resource packs have no loader on CurseForge.
+        accepted = loaders if mod["folder"] == "mods" else {None}
         files = [f for f in project.get("latestFilesIndexes", [])
-                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in loaders
+                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in accepted
                  and (f.get("releaseType") == 1 or not pack.get("stable"))]
         if files:
             newest = max(files, key=lambda f: f["fileId"])
@@ -1134,7 +1166,7 @@ def admin_new():
             shutil.rmtree(path, ignore_errors=True)
             flash(str(e), "error")
             return redirect(url_for("admin_index"))
-        save_settings(slug, {"mirror": bool(request.form.get("mirror")), "stable": False})
+        save_settings(slug, dict(load_settings(slug), mirror=bool(request.form.get("mirror"))))
     flash(f"Pack '{name}' created.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
 
@@ -1183,13 +1215,16 @@ def admin_pack(slug):
     provider = request.args.get("source", "modrinth")
     if provider != "curseforge" or not CURSEFORGE_API_KEY:
         provider = "modrinth"
+    kind = request.args.get("kind", "mod")
+    if kind not in KINDS:
+        kind = "mod"
     results, others, search_error = [], [], None
     if query:
         try:
-            results = search(provider, query, pack)
+            results = search(provider, query, pack, kind=kind)
             # Close matches that have no build for this pack, so they don't just vanish.
             found = {hit["key"] for hit in results}
-            others = [hit for hit in search(provider, query, limit=10) if hit["key"] not in found][:5]
+            others = [hit for hit in search(provider, query, limit=10, kind=kind) if hit["key"] not in found][:5]
         except (OSError, ValueError, ActionError) as e:
             search_error = f"{PROVIDER_NAMES[provider]} search failed: {e}"
     try:
@@ -1198,7 +1233,8 @@ def admin_pack(slug):
         updates, restricted, update_error = {}, set(), f"Checking for updates failed: {e}"
     installed = {m["key"] for m in pack["mods"] if m["key"]}
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
-    return render_template("admin_pack.html", pack=pack, query=query, results=results,
+    return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS,
+                           folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
                            max_upload_mb=MAX_UPLOAD_MB, chunk_mb=UPLOAD_CHUNK_MB, updates=updates,
@@ -1304,13 +1340,17 @@ def admin_add(slug):
                 before, versions_before = {m["path"] for m in pack["mods"]}, file_versions(pack["slug"])
                 packwiz(pack["slug"], *command)
                 drop_duplicate_deps(pack["slug"], before, keep_key=key)
+                for new in read_mods(pack["slug"]):
+                    if new["path"] not in before and new["folder"] != "mods":
+                        set_side(new["path"], "client")    # resource packs: servers don't need them
                 packwiz(pack["slug"], "refresh")
                 changes += describe_changes(pack["name"], versions_before, file_versions(pack["slug"]))
             except ActionError as e:
                 errors.append(f"{pack['name']}: {e}")
         errors += after_change(*(p["slug"] for p in targets))
     flash_results(changes, errors, "Already in the pack.")
-    return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", ""), source=provider))
+    return redirect(url_for("admin_pack", slug=slug, q=request.form.get("q", ""), source=provider,
+                            kind=request.form.get("kind", "mod")))
 
 
 @admin_route("/admin/pack/<slug>/add-link", methods=["POST"])
@@ -1350,13 +1390,26 @@ def process_jar(targets, original_name, data, side):
     Call under write_lock. Doesn't refresh: finish_upload does that once.
     """
     filename = safe_filename(original_name)
-    if not filename.lower().endswith(".jar"):
-        raise ActionError(f"{original_name}: only .jar files can be uploaded.")
-    jar_id, name = jar_metadata(data, filename)
+    if filename.lower().endswith(".jar"):
+        jar_id, name = jar_metadata(data, filename)
+        folder = "mods"
+    elif filename.lower().endswith(".zip"):
+        if not is_resource_pack(data):
+            raise ActionError(f"{original_name}: not a resource pack (no pack.mcmeta in it).")
+        jar_id, name, folder, side = None, filename[:-4], "resourcepacks", "client"
+    else:
+        raise ActionError(f"{original_name}: upload .jar mods or .zip resource packs.")
     sha512 = hashlib.sha512(data).hexdigest()
     matches = find_file_matches(data, sha512)
     sha256 = store_jar(data, filename)
-    return [write_upload(t, filename, sha256, sha512, jar_id, name, side, matches) for t in targets]
+    return [write_upload(t, filename, sha256, sha512, jar_id, name, side, matches, folder) for t in targets]
+
+
+def is_resource_pack(data):
+    try:
+        return "pack.mcmeta" in zipfile.ZipFile(io.BytesIO(data)).namelist()
+    except zipfile.BadZipFile:
+        return False
 
 
 def finish_upload(targets):
@@ -1534,6 +1587,52 @@ def admin_unpin(slug):
     return redirect(url_for("admin_pack", slug=slug))
 
 
+@admin_route("/admin/pack/<slug>/servers", methods=["POST"])
+def admin_servers(slug):
+    pack_dir(slug)
+    servers = []
+    for i in range(int(request.form.get("rows", "0") or 0)):
+        name = request.form.get(f"name_{i}", "").strip()[:64]
+        address = request.form.get(f"address_{i}", "").strip()
+        if not address or request.form.get(f"remove_{i}"):
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9.\-_:\[\]]{1,255}", address):
+            flash(f"'{address}' isn't a server address (host or host:port).", "error")
+            return redirect(url_for("admin_pack", slug=slug))
+        servers.append({"name": name or address, "address": address,
+                        "accept_textures": bool(request.form.get(f"textures_{i}"))})
+    with write_lock():
+        save_settings(slug, dict(load_settings(slug), servers=servers,
+                                 servers_once=request.form.get("once") == "1"))
+        try:
+            write_server_list(slug)
+        except ActionError as e:
+            flash(str(e), "error")
+    flash(f"Server list saved ({len(servers)} server{'s' if len(servers) != 1 else ''}); "
+          "players get it on their next start." if servers else "Server list removed from the pack.", "ok")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
+@admin_route("/admin/pack/<slug>/defaults", methods=["POST"])
+def admin_defaults(slug):
+    pack_dir(slug)
+    packs = {m["stem"] for m in read_mods(slug) if m["folder"] == "resourcepacks"}
+    chosen = [stem for stem in request.form.getlist("pack") if stem in packs]
+    extra = request.form.get("extra", "")[:4000]
+    bad = [l for l in extra.splitlines() if l.strip() and not OPTION_LINE_RE.match(l.strip())]
+    if bad:
+        flash(f"Not an option line (expected key:value): {bad[0]}", "error")
+        return redirect(url_for("admin_pack", slug=slug))
+    with write_lock():
+        save_settings(slug, dict(load_settings(slug), default_packs=chosen, options_extra=extra))
+        try:
+            sync_options(slug)
+        except ActionError as e:
+            flash(str(e), "error")
+    flash("Default settings saved. They apply to new installs (players without an options.txt yet).", "ok")
+    return redirect(url_for("admin_pack", slug=slug))
+
+
 @admin_route("/admin/pack/<slug>/stable", methods=["POST"])
 def admin_stable(slug):
     pack_dir(slug)
@@ -1618,6 +1717,91 @@ def relink_mod(slug, mod, provider, project_id):
     if changes:
         flash(f"{mod['name']} now comes from {PROVIDER_NAMES[provider]}.", "ok")
     return redirect(url_for("admin_pack", slug=slug))
+
+
+def nbt_string(text):
+    raw = text.encode("utf-8")
+    return struct.pack(">H", len(raw)) + raw
+
+
+def servers_dat(servers):
+    """servers.dat as Minecraft writes it: uncompressed NBT {servers: [{name, ip, acceptTextures}]}."""
+    out = b"\x0a" + nbt_string("")                                    # root compound
+    out += b"\x09" + nbt_string("servers") + b"\x0a" + struct.pack(">i", len(servers))
+    for server in servers:
+        out += b"\x08" + nbt_string("name") + nbt_string(server["name"])
+        out += b"\x08" + nbt_string("ip") + nbt_string(server["address"])
+        if server.get("accept_textures"):
+            out += b"\x01" + nbt_string("acceptTextures") + b"\x01"
+        out += b"\x00"                                                  # end of this server
+    return out + b"\x00"                                                # end of root
+
+
+def write_server_list(slug):
+    """Put the pack's server list in servers.dat (or remove it); call under write_lock.
+
+    "Install once" sets packwiz's preserve flag: players' own servers survive,
+    but later changes to the list only reach new installs.
+    """
+    settings = load_settings(slug)
+    data = servers_dat(settings["servers"]) if settings["servers"] else None
+    write_pack_file(slug, "servers.dat", data, preserve=settings["servers_once"])
+
+
+def write_pack_file(slug, name, data, preserve=False):
+    """Put a file in the pack root (or remove it when data is None); call under write_lock.
+
+    preserve is packwiz's "install once": packwiz-installer only writes the
+    file when the player doesn't have it yet.
+    """
+    target = PACKS_DIR / slug / name
+    if data is None:
+        target.unlink(missing_ok=True)
+    else:
+        target.write_bytes(data)
+    packwiz(slug, "refresh")
+    index = PACKS_DIR / slug / "index.toml"
+    line = f"file = {json.dumps(name)}\n"
+
+    def set_preserve(entry):
+        # packwiz may put the flag anywhere in the entry, so drop it everywhere first.
+        entry = re.sub(r"^preserve = .*\n", "", entry.group(0), flags=re.M)
+        return entry.replace(line, line + "preserve = true\n") if preserve else entry
+
+    toml = re.sub(r"\[\[files\]\]\n" + re.escape(line) + r"(?:(?!\[\[files\]\]).*\n?)*", set_preserve,
+                  index.read_text())
+    index.write_text(toml)
+    packwiz(slug, "refresh")    # pack.toml carries the index hash
+
+
+OPTION_LINE_RE = re.compile(r"^[A-Za-z0-9_.]+:.*$")
+
+
+def options_txt(slug):
+    """The default options.txt for new installs, or None if there's nothing to set.
+
+    Minecraft fills in every option that's missing, so this only holds what the
+    admin chose: extra lines plus the resource packs that start switched on.
+    """
+    settings = load_settings(slug)
+    lines = [l.strip() for l in settings["options_extra"].splitlines()
+             if OPTION_LINE_RE.match(l.strip()) and not l.strip().startswith(("resourcePacks:", "incompatibleResourcePacks:"))]
+    packs = {m["stem"]: m for m in read_mods(slug) if m["folder"] == "resourcepacks"}
+    chosen = [packs[stem] for stem in settings["default_packs"] if stem in packs]
+    if chosen:
+        # Later entries sit higher in Minecraft's list, so the first one chosen ends up on top.
+        enabled = ["vanilla"] + [f"file/{m['filename']}" for m in reversed(chosen)]
+        lines.append("resourcePacks:" + json.dumps(enabled, separators=(",", ":")))
+    return ("\n".join(lines) + "\n").encode() if lines else None
+
+
+def sync_options(slug):
+    """Keep options.txt in line with the settings and the current resource pack files."""
+    wanted = options_txt(slug)
+    target = PACKS_DIR / slug / "options.txt"
+    current = target.read_bytes() if target.exists() else None
+    if wanted != current:
+        write_pack_file(slug, "options.txt", wanted, preserve=True)
 
 
 def drop_duplicate_deps(slug, before, keep_key=None):
