@@ -193,7 +193,17 @@
 {% if tab == 'mods' %}
   {{ search_card('mod') }}
   {{ upload_card('mod') }}
-  <h2>Mods ({{ mods|length }})</h2>
+  <div class="titlebar list-head">
+    <h2>Mods ({{ mods|length }})</h2>
+    {% if mods %}
+    <form method="post" action="{{ url_for('admin_remove_all', slug=pack.slug) }}"
+          data-confirm="Remove all {{ mods|length }} mods from {{ pack.name }}? Players and servers lose them on their next start.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="folder" value="mods">
+      <button class="danger">Remove all mods</button>
+    </form>
+    {% endif %}
+  </div>
   {{ content_table(mods, 'Mod') }}
   <p class="muted small">Side: <b>client</b> mods are skipped on servers, <b>server</b> mods are skipped on players' PCs.
     Updating an uploaded jar swaps it for the Modrinth/CurseForge version.</p>
@@ -217,7 +227,17 @@
       when a player doesn't have one yet). Existing players switch packs on themselves under Options → Resource Packs.
       The first ticked pack ends up on top. Newly added packs are ticked automatically.</p>
   </section>
-  <h2>Resource packs ({{ rps|length }})</h2>
+  <div class="titlebar list-head">
+    <h2>Resource packs ({{ rps|length }})</h2>
+    {% if rps %}
+    <form method="post" action="{{ url_for('admin_remove_all', slug=pack.slug) }}"
+          data-confirm="Remove all {{ rps|length }} resource packs from {{ pack.name }}? Players and servers lose them on their next start.">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="folder" value="resourcepacks">
+      <button class="danger">Remove all resource packs</button>
+    </form>
+    {% endif %}
+  </div>
   {{ content_table(rps, 'Resource pack') }}
 
 {% else %}

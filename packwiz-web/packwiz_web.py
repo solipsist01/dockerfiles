@@ -2112,6 +2112,27 @@ def admin_remove(slug):
     return back_to_pack(slug)
 
 
+@admin_route("/admin/pack/<slug>/remove-all", methods=["POST"])
+def admin_remove_all(slug):
+    """Remove every mod, or every resource pack, from a pack."""
+    pack_dir(slug)
+    folder = request.form.get("folder", "")
+    if folder not in FOLDER_LABELS:
+        abort(400)
+    with write_lock():
+        gone = [m for m in read_mods(slug) if m["folder"] == folder]
+        for mod in gone:
+            mod["path"].unlink(missing_ok=True)
+        try:
+            packwiz(slug, "refresh")
+        except ActionError as e:
+            flash(str(e), "error")
+        for e in after_change(slug):     # cleans up stored files and options.txt
+            flash(e, "error")
+    flash(f"Removed all {FOLDER_LABELS[folder].lower()} ({len(gone)}).", "ok")
+    return back_to_pack(slug)
+
+
 @admin_route("/admin/pack/<slug>/side", methods=["POST"])
 def admin_side(slug):
     pack_dir(slug)

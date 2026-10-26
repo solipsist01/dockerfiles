@@ -197,3 +197,5 @@ form.memory .fields { display: grid; grid-template-columns: repeat(auto-fit, min
 form.memory .fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
 form.memory .fields label.wide { grid-column: 1 / -1; }
 .current-setting { margin: 4px 0; }
+.list-head { margin-top: 18px; }
+.list-head h2 { margin: 0; }
