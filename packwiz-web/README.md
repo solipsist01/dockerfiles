@@ -50,6 +50,14 @@ loader. **Update all mods** / **Update all packs** / **Update everywhere** (per
 shared mod) show what changed as `old.jar → new.jar`. Set a mod to `client` or
 `server` so the other side skips it. **Copy** clones a pack as the start of a new one.
 
+**Rename:** Settings tab → *Name & URL*, three choices:
+- *Name only*: the URL (`/packs/<slug>/`) stays.
+- *New URL, old URL keeps working*: the old URL keeps serving the pack (pack files, Prism zip,
+  old admin links), so servers and existing Prism instances don't need changing. Old URLs are
+  kept in `/data/aliases.json`; a new pack can't take one.
+- *New URL, old URL stops working*: a real rename; this pack's old URLs are all dropped (after a
+  confirmation). Servers need the new Pack URL and players re-import the Prism zip.
+
 **Minecraft & loader version:** on the pack page, open *Minecraft & loader version*, pick the
 Minecraft version, loader and loader version (empty = newest) and click **Change**. packwiz
 first checks the combination in a scratch pack; nothing changes if it doesn't exist. Mods aren't

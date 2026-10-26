@@ -222,6 +222,30 @@
 
 {% else %}
   <section class="card">
+    <h2>Name &amp; URL</h2>
+    <form method="post" action="{{ url_for('admin_rename', slug=pack.slug) }}" class="rename" id="rename-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <div class="row wrap">
+        <input name="name" value="{{ pack.name }}" required maxlength="100" aria-label="Pack name">
+        <button class="primary">Rename</button>
+      </div>
+      <div class="checks-col">
+        <label class="choice"><input type="radio" name="url" value="keep" checked> Name only: the URL stays <code>/packs/{{ pack.slug }}/</code></label>
+        <label class="choice"><input type="radio" name="url" value="alias"> New URL to match the name; <b>the old URL keeps working</b> (both active)</label>
+        <label class="choice"><input type="radio" name="url" value="move"> New URL to match the name; <b>the old URL stops working</b></label>
+      </div>
+    </form>
+    <p class="muted small">With "the old URL stops working", servers with the old Pack URL stop syncing and existing Prism instances
+      stop updating until you change their URL (servers) or re-import the zip (players). "Both active" avoids that.
+      {% if old_urls %}Old URLs that still lead here: {% for u in old_urls %}<code>/packs/{{ u }}/</code>{{ ', ' if not loop.last }}{% endfor %}.{% endif %}</p>
+    <script>
+    document.getElementById("rename-form").addEventListener("submit", function (e) {
+      if (this.elements.url.value === "move" && !confirm("Really rename the URL? The old URL stops working: servers using it stop syncing and players' Prism instances stop updating until they re-import.")) e.preventDefault();
+    });
+    </script>
+  </section>
+
+  <section class="card">
     <h2>Jar hosting</h2>
     <form method="post" action="{{ url_for('admin_hosting', slug=pack.slug) }}" class="row wrap"
           data-confirm="Change jar hosting for {{ pack.name }}? Switching to 'host here' downloads every Modrinth/CurseForge file, which can take a while.">

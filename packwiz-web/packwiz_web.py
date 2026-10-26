@@ -128,6 +128,40 @@ def slugify(name):
     return slug[:63]
 
 
+ALIASES_FILE = DATA_DIR / "aliases.json"
+
+
+def load_aliases():
+    """Old pack URLs (slugs) of renamed packs -> their current slug."""
+    try:
+        return json.loads(ALIASES_FILE.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def save_aliases(aliases):
+    ALIASES_FILE.write_text(json.dumps(aliases, indent=1))
+
+
+def resolve_slug(slug):
+    """The current slug for a pack URL, following renames."""
+    aliases = load_aliases()
+    seen = set()
+    while slug in aliases and slug not in seen and not (PACKS_DIR / slug / "pack.toml").is_file():
+        seen.add(slug)
+        slug = aliases[slug]
+    return slug
+
+
+def slug_taken(slug):
+    """A pack, or the old URL of a renamed pack, already uses this slug."""
+    if (PACKS_DIR / slug).exists():
+        return f"A pack called '{slug}' already exists."
+    if slug in load_aliases():
+        return f"'{slug}' is the old URL of a renamed pack (players still use it); pick another name."
+    return None
+
+
 def pack_dir(slug):
     if not SLUG_RE.match(slug or ""):
         abort(404)
@@ -1079,6 +1113,7 @@ def index():
 
 @app.route("/packs/<slug>.zip")
 def download_prism(slug):
+    slug = resolve_slug(slug)
     pack_dir(slug)
     return send_file(prism_zip(read_pack(slug)), mimetype="application/zip",
                      as_attachment=True, download_name=f"{slug}.zip")
@@ -1086,7 +1121,7 @@ def download_prism(slug):
 
 @app.route("/packs/<slug>/<path:filename>")
 def pack_file(slug, filename):
-    return send_from_directory(pack_dir(slug), filename, max_age=0)
+    return send_from_directory(pack_dir(resolve_slug(slug)), filename, max_age=0)
 
 
 @app.route("/jars/<sha>/<filename>")
@@ -1204,8 +1239,8 @@ def admin_new():
         return redirect(url_for("admin_index"))
     path = PACKS_DIR / slug
     with write_lock():
-        if path.exists():
-            flash(f"A pack called '{slug}' already exists.", "error")
+        if slug_taken(slug):
+            flash(slug_taken(slug), "error")
             return redirect(url_for("admin_index"))
         path.mkdir()
         try:
@@ -1230,8 +1265,8 @@ def admin_copy(slug):
         return redirect(url_for("admin_index"))
     dst = PACKS_DIR / new_slug
     with write_lock():
-        if dst.exists():
-            flash(f"A pack called '{new_slug}' already exists.", "error")
+        if slug_taken(new_slug):
+            flash(slug_taken(new_slug), "error")
             return redirect(url_for("admin_index"))
         shutil.copytree(src, dst)
         toml = (dst / "pack.toml").read_text()
@@ -1242,6 +1277,55 @@ def admin_copy(slug):
     return redirect(url_for("admin_pack", slug=new_slug))
 
 
+@admin_route("/admin/pack/<slug>/rename", methods=["POST"])
+def admin_rename(slug):
+    """Rename a pack: the name only, or also its URL (keeping the old URL working, or not)."""
+    path = pack_dir(slug)
+    name = request.form.get("name", "").strip()[:100]
+    if not name:
+        flash("Give the pack a name.", "error")
+        return back_to_pack(slug)
+    url_mode = request.form.get("url", "keep")    # keep | alias (old URL keeps working) | move (old URL stops)
+    if url_mode not in ("keep", "alias", "move"):
+        abort(400)
+    new_slug = slug if url_mode == "keep" else slugify(name)
+    if not SLUG_RE.match(new_slug):
+        flash("That name doesn't make a usable URL; use letters or digits.", "error")
+        return back_to_pack(slug)
+    with write_lock():
+        own_old_url = load_aliases().get(new_slug) is not None and resolve_slug(new_slug) == slug
+        if new_slug != slug and slug_taken(new_slug) and not own_old_url:
+            flash(slug_taken(new_slug), "error")
+            return back_to_pack(slug)
+        toml = (path / "pack.toml").read_text()
+        toml = re.sub(r'^name = ".*"$', f"name = {json.dumps(name)}", toml, count=1, flags=re.M)
+        (path / "pack.toml").write_text(toml)
+        if new_slug != slug:
+            path.rename(PACKS_DIR / new_slug)
+            settings = SETTINGS_DIR / f"{slug}.json"
+            if settings.exists():
+                settings.rename(SETTINGS_DIR / f"{new_slug}.json")
+            aliases = load_aliases()
+            if url_mode == "alias":
+                # The old URL (and any older ones) now lead here.
+                aliases = {old: (new_slug if new == slug else new) for old, new in aliases.items()}
+                aliases[slug] = new_slug
+            else:
+                # A real rename: none of this pack's old URLs stay.
+                aliases = {old: new for old, new in aliases.items() if new != slug}
+            aliases.pop(new_slug, None)       # moving back to one of its own old URLs
+            save_aliases(aliases)
+    if new_slug != slug and url_mode == "alias":
+        flash(f"Renamed to '{name}', new URL /packs/{new_slug}/. The old URL /packs/{slug}/ keeps working for "
+              "servers and players that already use it.", "ok")
+    elif new_slug != slug:
+        flash(f"Renamed to '{name}', new URL /packs/{new_slug}/. The old URL /packs/{slug}/ no longer works: "
+              "update servers (Pack URL) and have players re-import the Prism zip.", "ok")
+    else:
+        flash(f"Renamed to '{name}'. The URL stays /packs/{slug}/.", "ok")
+    return redirect(url_for("admin_pack", slug=new_slug, tab="settings"))
+
+
 @admin_route("/admin/pack/<slug>/delete", methods=["POST"])
 def admin_delete(slug):
     path = pack_dir(slug)
@@ -1249,6 +1333,7 @@ def admin_delete(slug):
     with write_lock():
         shutil.rmtree(path)
         (SETTINGS_DIR / f"{slug}.json").unlink(missing_ok=True)
+        save_aliases({old: new for old, new in load_aliases().items() if new != slug})
         collect_garbage()
     flash(f"Pack '{name}' deleted.", "ok")
     return redirect(url_for("admin_index"))
@@ -1256,6 +1341,8 @@ def admin_delete(slug):
 
 @admin_route("/admin/pack/<slug>")
 def admin_pack(slug):
+    if resolve_slug(slug) != slug:
+        return redirect(url_for("admin_pack", slug=resolve_slug(slug), **request.args))   # old bookmark
     pack_dir(slug)
     pack = read_pack(slug)
     if adopt_linked_uploads(pack):
@@ -1287,7 +1374,9 @@ def admin_pack(slug):
         updates, restricted, update_error = {}, set(), f"Checking for updates failed: {e}"
     installed = {m["key"] for m in pack["mods"] if m["key"]}
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
+    old_urls = sorted(old for old, new in load_aliases().items() if new == slug)
     return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS, tab=tab,
+                           old_urls=old_urls,
                            folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
