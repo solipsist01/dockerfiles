@@ -2,9 +2,9 @@
 FROM kasmweb/core-debian-bookworm:1.19.0-rolling-weekly
 USER root
 
-ENV HOME /home/kasm-default-profile
-ENV STARTUPDIR /dockerstartup
-ENV INST_SCRIPTS $STARTUPDIR/install
+ENV HOME=/home/kasm-default-profile
+ENV STARTUPDIR=/dockerstartup
+ENV INST_SCRIPTS=$STARTUPDIR/install
 WORKDIR $HOME
 
 ######### Customize Container Here ###########
@@ -16,13 +16,12 @@ RUN apt-get update && apt-get install -y apt-transport-https mc \
 
 #torclient
 RUN mkdir /apps && \
-    TOR_URL=$(curl -q https://www.torproject.org/download/ | \
-        grep downloadLink | \
-        grep linux | \
-        sed 's/.*href="//g' | \
-        cut -d '"' -f1 | \
-        head -1) && \
-    FULL_TOR_URL="https://www.torproject.org/${TOR_URL}" && \
+    TOR_VERSION=$(curl -sL https://dist.torproject.org/torbrowser/ | \
+        grep -oP 'href="\K[0-9]+\.[0-9]+(\.[0-9]+)?/(?=")' | \
+        sed 's#/##' | \
+        sort -V | \
+        tail -1) && \
+    FULL_TOR_URL="https://dist.torproject.org/torbrowser/${TOR_VERSION}/tor-browser-linux-x86_64-${TOR_VERSION}.tar.xz" && \
     wget --quiet "${FULL_TOR_URL}" -O /tmp/torbrowser.tar.xz && \
     tar -xJf /tmp/torbrowser.tar.xz -C /apps && \
     rm /tmp/torbrowser.tar.xz && \
@@ -48,7 +47,7 @@ RUN echo "kasm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kasm-user && chmod 
 RUN chown 1000:0 $HOME 
 RUN $STARTUPDIR/set_user_permission.sh $HOME
 
-ENV HOME /home/kasm-user
+ENV HOME=/home/kasm-user
 WORKDIR $HOME
 RUN mkdir -p $HOME && chown -R 1000:0 $HOME 
 USER 1000
