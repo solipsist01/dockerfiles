@@ -235,6 +235,8 @@ def read_mods(slug):
             "hash": download.get("hash", ""),
             "source": source,
             "download_from": download_origin(url, download.get("mode", "")),
+            # Path of the hosted file under /jars/, for the download link in the admin list.
+            "jar_path": urllib.parse.urlparse(url).path if JAR_URL_RE.search(url) else None,
         })
     mods.sort(key=lambda m: m["name"].lower())
     return mods
@@ -1128,8 +1130,9 @@ def pack_file(slug, filename):
 def jar_file(sha, filename):
     if not SHA256_RE.match(sha):
         abort(404)
-    # Content-addressed, so it never changes and can be cached for good.
-    return send_from_directory(JARS_DIR / sha, filename, max_age=31536000)
+    # Content-addressed, so it never changes and can be cached for good. Sent as an attachment so a
+    # click in the browser saves it under its own name (packwiz-installer doesn't care).
+    return send_from_directory(JARS_DIR / sha, filename, max_age=31536000, as_attachment=True)
 
 
 @app.route("/packwiz-installer-bootstrap.jar")
