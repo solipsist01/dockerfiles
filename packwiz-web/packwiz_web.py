@@ -54,6 +54,8 @@ DATA_DIR = Path(os.environ.get("PACKWIZ_DATA", str(BASE_DIR / "data")))
 PACKS_DIR = DATA_DIR / "packs"
 JARS_DIR = DATA_DIR / "jars"
 SETTINGS_DIR = DATA_DIR / "settings"
+# Per pack and mod, the .pw.toml from before its last update, so the update can be undone.
+REVERTS_DIR = DATA_DIR / "reverts"
 UPLOADS_DIR = DATA_DIR / "uploads"
 BOOTSTRAP_JAR = BASE_DIR / "packwiz-installer-bootstrap.jar"
 
@@ -99,7 +101,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 JAR_URL_RE = re.compile(r"/jars/([0-9a-f]{64})/")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR, UPLOADS_DIR):
+for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR, UPLOADS_DIR, REVERTS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -505,6 +507,8 @@ def collect_garbage():
     used = set()
     for meta_file in PACKS_DIR.glob("*/**/*.pw.toml"):
         used.update(JAR_URL_RE.findall(meta_file.read_text()))
+    for point in REVERTS_DIR.glob("*/*.json"):   # files an update can be reverted to stay stored
+        used.update(JAR_URL_RE.findall(point.read_text()))
     for jar_dir in JARS_DIR.iterdir():
         if jar_dir.name not in used:
             shutil.rmtree(jar_dir, ignore_errors=True)
@@ -1367,6 +1371,8 @@ def admin_rename(slug):
             settings = SETTINGS_DIR / f"{slug}.json"
             if settings.exists():
                 settings.rename(SETTINGS_DIR / f"{new_slug}.json")
+            if (REVERTS_DIR / slug).exists():
+                (REVERTS_DIR / slug).rename(REVERTS_DIR / new_slug)
             aliases = load_aliases()
             if url_mode == "alias":
                 # The old URL (and any older ones) now lead here.
@@ -1395,6 +1401,7 @@ def admin_delete(slug):
     with write_lock():
         shutil.rmtree(path)
         (SETTINGS_DIR / f"{slug}.json").unlink(missing_ok=True)
+        shutil.rmtree(REVERTS_DIR / slug, ignore_errors=True)
         save_aliases({old: new for old, new in load_aliases().items() if new != slug})
         collect_garbage()
     flash(f"Pack '{name}' deleted.", "ok")
@@ -1438,7 +1445,7 @@ def admin_pack(slug):
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
     old_urls = sorted(old for old, new in load_aliases().items() if new == slug)
     return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS, tab=tab,
-                           old_urls=old_urls,
+                           old_urls=old_urls, reverts=revert_points(slug),
                            folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
@@ -1779,10 +1786,11 @@ def admin_pick_version(slug, stem):
     changes, errors = [], []
     with write_lock():
         pack = read_pack(slug)
-        before = file_versions(slug)
+        before, snapshot = file_versions(slug), snapshot_mods(slug, {stem})
         try:
             if version_id != str(mod["version_id"] or mod["cf_file_id"]):
                 install_version(slug, mod, {"id": version_id})
+                record_reverts(slug, snapshot)
             new = next((m for m in read_mods(slug) if m["key"] == mod["key"]), None)
             if new:
                 packwiz(slug, "pin", new["stem"])
@@ -2122,11 +2130,14 @@ def apply_updates(pack, only=None):
     own update if the check can't reach Modrinth/CurseForge.
     """
     slug = pack["slug"]
+    snapshot = snapshot_mods(slug, only)
     try:
         updates, _ = check_updates(pack, fresh=True)
     except (OSError, ValueError, ActionError):
         args = ["update", *only] if only else ["update", "--all"]
-        return run_and_report(pack, *args), []
+        changes = run_and_report(pack, *args)
+        record_reverts(slug, snapshot)
+        return changes, []
     mods = {m["stem"]: m for m in pack["mods"]}
     before, errors = file_versions(slug), []
     for stem, update in updates.items():
@@ -2137,7 +2148,79 @@ def apply_updates(pack, only=None):
         except ActionError as e:
             errors.append(f"{pack['name']}: {mods[stem]['name']}: {e}")
     packwiz(slug, "refresh")
+    record_reverts(slug, snapshot)
     return describe_changes(pack["name"], before, file_versions(slug)), errors
+
+
+# --- Reverting an update ------------------------------------------------------
+
+def snapshot_mods(slug, only=None):
+    """The .pw.toml of each mod (or just the stems in only), to compare after an update."""
+    root = PACKS_DIR / slug
+    return {m["stem"]: {"path": str(m["path"].relative_to(root)), "toml": m["path"].read_text(),
+                        "name": m["name"], "from": m["filename"], "hash": m["hash"]}
+            for m in read_mods(slug) if only is None or m["stem"] in only}
+
+
+def record_reverts(slug, snapshot):
+    """Keep the old .pw.toml of every mod the update moved to another file, replacing older points."""
+    now = {m["stem"]: m for m in read_mods(slug)}
+    for stem, old in snapshot.items():
+        new = now.get(stem)
+        if new is None or (new["hash"] == old["hash"] and new["filename"] == old["from"]):
+            continue
+        (REVERTS_DIR / slug).mkdir(parents=True, exist_ok=True)
+        to = new["filename"]
+        if to == old["from"]:   # some projects use the same file name for every version
+            old = dict(old, **{"from": f"the previous {old['from']}"})
+            to = f"the new {to}"
+        point = dict(old, to=to, time=int(time.time()))
+        (REVERTS_DIR / slug / f"{stem}.json").write_text(json.dumps(point))
+
+
+def revert_points(slug):
+    """Revert points of a pack by mod stem, for mods still in the pack."""
+    stems = {m["stem"] for m in read_mods(slug)}
+    points = {}
+    for path in (REVERTS_DIR / slug).glob("*.json"):
+        if path.stem in stems:
+            points[path.stem] = json.loads(path.read_text())
+    return points
+
+
+@admin_route("/admin/pack/<slug>/revert", methods=["POST"])
+def admin_revert(slug):
+    """Put a mod back on the file it had before its last update, and pin it there."""
+    root = pack_dir(slug)
+    mod = find_mod(slug, request.form.get("stem", ""))
+    point_file = REVERTS_DIR / slug / f"{mod['stem']}.json"
+    if not point_file.exists():
+        flash(f"There is no earlier version of {mod['name']} to go back to.", "error")
+        return back_to_pack(slug, tab_of(mod))
+    point = json.loads(point_file.read_text())
+    target = (root / point["path"]).resolve()
+    if root.resolve() not in target.parents or not target.name.endswith(".pw.toml"):
+        abort(400)
+    errors = []
+    with write_lock():
+        if mod["path"].resolve() != target:
+            mod["path"].unlink(missing_ok=True)
+        target.write_text(point["toml"])
+        point_file.unlink()
+        try:
+            packwiz(slug, "refresh")
+            # Pinned, or the next "Update all" would bring the version that didn't work right back.
+            packwiz(slug, "pin", mod["stem"])
+            packwiz(slug, "refresh")
+        except ActionError as e:
+            errors.append(e)
+        errors += after_change(slug)
+    for e in errors:
+        flash(str(e), "error")
+    if not errors:
+        flash(f"{point['name']}: back from {point['to']} to {point['from']}. It is pinned so updates skip it; "
+              "unpin it when a fixed version is out.", "ok")
+    return back_to_pack(slug, tab_of(mod))
 
 
 @admin_route("/admin/pack/<slug>/update-one", methods=["POST"])

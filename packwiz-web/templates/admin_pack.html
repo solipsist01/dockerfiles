@@ -146,6 +146,14 @@
         </form>
         {% elif mod.provider == 'modrinth' or (mod.provider == 'curseforge' and cf_enabled) %}<span class="muted small">up to date</span>
         {% endif %}
+        {% if mod.stem in reverts %}
+        <form method="post" action="{{ url_for('admin_revert', slug=pack.slug) }}" class="row"
+              data-confirm="Put {{ mod.name }} back from {{ reverts[mod.stem].to }} to {{ reverts[mod.stem].from }}? It gets pinned so updates skip it.">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <button class="small" title="Back to {{ reverts[mod.stem].from }}, the file from before the last update">↶ Revert</button>
+        </form>
+        {% endif %}
       </td>
       <td class="actions">
         {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
