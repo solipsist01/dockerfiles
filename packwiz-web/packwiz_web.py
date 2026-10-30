@@ -230,6 +230,8 @@ def read_mods(slug):
             "filename": meta.get("filename", ""),
             "side": meta.get("side", "both"),
             "pinned": bool(meta.get("pin", False)),
+            # A resource pack converted here for the pack's Minecraft version (see run_migration).
+            "migrated": bool(meta.get("x-migrated", False)),
             "provider": provider,
             "mod_id": modrinth.get("mod-id"),
             "version_id": modrinth.get("version"),
@@ -591,7 +593,7 @@ def remote_allowed(mod):
 
 def can_go_remote(mod):
     """An upload that is a known remote file, which players can fetch themselves."""
-    return mod["source"] == "uploaded" and is_exact_link(mod) and remote_allowed(mod)
+    return mod["source"] == "uploaded" and is_exact_link(mod) and not mod["migrated"] and remote_allowed(mod)
 
 
 def adopt_linked_uploads(*packs):
@@ -891,14 +893,27 @@ def newer_release(versions, current_id):
     return release
 
 
+def migrated_modrinth_updates(pack):
+    """Updates for migrated resource packs: the project's newest version for any Minecraft version,
+    since the file it was migrated from wasn't made for the pack's version either."""
+    updates = {}
+    for mod in (m for m in pack["mods"] if m["provider"] == "modrinth" and m["migrated"]):
+        versions = modrinth_get(f"/project/{mod['mod_id']}/version", {"loaders": json.dumps(["minecraft"])})
+        if pack.get("stable"):
+            versions = [v for v in versions if v["version_type"] == "release"]
+        if versions and versions[0]["id"] != mod["version_id"]:
+            updates[mod["stem"]] = versions[0]
+    return updates
+
+
 def modrinth_updates(pack):
     """Newest compatible Modrinth version for each linked mod that isn't on it.
 
     With the pack's "stable releases only" setting, betas and alphas are skipped.
     """
-    linked = [m for m in pack["mods"] if m["provider"] == "modrinth"]
+    linked = [m for m in pack["mods"] if m["provider"] == "modrinth" and not m["migrated"]]
     loaders = compatible_loaders(pack["loader"], pack["minecraft"])
-    updates, unknown = {}, []
+    updates, unknown = migrated_modrinth_updates(pack), []
     if pack.get("stable"):
         # The batch endpoint can't filter on release type, so ask per project.
         with ThreadPoolExecutor(8) as pool:
@@ -1094,8 +1109,9 @@ def curseforge_updates(pack, mods):
             restricted.add(mod["stem"])
         # Resource packs have no loader on CurseForge.
         accepted = loaders if mod["folder"] == "mods" else {None}
+        # A migrated resource pack takes the newest file for any Minecraft version (see migrated_modrinth_updates).
         files = [f for f in project.get("latestFilesIndexes", [])
-                 if f.get("gameVersion") == pack["minecraft"] and f.get("modLoader") in accepted
+                 if (mod["migrated"] or f.get("gameVersion") == pack["minecraft"]) and f.get("modLoader") in accepted
                  and (f.get("releaseType") == 1 or not pack.get("stable"))]
         if files:
             newest = max(files, key=lambda f: f["fileId"])
@@ -1455,7 +1471,7 @@ def admin_pack(slug):
     old_urls = sorted(old for old, new in load_aliases().items() if new == slug)
     return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS, tab=tab,
                            old_urls=old_urls, reverts=revert_points(slug), jobs=jobs,
-                           migrating={j["stem"] for j in jobs},
+                           migrating={j["stem"] for j in jobs}, needs_migration=needs_migration(pack),
                            target_format=resourcepack_migrate.format_for(pack["minecraft"]),
                            folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
@@ -2283,11 +2299,12 @@ def _run_migration(job_id, slug, stem, minecraft, target):
             snapshot = snapshot_mods(slug, {stem})
             sha256, sha512 = hash_file(work_out)
             store_file(work_out, mod["filename"], sha256)
-            # Keep the project link (minus the version, as this file isn't one of its files) and pin
-            # it, so an update doesn't bring back the file made for the other version.
-            write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"], sha256, sha512,
-                              mod_link(mod, keep_version=False))
-            if mod["provider"]:
+            # Linked to the version it was made from, so the update check can tell when there is a
+            # newer one (which brings back the original file, to be migrated again); marked so the
+            # hosting sync keeps serving this file instead of that version's.
+            write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"], sha256, sha512, mod_link(mod))
+            mark_migrated(mod["path"])
+            if mod["pinned"]:
                 pin_file(mod["path"])
             try:
                 packwiz(slug, "refresh")
@@ -2297,7 +2314,8 @@ def _run_migration(job_id, slug, stem, minecraft, target):
             errors += after_change(slug)
         pack_name = read_pack(slug)["name"]
         messages = [f"{pack_name}: {name} migrated from resource pack format {source_format} to {target} "
-                    f"(Minecraft {minecraft}). ↶ Revert puts the original back."]
+                    f"(Minecraft {minecraft}). ↶ Revert puts the original back. When an update comes out, "
+                    "it brings the original file again: migrate that one too."]
         messages += [f"{name}: {note}" for note in notes]
         write_job(job_id, state="done", progress=1.0, step="Done", messages=messages, errors=[str(e) for e in errors])
     except Exception as e:   # anything: the job must end, or the page waits forever
@@ -2307,7 +2325,69 @@ def _run_migration(job_id, slug, stem, minecraft, target):
         work_out.unlink(missing_ok=True)
 
 
+# Whether a resource pack file is made for a resource pack format / Minecraft version. Files never
+# change (hosted ones are stored by hash, remote ones by version), so the answers are kept.
+_rp_supports = {}
+
+
+def needs_migration(pack):
+    """Stems of the pack's resource packs that aren't made for its Minecraft version.
+
+    Hosted files are checked by their pack.mcmeta; remote ones by the Minecraft versions Modrinth
+    or CurseForge list for the file. When it can't be told, the pack is assumed to need it.
+    """
+    target = resourcepack_migrate.format_for(pack["minecraft"])
+    if target is None:
+        return set()
+    rps = [m for m in pack["mods"] if m["folder"] == "resourcepacks"]
+    unknown_mr = [m["version_id"] for m in rps if not m["jar_path"] and m["provider"] == "modrinth"
+                  and m["version_id"] and ("mr", m["version_id"]) not in _rp_supports]
+    if unknown_mr:
+        try:
+            for version in modrinth_get("/versions", {"ids": json.dumps(unknown_mr)}):
+                _rp_supports[("mr", version["id"])] = set(version.get("game_versions", []))
+        except (OSError, ValueError, ActionError):
+            pass
+    unknown_cf = [m["cf_file_id"] for m in rps if not m["jar_path"] and m["provider"] == "curseforge"
+                  and m["cf_file_id"] and ("cf", m["cf_file_id"]) not in _rp_supports]
+    if unknown_cf and CURSEFORGE_API_KEY:
+        try:
+            for file in curseforge_request("/mods/files", body={"fileIds": unknown_cf})["data"]:
+                _rp_supports[("cf", file["id"])] = set(file.get("gameVersions", []))
+        except (OSError, ValueError, ActionError):
+            pass
+    stems = set()
+    for mod in rps:
+        hosted = JAR_URL_RE.search(mod["url"])
+        if hosted:
+            key = ("file", hosted.group(1), target)
+            if key not in _rp_supports:
+                try:
+                    _rp_supports[key] = resourcepack_migrate.supports(JARS_DIR / hosted.group(1) / mod["filename"], target)
+                except (OSError, ValueError, zipfile.BadZipFile):
+                    _rp_supports[key] = False
+            fits = _rp_supports[key]
+        elif mod["provider"] == "modrinth":
+            fits = pack["minecraft"] in _rp_supports.get(("mr", mod["version_id"]), set())
+        elif mod["provider"] == "curseforge":
+            fits = pack["minecraft"] in _rp_supports.get(("cf", mod["cf_file_id"]), set())
+        else:
+            fits = False
+        if not fits:
+            stems.add(mod["stem"])
+    return stems
+
+
 # --- Reverting an update ------------------------------------------------------
+
+def mark_migrated(meta_file):
+    """Mark a .pw.toml as a migrated resource pack: hosted here, though linked to a remote version."""
+    toml = meta_file.read_text()
+    for key in ("x-migrated", "x-uploaded"):
+        if not re.search(rf"^{key} = true$", toml, flags=re.M):
+            toml = f"{key} = true\n" + toml
+    meta_file.write_text(toml)
+
 
 def pin_file(meta_file):
     """Pin a mod by writing pin = true into its .pw.toml. Unlike `packwiz pin`, which rewrites

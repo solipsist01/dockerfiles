@@ -157,7 +157,7 @@
       </td>
       <td class="actions">
         {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
-        {% if mod.folder == 'resourcepacks' and target_format %}
+        {% if mod.stem in needs_migration or mod.stem in migrating %}
         <form method="post" action="{{ url_for('admin_migrate', slug=pack.slug) }}"
               data-confirm="Migrate {{ mod.name }} to Minecraft {{ pack.minecraft }} (resource pack format {{ target_format }})? The original stays available through ↶ Revert.">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">

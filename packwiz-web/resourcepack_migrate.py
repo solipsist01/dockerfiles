@@ -120,6 +120,22 @@ def _pack_format(pack):
     return int(fmt) if fmt is not None else None
 
 
+def supports(source_zip, fmt):
+    """Whether a resource pack zip is made for format fmt (its pack_format, or the range it declares)."""
+    with zipfile.ZipFile(source_zip) as z:
+        metas = sorted((n for n in z.namelist() if n.rsplit("/", 1)[-1] == "pack.mcmeta"), key=len)
+        if not metas:
+            raise NotAResourcePack("no pack.mcmeta in it")
+        pack = json.loads(z.read(metas[0]).decode("utf-8-sig")).get("pack", {})
+    ranges = pack.get("supported_formats")
+    if ranges is not None:
+        return _overlay_applies(ranges, fmt)
+    if "min_format" in pack and "max_format" in pack:
+        low, high = (v[0] if isinstance(v, list) else v for v in (pack["min_format"], pack["max_format"]))
+        return int(low) <= fmt <= int(high)
+    return _pack_format(pack) == fmt
+
+
 class NotAResourcePack(ValueError):
     pass
 
