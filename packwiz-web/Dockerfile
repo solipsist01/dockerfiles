@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --from=packwiz /go/bin/packwiz /usr/local/bin/packwiz
 COPY --from=packwiz /packwiz-installer-bootstrap.jar /app/packwiz-installer-bootstrap.jar
-COPY packwiz_web.py ./
+COPY packwiz_web.py resourcepack_migrate.py ./
 COPY templates ./templates
 COPY static ./static
 

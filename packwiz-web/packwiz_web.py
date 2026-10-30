@@ -46,6 +46,7 @@ from functools import wraps
 from pathlib import Path
 
 import jwt
+import resourcepack_migrate
 from flask import (Flask, abort, flash, g, redirect, render_template, request,
                    send_file, send_from_directory, session, url_for)
 
@@ -56,6 +57,9 @@ JARS_DIR = DATA_DIR / "jars"
 SETTINGS_DIR = DATA_DIR / "settings"
 # Per pack and mod, the .pw.toml from before its last update, so the update can be undone.
 REVERTS_DIR = DATA_DIR / "reverts"
+# Long-running work (resource pack migration) runs in the background; its state is a file here,
+# so whichever gunicorn worker serves the progress page can read it.
+JOBS_DIR = DATA_DIR / "jobs"
 UPLOADS_DIR = DATA_DIR / "uploads"
 BOOTSTRAP_JAR = BASE_DIR / "packwiz-installer-bootstrap.jar"
 
@@ -101,7 +105,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 JAR_URL_RE = re.compile(r"/jars/([0-9a-f]{64})/")
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR, UPLOADS_DIR, REVERTS_DIR):
+for _dir in (PACKS_DIR, JARS_DIR, SETTINGS_DIR, UPLOADS_DIR, REVERTS_DIR, JOBS_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -1413,6 +1417,11 @@ def admin_pack(slug):
     if resolve_slug(slug) != slug:
         return redirect(url_for("admin_pack", slug=resolve_slug(slug), **request.args))   # old bookmark
     pack_dir(slug)
+    jobs = pack_jobs(slug)
+    for job in [j for j in jobs if j["state"] != "running"]:
+        flash_results(job["messages"], job["errors"])
+        (JOBS_DIR / f"{job['id']}.json").unlink(missing_ok=True)
+    jobs = [j for j in jobs if j["state"] == "running"]
     pack = read_pack(slug)
     if adopt_linked_uploads(pack):
         pack = read_pack(slug)
@@ -1445,7 +1454,9 @@ def admin_pack(slug):
     siblings = [p for p in all_packs() if p["loader"] == pack["loader"] and p["slug"] != slug]
     old_urls = sorted(old for old, new in load_aliases().items() if new == slug)
     return render_template("admin_pack.html", pack=pack, query=query, results=results, kind=kind, kinds=KINDS, tab=tab,
-                           old_urls=old_urls, reverts=revert_points(slug),
+                           old_urls=old_urls, reverts=revert_points(slug), jobs=jobs,
+                           migrating={j["stem"] for j in jobs},
+                           target_format=resourcepack_migrate.format_for(pack["minecraft"]),
                            folder_labels=FOLDER_LABELS,
                            others=others, search_error=search_error, installed=installed,
                            siblings=siblings, sides=SIDES, pack_url=pack_url(slug),
@@ -2152,7 +2163,162 @@ def apply_updates(pack, only=None):
     return describe_changes(pack["name"], before, file_versions(slug)), errors
 
 
+# --- Background jobs: resource pack migration ----------------------------------
+
+# A job that hasn't reported for this long died with its worker (e.g. a restart).
+JOB_STALE_SECONDS = 600
+
+
+def write_job(job_id, **fields):
+    path = JOBS_DIR / f"{job_id}.json"
+    job = json.loads(path.read_text()) if path.exists() else {"id": job_id}
+    job.update(fields, updated=time.time())
+    tmp = path.with_name(f".{job_id}.tmp")
+    tmp.write_text(json.dumps(job))
+    os.replace(tmp, path)
+
+
+def read_job(job_id):
+    path = JOBS_DIR / f"{job_id}.json"
+    if not re.fullmatch(r"[0-9a-f]{16}", job_id) or not path.exists():
+        return None
+    job = json.loads(path.read_text())
+    if job["state"] == "running" and time.time() - job["updated"] > JOB_STALE_SECONDS:
+        write_job(job_id, state="failed", errors=[f"{job['name']}: the migration stopped (the server restarted?). Try again."])
+        job = json.loads(path.read_text())
+    return job
+
+
+def pack_jobs(slug):
+    jobs = [read_job(p.stem) for p in JOBS_DIR.glob("*.json")]
+    return sorted((j for j in jobs if j and j["slug"] == slug), key=lambda j: j["updated"])
+
+
+@admin_route("/admin/jobs/<job_id>")
+def admin_job(job_id):
+    job = read_job(job_id)
+    if job is None:
+        return {"state": "gone"}
+    return {"state": job["state"], "progress": job["progress"], "step": job["step"]}
+
+
+@admin_route("/admin/pack/<slug>/migrate", methods=["POST"])
+def admin_migrate(slug):
+    """Migrate a resource pack to the pack's Minecraft version, in the background."""
+    pack = read_pack(slug)
+    mod = find_mod(slug, request.form.get("stem", ""))
+    target = resourcepack_migrate.format_for(pack["minecraft"])
+    if mod["folder"] != "resourcepacks":
+        abort(400)
+    if target is None:
+        flash(f"Don't know the resource pack format of Minecraft {pack['minecraft']}.", "error")
+    elif any(j["stem"] == mod["stem"] for j in pack_jobs(slug) if j["state"] == "running"):
+        flash(f"{mod['name']} is already being migrated.", "error")
+    else:
+        job_id = secrets.token_hex(8)
+        write_job(job_id, slug=slug, stem=mod["stem"], name=mod["name"], state="running", progress=0.0,
+                  step="Starting", messages=[], errors=[])
+        threading.Thread(target=run_migration, daemon=True,
+                         args=(job_id, slug, mod["stem"], pack["minecraft"], target, request.url_root)).start()
+    return back_to_pack(slug, "resourcepacks")
+
+
+def download_to(url, path, progress):
+    """Download url to path in blocks, reporting the fraction done."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(path, "wb") as f:
+        total, done = int(resp.headers.get("Content-Length") or 0), 0
+        while block := resp.read(1024 * 1024):
+            f.write(block)
+            done += len(block)
+            if total:
+                progress(done / total)
+
+
+def run_migration(job_id, slug, stem, minecraft, target, base_url):
+    """The migration job: fetch the pack's file, convert it, and swap it in (pinned, revertible).
+
+    Runs in a thread, in a request context for base_url so URLs come out as in the request that started it.
+    """
+    with app.test_request_context(base_url=base_url):
+        _run_migration(job_id, slug, stem, minecraft, target)
+
+
+def _run_migration(job_id, slug, stem, minecraft, target):
+    work_in = UPLOADS_DIR / f"migrate-{job_id}.in"
+    work_out = UPLOADS_DIR / f"migrate-{job_id}.out"
+    name = stem
+    try:
+        mod = find_mod(slug, stem)
+        name = mod["name"]
+        hosted = JAR_URL_RE.search(mod["url"])
+        if hosted:
+            source = JARS_DIR / hosted.group(1) / mod["filename"]
+        else:
+            url = mod["url"] or (curseforge_download_url(mod) if mod["provider"] == "curseforge" else None)
+            if not url:
+                raise ActionError("its file can't be downloaded here (the author blocks it); download it "
+                                  "yourself, upload it, and migrate that.")
+            write_job(job_id, step="Downloading", progress=0.0)
+            download_to(url, work_in, lambda f: write_job(job_id, progress=0.3 * f))
+            source = work_in
+
+        write_job(job_id, step="Converting", progress=0.3)
+        last = [0.0]
+
+        def converting(fraction):
+            if fraction - last[0] >= 0.02 or fraction == 1.0:
+                last[0] = fraction
+                write_job(job_id, progress=0.3 + 0.6 * fraction)
+
+        try:
+            source_format, notes = resourcepack_migrate.migrate(source, work_out, target, converting)
+        except (resourcepack_migrate.NotAResourcePack, zipfile.BadZipFile, ValueError) as e:
+            raise ActionError(f"can't read it as a resource pack: {e}")
+
+        write_job(job_id, step="Saving", progress=0.92)
+        errors = []
+        with write_lock():
+            mod = find_mod(slug, stem)
+            snapshot = snapshot_mods(slug, {stem})
+            sha256, sha512 = hash_file(work_out)
+            store_file(work_out, mod["filename"], sha256)
+            # Keep the project link (minus the version, as this file isn't one of its files) and pin
+            # it, so an update doesn't bring back the file made for the other version.
+            write_upload_meta(mod["path"], mod["name"], mod["filename"], mod["side"], sha256, sha512,
+                              mod_link(mod, keep_version=False))
+            if mod["provider"]:
+                pin_file(mod["path"])
+            try:
+                packwiz(slug, "refresh")
+            except ActionError as e:
+                errors.append(e)
+            record_reverts(slug, snapshot)
+            errors += after_change(slug)
+        pack_name = read_pack(slug)["name"]
+        messages = [f"{pack_name}: {name} migrated from resource pack format {source_format} to {target} "
+                    f"(Minecraft {minecraft}). ↶ Revert puts the original back."]
+        messages += [f"{name}: {note}" for note in notes]
+        write_job(job_id, state="done", progress=1.0, step="Done", messages=messages, errors=[str(e) for e in errors])
+    except Exception as e:   # anything: the job must end, or the page waits forever
+        write_job(job_id, state="failed", step="Failed", errors=[f"{name}: migration failed: {e}"])
+    finally:
+        work_in.unlink(missing_ok=True)
+        work_out.unlink(missing_ok=True)
+
+
 # --- Reverting an update ------------------------------------------------------
+
+def pin_file(meta_file):
+    """Pin a mod by writing pin = true into its .pw.toml. Unlike `packwiz pin`, which rewrites
+    the file, this keeps our own keys such as x-uploaded. Refresh the pack afterwards."""
+    toml = meta_file.read_text()
+    if re.search(r"^pin = ", toml, flags=re.M):
+        toml = re.sub(r"^pin = .*$", "pin = true", toml, count=1, flags=re.M)
+    else:
+        toml = "pin = true\n" + toml   # top-level keys may come in any order
+    meta_file.write_text(toml)
+
 
 def snapshot_mods(slug, only=None):
     """The .pw.toml of each mod (or just the stems in only), to compare after an update."""
@@ -2206,11 +2372,10 @@ def admin_revert(slug):
         if mod["path"].resolve() != target:
             mod["path"].unlink(missing_ok=True)
         target.write_text(point["toml"])
+        # Pinned, or the next "Update all" would bring the version that didn't work right back.
+        pin_file(target)
         point_file.unlink()
         try:
-            packwiz(slug, "refresh")
-            # Pinned, or the next "Update all" would bring the version that didn't work right back.
-            packwiz(slug, "pin", mod["stem"])
             packwiz(slug, "refresh")
         except ActionError as e:
             errors.append(e)

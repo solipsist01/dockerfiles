@@ -157,6 +157,14 @@
       </td>
       <td class="actions">
         {% if mod.page_url %}<a class="button" href="{{ mod.page_url }}" target="_blank" rel="noopener" title="Linked to {{ provider_names[mod.provider] }}; updates come from there">{{ provider_names[mod.provider] }} ↗</a>{% endif %}
+        {% if mod.folder == 'resourcepacks' and target_format %}
+        <form method="post" action="{{ url_for('admin_migrate', slug=pack.slug) }}"
+              data-confirm="Migrate {{ mod.name }} to Minecraft {{ pack.minecraft }} (resource pack format {{ target_format }})? The original stays available through ↶ Revert.">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input type="hidden" name="stem" value="{{ mod.stem }}">
+          <button{% if mod.stem in migrating %} disabled{% endif %} title="Convert this resource pack for Minecraft {{ pack.minecraft }}">{{ 'Migrating…' if mod.stem in migrating else 'Migrate to ' ~ pack.minecraft }}</button>
+        </form>
+        {% endif %}
         <a class="button" href="{{ url_for('admin_link', slug=pack.slug, stem=mod.stem) }}" title="{{ 'Change or remove the link, or pick a version' if mod.provider else 'Link this file to its Modrinth or CurseForge project' }}">{{ '✎' if mod.provider else 'Link' }}</a>
         <form method="post" action="{{ url_for('admin_remove', slug=pack.slug) }}" data-confirm="Remove {{ mod.name }}?">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -176,6 +184,13 @@
 {% set mods = pack.mods|selectattr('folder', 'equalto', 'mods')|list %}
 {% set rps = pack.mods|selectattr('folder', 'equalto', 'resourcepacks')|list %}
 <p><a href="{{ url_for('admin_index') }}">← All packs</a></p>
+{% for job in jobs %}
+<section class="card job" data-job="{{ job.id }}">
+  <b>Migrating {{ job.name }} to Minecraft {{ pack.minecraft }}</b> <span class="muted small job-step">{{ job.step }}…</span>
+  <div class="progress"><div class="bar" style="width: {{ (job.progress * 100)|round(1) }}%"></div></div>
+  <p class="muted small">This runs on the server: you can leave this page and come back.</p>
+</section>
+{% endfor %}
 <div class="titlebar">
   <h1>{{ pack.name }}</h1>
   <span class="tag">Minecraft {{ pack.minecraft }}</span>
@@ -380,4 +395,21 @@
   </section>
 {% endif %}
 {% endblock %}
-{% block scripts %}{% if tab != 'settings' %}<script src="{{ asset_url('upload.js') }}"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if tab != 'settings' %}<script src="{{ asset_url('upload.js') }}"></script>{% endif %}
+{% if jobs %}<script>
+// Follow running migrations; reload the page (which shows the result) when they finish.
+document.querySelectorAll("[data-job]").forEach(function (card) {
+  var bar = card.querySelector(".bar"), step = card.querySelector(".job-step");
+  (function poll() {
+    fetch("{{ url_for('admin_index') }}/jobs/" + card.dataset.job, {credentials: "same-origin"})
+      .then(function (r) { return r.json(); })
+      .then(function (job) {
+        if (job.state !== "running") { location.reload(); return; }
+        bar.style.width = (job.progress * 100).toFixed(1) + "%";
+        step.textContent = job.step + "…";
+        setTimeout(poll, 1000);
+      })
+      .catch(function () { setTimeout(poll, 3000); });
+  })();
+});
+</script>{% endif %}{% endblock %}
