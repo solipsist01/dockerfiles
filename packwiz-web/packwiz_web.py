@@ -35,6 +35,7 @@ import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
 import tempfile
+import threading
 import tomllib
 import urllib.error
 import urllib.parse
@@ -789,8 +790,64 @@ def modrinth_project(slug_or_url):
         raise
 
 
-def check_updates(pack):
-    """Available updates per mod stem, and CurseForge mods that can't be mirrored."""
+# Update checks ask Modrinth and CurseForge, which takes seconds; pages use the last result.
+# A result is reused while the pack's mods are unchanged; once it is older than this, the
+# page still gets it right away and a fresh check runs in the background.
+UPDATE_CHECK_MAX_AGE = 15 * 60
+_update_checks = {}   # slug -> (fingerprint, time, (updates, restricted))
+_update_checks_lock = threading.Lock()
+_update_checks_running = set()
+
+
+def _update_fingerprint(pack):
+    """What an update check depends on: the pack's versions and settings and each mod's file."""
+    mods = tuple((m["stem"], m["provider"], m["version_id"], m["cf_file_id"], m["hash"], m["pinned"])
+                 for m in pack["mods"])
+    return pack["minecraft"], pack["loader"], pack.get("stable"), mods
+
+
+def check_updates(pack, fresh=False):
+    """Available updates per mod stem, and CurseForge mods that can't be mirrored.
+
+    Served from the last check of this pack unless fresh is set or the mods changed since.
+    """
+    slug, fingerprint = pack["slug"], _update_fingerprint(pack)
+    if not fresh:
+        with _update_checks_lock:
+            cached = _update_checks.get(slug)
+        if cached and cached[0] == fingerprint:
+            if time.time() - cached[1] > UPDATE_CHECK_MAX_AGE:
+                _recheck_in_background(pack, fingerprint)
+            updates, restricted = cached[2]
+            return dict(updates), set(restricted)
+    result = _check_updates_now(pack)
+    with _update_checks_lock:
+        _update_checks[slug] = (fingerprint, time.time(), result)
+    return dict(result[0]), set(result[1])
+
+
+def _recheck_in_background(pack, fingerprint):
+    slug = pack["slug"]
+    with _update_checks_lock:
+        if slug in _update_checks_running:
+            return
+        _update_checks_running.add(slug)
+
+    def run():
+        try:
+            result = _check_updates_now(pack)
+            with _update_checks_lock:
+                _update_checks[slug] = (fingerprint, time.time(), result)
+        except (OSError, ValueError, ActionError):
+            pass   # keep showing the last result; the next page view tries again
+        finally:
+            with _update_checks_lock:
+                _update_checks_running.discard(slug)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _check_updates_now(pack):
     updates = modrinth_updates(pack)
     cf_updates, restricted = curseforge_updates(
         pack, [m for m in pack["mods"] if m["provider"] == "curseforge"])
@@ -1220,12 +1277,14 @@ def admin_index():
                 entry["packs"].append(pack["name"])
     shared = sorted((dict(e, key=k) for k, e in shared.items() if len(e["packs"]) > 1),
                     key=lambda e: e["name"].lower())
-    update_counts = {}
-    for pack in packs:
+    def count_updates(pack):
         try:
-            update_counts[pack["slug"]] = len(check_updates(pack)[0])
+            return len(check_updates(pack)[0])
         except (OSError, ValueError, ActionError):
-            update_counts[pack["slug"]] = None
+            return None
+
+    with ThreadPoolExecutor(max(1, len(packs))) as pool:
+        update_counts = dict(zip((p["slug"] for p in packs), pool.map(count_updates, packs)))
     return render_template("admin_index.html", packs=packs, shared=shared, loaders=LOADERS,
                            mc_versions=minecraft_versions(), pack_url=pack_url,
                            update_counts=update_counts)
@@ -2064,7 +2123,7 @@ def apply_updates(pack, only=None):
     """
     slug = pack["slug"]
     try:
-        updates, _ = check_updates(pack)
+        updates, _ = check_updates(pack, fresh=True)
     except (OSError, ValueError, ActionError):
         args = ["update", *only] if only else ["update", "--all"]
         return run_and_report(pack, *args), []
