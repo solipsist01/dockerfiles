@@ -36,10 +36,10 @@ RUN mkdir /apps && \
     cp /apps/tor-browser/Browser/browser/chrome/icons/default/default128.png /usr/share/icons/tor.png && \
     chown 1000:0 /usr/share/icons/tor.png
 
-#WordCraft (Word-like) + GridCraft (Excel-like) - official repos are storytold/*
+#WordCraft (Word), GridCraft (Excel), DeckCraft (PowerPoint), FilmCraft (video editor) - official repos are storytold/*
 #(beware lookalike repos such as app-wordcraft/wordcraft). Always grabs the latest
 #release via the /releases/latest redirect and verifies against SHA256SUMS.txt.
-RUN set -e; for APP in wordcraft gridcraft; do \
+RUN set -e; for APP in wordcraft gridcraft deckcraft filmcraft; do \
         TAG=$(curl -sI "https://github.com/storytold/${APP}/releases/latest" | \
             grep -i '^location:' | grep -oP '/tag/\K[^\s]+'); \
         VER=${TAG#v}; \
