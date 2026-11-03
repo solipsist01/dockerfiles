@@ -36,6 +36,21 @@ RUN mkdir /apps && \
     cp /apps/tor-browser/Browser/browser/chrome/icons/default/default128.png /usr/share/icons/tor.png && \
     chown 1000:0 /usr/share/icons/tor.png
 
+#WordCraft (Word-like) + GridCraft (Excel-like) - official repos are storytold/*
+#(beware lookalike repos such as app-wordcraft/wordcraft). Always grabs the latest
+#release via the /releases/latest redirect and verifies against SHA256SUMS.txt.
+RUN set -e; for APP in wordcraft gridcraft; do \
+        TAG=$(curl -sI "https://github.com/storytold/${APP}/releases/latest" | \
+            grep -i '^location:' | grep -oP '/tag/\K[^\s]+'); \
+        VER=${TAG#v}; \
+        DEB="${APP}-${VER}-linux-x86_64.deb"; \
+        BASE="https://github.com/storytold/${APP}/releases/download/${TAG}"; \
+        cd /tmp && wget --quiet "${BASE}/${DEB}" "${BASE}/SHA256SUMS.txt" && \
+        grep " ${DEB}\$" SHA256SUMS.txt | sha256sum -c - && \
+        apt-get install -y "/tmp/${DEB}" && \
+        rm -f "/tmp/${DEB}" /tmp/SHA256SUMS.txt; \
+    done
+
 RUN wget -U "Mozilla" https://downloads.exodus.com/releases/exodus-linux-x64-26.10.21.deb -O /tmp/exodus.deb && \
     dpkg -i /tmp/exodus.deb || apt-get install -yf && rm /tmp/exodus.deb
 
