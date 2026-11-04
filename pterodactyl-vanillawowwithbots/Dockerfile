@@ -12,8 +12,9 @@
 ##   docker build -t ghcr.io/solipsist01/pterodactyl-vanillawowwithbots:latest .
 ##   docker push ghcr.io/solipsist01/pterodactyl-vanillawowwithbots:latest
 ##
-## To build a specific branch/tag of mangos-classic instead of master:
-##   docker build --build-arg MANGOS_BRANCH=some-tag -t ... .
+## To build a specific branch/tag of mangos-classic / classic-db instead
+## of master (keep them in step - classic-db master tracks core master):
+##   docker build --build-arg MANGOS_BRANCH=some-tag --build-arg CLASSICDB_BRANCH=some-tag -t ... .
 
 ############################################
 # Stage 1: builder
@@ -36,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 ARG MANGOS_BRANCH=master
+ARG CLASSICDB_BRANCH=master
 
 # CORRECTED: clones the same cmangos/mangos-classic repo as the vanilla
 # build - NOT a separate cmangos/playerbots repo. Playerbots turned out
@@ -48,7 +50,7 @@ ARG MANGOS_BRANCH=master
 # their own config file.
 WORKDIR /usr/src
 RUN git clone --recursive --branch "${MANGOS_BRANCH}" https://github.com/cmangos/mangos-classic.git mangos-classic \
-    && git clone https://github.com/cmangos/classic-db.git classic-db
+    && git clone --depth 1 --branch "${CLASSICDB_BRANCH}" https://github.com/cmangos/classic-db.git classic-db
 
 WORKDIR /usr/src/mangos-classic
 RUN mkdir build && cd build && cmake .. \
@@ -121,33 +123,45 @@ RUN set -e; \
     fi; \
     cp "${AIPB_DIST}" /opt/mangos/aiplayerbot.conf.dist
 
-# Stage the SQL files needed to seed the databases, next to the install
-# prefix, so the runtime image gets everything without carrying the whole
-# build tree (object files, .git, etc).
+# Stage everything needed to build the databases, without carrying the
+# whole build tree (object files, .git, etc) into the runtime image.
 #
-# NOTE on classic-db content import: InstallFullDB.sh in that repo is a
-# genuinely interactive, menu-driven tool (prompts for the MySQL root
-# password, numbered options) - it isn't something a config file can
-# drive headlessly. Rather than automate its interactive flow, we take
-# the simpler, reliable path: the repo also ships a complete, internally
-# consistent pre-built world DB snapshot under Full_DB/*.sql.gz, which we
-# extract here at build time and just import with a plain `mysql <` at
-# install time. Trade-off: this pins content to whatever release was
-# current when the image was built, rather than picking up incremental
-# commits since the last release - the full classic-db repo (including
-# InstallFullDB.sh) is still copied into the image if you want to run
-# that interactively later for the latest content.
-RUN mkdir -p /opt/mangos/sql \
-    && cp -r /usr/src/mangos-classic/sql/base    /opt/mangos/sql/base \
-    && cp -r /usr/src/mangos-classic/sql/updates /opt/mangos/sql/updates \
-    && FULLDB_GZ="$(find /usr/src/classic-db/Full_DB -maxdepth 1 -iname 'ClassicDB_*.sql.gz' | head -n1)" \
-    && if [ -z "${FULLDB_GZ}" ]; then echo "!! Could not find Full_DB/ClassicDB_*.sql.gz in classic-db - repo layout may have changed" && exit 1; fi \
-    && mkdir -p /opt/mangos-db-dump \
-    && gzip -dc "${FULLDB_GZ}" > /opt/mangos-db-dump/classic-db-full.sql \
-    && ACID_SQL="$(find /usr/src/classic-db/ACID -maxdepth 1 -iname 'acid_classic.sql' 2>/dev/null | head -n1)" \
-    && if [ -n "${ACID_SQL}" ]; then cp "${ACID_SQL}" /opt/mangos-db-dump/acid_classic.sql; fi \
-    && rm -rf /usr/src/classic-db/.git \
-    && cp -r /usr/src/classic-db /opt/mangos-db
+# World DB: we no longer import only classic-db's Full_DB snapshot. That
+# file is just the BASE milestone (z2815 "Melting Pot v2", years old) -
+# all content since lives in classic-db's Updates/, and the spell data
+# (spell_template, which cmangos reads from the DB instead of Spell.dbc)
+# lives in core's sql/base/dbc/. Importing only Full_DB left the server
+# on stale spell data - spell power etc. not applying. Instead, install
+# runs classic-db's own InstallFullDB.sh in its headless "-World" mode
+# (see build-worlddb.sh), which applies Full_DB + every content update +
+# newer core updates + dbc/spell data + scriptdev2 + ACID in the order
+# upstream intends. It needs a "core path" with core's sql/ tree and
+# src/shared/revision_sql.h - staged at /opt/mangos/core below.
+#
+# /opt/mangos/sql/{base,updates} stay where they were (install.sh and
+# start.sh reference them directly).
+#
+# BUILD_INFO records the exact core + classic-db commits baked into this
+# image. start.sh compares it against what the world DB was last built
+# from and rebuilds the world DB automatically when they differ - so the
+# monthly CI rebuild + a restart is enough to pick up new content.
+RUN set -e; \
+    mkdir -p /opt/mangos/sql /opt/mangos/core/src/shared; \
+    cp -r /usr/src/mangos-classic/sql/base    /opt/mangos/sql/base; \
+    cp -r /usr/src/mangos-classic/sql/updates /opt/mangos/sql/updates; \
+    cp -r /usr/src/mangos-classic/sql         /opt/mangos/core/sql; \
+    cp /usr/src/mangos-classic/src/shared/revision_sql.h /opt/mangos/core/src/shared/; \
+    for d in sql/updates/mangos sql/base/dbc/original_data sql/base/dbc/cmangos_fixes sql/scriptdev2; do \
+        [ -d "/opt/mangos/core/${d}" ] || { echo "!! core ${d} missing - InstallFullDB.sh -World would refuse to run"; exit 1; }; \
+    done; \
+    [ -x /usr/src/classic-db/InstallFullDB.sh ] || { echo "!! classic-db InstallFullDB.sh missing/not executable - repo layout changed?"; exit 1; }; \
+    ls /usr/src/classic-db/Full_DB/*.sql.gz >/dev/null 2>&1 || { echo "!! classic-db Full_DB/*.sql.gz missing - repo layout changed?"; exit 1; }; \
+    CORE_REV="$(git -C /usr/src/mangos-classic rev-parse --short=12 HEAD)"; \
+    CDB_REV="$(git -C /usr/src/classic-db rev-parse --short=12 HEAD)"; \
+    echo "core=${CORE_REV} classic-db=${CDB_REV}" > /opt/mangos/BUILD_INFO; \
+    echo "BUILD_INFO: $(cat /opt/mangos/BUILD_INFO)"; \
+    rm -rf /usr/src/classic-db/.git; \
+    cp -r /usr/src/classic-db /opt/mangos-db
 
 ############################################
 # Stage 2: runtime
@@ -183,10 +197,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /opt/mangos          /opt/mangos
 COPY --from=builder /opt/mangos-db       /opt/mangos-db
-COPY --from=builder /opt/mangos-db-dump  /opt/mangos-db-dump
 COPY start.sh /opt/mangos/start.sh
+COPY build-worlddb.sh /opt/mangos/build-worlddb.sh
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /opt/mangos/start.sh /entrypoint.sh
+RUN chmod +x /opt/mangos/start.sh /opt/mangos/build-worlddb.sh /entrypoint.sh /opt/mangos-db/InstallFullDB.sh
 
 # wings maps its own (non-root, often UID-less) user into the container at
 # runtime, so we don't create/switch users here - that's wings' job.

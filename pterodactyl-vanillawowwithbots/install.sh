@@ -188,101 +188,20 @@ SQL
 echo "==> Importing base schema..."
 mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" realmd    < /opt/mangos/sql/base/realmd.sql
 mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" characters < /opt/mangos/sql/base/characters.sql
-mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos    < /opt/mangos/sql/base/mangos.sql
 if [ -f /opt/mangos/sql/base/logs.sql ]; then
     mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" classiclogs < /opt/mangos/sql/base/logs.sql
 fi
 
-echo "==> [4/5] Copying classic-db repo (for optional later use) and importing the pre-built world content dump..."
-cp -r /opt/mangos-db /mnt/server/classic-db
-
-if [ ! -f /opt/mangos-db-dump/classic-db-full.sql ]; then
-    echo "!! /opt/mangos-db-dump/classic-db-full.sql not found in the image - the world"
-    echo "!! database will only have the empty base schema. Check the Docker build log."
-else
-    DUMP_SIZE="$(du -h /opt/mangos-db-dump/classic-db-full.sql | cut -f1)"
-    echo "    Importing Full_DB snapshot (${DUMP_SIZE}) - this runs with no output for a"
-    echo "    while, that's normal for a plain SQL import, not a hang. Printing a"
-    echo "    heartbeat every 15s so the console doesn't look frozen:"
-
-    mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos \
-        < /opt/mangos-db-dump/classic-db-full.sql 2>/mnt/server/full_db_import_errors.log &
-    IMPORT_PID=$!
-    SECS=0
-    while kill -0 "${IMPORT_PID}" 2>/dev/null; do
-        sleep 15
-        SECS=$((SECS + 15))
-        echo "    ... still importing (${SECS}s elapsed)"
-    done
-    if wait "${IMPORT_PID}"; then
-        echo "    Full_DB import finished with no reported errors."
-    else
-        echo "!! Full_DB import FAILED partway through - the mysql client stops at the"
-        echo "!! first bad statement, so everything after it in the file was never"
-        echo "!! applied. Error:"
-        echo "----------------------------------------"
-        cat /mnt/server/full_db_import_errors.log 2>/dev/null
-        echo "----------------------------------------"
-    fi
-
-    # Concrete, unambiguous sanity check regardless of the above - counts
-    # what's actually in the database right now.
-    TABLE_COUNT="$(mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" -N -e \
-        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mangos';" 2>/dev/null)"
-    echo "    'mangos' database now has ${TABLE_COUNT:-0} table(s) after the Full_DB import."
-
-    if [ -f /opt/mangos-db-dump/acid_classic.sql ]; then
-        echo "    Importing ACID (creature AI scripts) on top..."
-        mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < /opt/mangos-db-dump/acid_classic.sql \
-            || echo "!! ACID import reported errors above - non-fatal, core content is still in place"
-    fi
-
-    # The compiled mangosd binary is built from mangos-classic's master
-    # branch, but the Full_DB dump above comes from classic-db's last
-    # tagged release - which lags a bit behind core master. Core ships a
-    # sql/updates/mangos/ folder of incremental migrations to bridge
-    # exactly this gap; mangosd refuses to start against a world DB
-    # that's missing them. We don't replicate the official installer's
-    # precise "which revision am I on" detection here, so we just try
-    # applying every update file in order - ones already folded into the
-    # Full_DB snapshot will fail harmlessly (column/table already
-    # exists) and are skipped over, the ones actually needed will apply.
-    #
-    # One mysql process per file (reverted from a batched single-session
-    # version - both a --force-piped variant and a `source`-per-file
-    # variant were tried; the former caused real schema corruption, the
-    # latter didn't resolve a specific spell_template mismatch and made
-    # it harder to see which exact file was responsible. Back to the
-    # simple, well-understood version while that gets tracked down
-    # separately - this reintroduces real risk of hitting a wings
-    # install timeout on this step (~140 separate process spawns), worth
-    # watching for.
-    UPD_DIR="/opt/mangos/sql/updates/mangos"
-    if [ -d "${UPD_DIR}" ]; then
-        echo "    Applying core schema updates (bridges core master vs. last classic-db release)..."
-        FAILCOUNT=0
-        for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
-            OUT="$(mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
-            if [ $? -eq 0 ]; then
-                echo "      applied $(basename "$f")"
-            else
-                FAILCOUNT=$((FAILCOUNT + 1))
-                echo "      skipped $(basename "$f"): ${OUT}"
-            fi
-        done
-        echo "    (${FAILCOUNT} update file(s) skipped - normal if they were already"
-        echo "    included in the Full_DB snapshot; check the messages above if"
-        echo "    mangosd still reports a version mismatch after this install)"
-    else
-        echo "!! ${UPD_DIR} not found in image - mangosd may report a version mismatch on first start"
-    fi
-fi
-
-echo "    Note: this loads a complete snapshot of classic-db as of the image build,"
-echo "    not the very latest commits since that release. If you want to update to"
-echo "    newer content later, /home/container/classic-db has the full repo including"
-echo "    the real (interactive) InstallFullDB.sh - run it from a container shell:"
-echo "      cd /home/container/classic-db && ./InstallFullDB.sh"
+echo "==> [4/5] Building the world database (latest classic-db + core data)..."
+# Full_DB is only classic-db's years-old base milestone; build-worlddb.sh
+# runs classic-db's own InstallFullDB.sh headlessly to apply every content
+# update, the core's spell/dbc data, scriptdev2, ACID etc. on top - see
+# the header of /opt/mangos/build-worlddb.sh for the details. Its working
+# copy doubles as /home/container/classic-db, with a ready-made
+# InstallFullDB.config inside.
+DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD}" DB_PASSWORD="${DB_PASSWORD}" \
+    /opt/mangos/build-worlddb.sh /mnt/server/mysql.sock /mnt/server/classic-db /mnt/server/.worlddb-build \
+    || echo "!! World DB build failed (details above) - start.sh will retry it on next boot."
 
 echo "==> Importing playerbots SQL content..."
 # Imports playerbots' own characters-db and world-db SQL content, needed
@@ -304,11 +223,8 @@ for f in $(ls /opt/mangos/sql/playerbots/characters/*.sql 2>/dev/null | sort); d
         && echo "    applied (characters) $(basename "$f")" \
         || echo "    skipped (characters) $(basename "$f") - may already be applied"
 done
-for f in $(ls /opt/mangos/sql/playerbots/world/*.sql 2>/dev/null | sort); do
-    mysql --socket=/mnt/server/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" \
-        && echo "    applied (world) $(basename "$f")" \
-        || echo "    skipped (world) $(basename "$f") - may already be applied"
-done
+# (playerbots world-db SQL is applied by build-worlddb.sh above, right
+# after the world DB is built.)
 # sql/other/ - found to exist in this module but not documented/verified
 # which database it targets. Importing into characters db based on the
 # characters_-prefixed naming convention some files there use, but this

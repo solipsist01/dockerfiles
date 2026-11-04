@@ -157,6 +157,24 @@ else
     echo "  (no ahbot.conf found - AHBot config wasn't written at install time)"
 fi
 
+# World DB self-heal: /opt/mangos/BUILD_INFO holds the core + classic-db
+# commits baked into this image; .worlddb-build holds the ones the world
+# DB was last built from. If they differ (image rebuilt with newer
+# content, a previous build failed, or this server predates the
+# InstallFullDB-based build), rebuild the world DB from scratch. Safe:
+# the world DB is pure content - accounts/characters live in realmd/
+# characters and are not touched. Takes a few minutes when it runs.
+IMAGE_BUILD="$(cat /opt/mangos/BUILD_INFO 2>/dev/null || echo unknown)"
+DB_BUILD="$(cat /home/container/.worlddb-build 2>/dev/null || echo none)"
+if [ "${IMAGE_BUILD}" != "${DB_BUILD}" ]; then
+    echo "World DB was built from '${DB_BUILD}', image has '${IMAGE_BUILD}' - rebuilding world DB..."
+    DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD}" DB_PASSWORD="${DB_PASSWORD}" \
+        /opt/mangos/build-worlddb.sh /home/container/mysql.sock /home/container/classic-db /home/container/.worlddb-build \
+        || echo "!! World DB rebuild failed (details above) - will retry next boot."
+else
+    echo "World DB is up to date with this image (${IMAGE_BUILD})."
+fi
+
 if [ ! -d /opt/mangos/sql/playerbots ]; then
     echo "!! /opt/mangos/sql/playerbots not found in the image - this build doesn't"
     echo "!! actually have playerbots SQL content staged. Check playerbots/Dockerfile."
@@ -169,32 +187,23 @@ for f in $(ls /opt/mangos/sql/playerbots/world/*.sql 2>/dev/null | sort); do
     mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" >/dev/null 2>&1 || true
 done
 
-# Applying core's sql/updates/mangos/*.sql on every boot, not just at
-# install, is deliberate: if the image gets rebuilt later against a
-# newer mangos-classic commit, an already-installed server's world DB
-# would otherwise stay pinned to whatever schema existed at its last
-# install/reinstall and fail the same version-mismatch check forever.
-# Doing this here means "rebuild the image, restart the server" is
-# enough to catch the DB up - no manual SQL, no reinstall needed.
-#
-# One mysql process per file (reverted from a batched single-session
-# version - see install.sh for the full history) - each file is its own
-# attempt; ones already applied fail fast (harmless) and don't block the
-# rest.
-UPD_DIR="/opt/mangos/sql/updates/mangos"
-if [ -d "${UPD_DIR}" ]; then
+# Core schema updates for all four databases on every boot, so rebuilding
+# the image against a newer mangos-classic commit + restarting catches
+# existing databases up (characters/realmd included - those are never
+# rebuilt). Uses classic-db's own "InstallFullDB.sh -UpdateCore", which
+# reads each DB's current required_* revision and applies only the newer
+# core update files, in order - replacing the old "try every file and
+# let the already-applied ones fail" loop.
+if [ -f /home/container/classic-db/InstallFullDB.config ]; then
     echo "Checking for core schema updates..."
-    APPLIED=0
-    for f in $(ls "${UPD_DIR}"/*.sql 2>/dev/null | sort); do
-        OUT="$(mysql --socket=/home/container/mysql.sock -u root -p"${DB_ROOT_PASSWORD}" mangos < "$f" 2>&1)"
-        if [ $? -eq 0 ]; then
-            APPLIED=$((APPLIED + 1))
-            echo "  applied $(basename "$f")"
-        else
-            echo "  skipped $(basename "$f"): $(echo "$OUT" | head -n1)"
-        fi
-    done
-    echo "  ${APPLIED} update(s) newly applied this boot."
+    sed -i "s#^MYSQL_PASSWORD=.*#MYSQL_PASSWORD=\"${DB_PASSWORD}\"#" /home/container/classic-db/InstallFullDB.config
+    ( cd /home/container/classic-db && TERM=dumb ./InstallFullDB.sh -UpdateCore ) \
+        | grep -E 'Applying|PROCESSED|ERROR|FAILED|>>>' \
+        || true
+    # InstallFullDB.sh unpacks Full_DB on every invocation - drop the copy.
+    rm -f /home/container/classic-db/Full_DB/*.sql
+else
+    echo "!! /home/container/classic-db/InstallFullDB.config missing - core schema updates skipped."
 fi
 
 echo "Syncing realmlist (name=${REALM_NAME}, address=${REALM_ADDRESS}, port=${WORLD_PORT})..."

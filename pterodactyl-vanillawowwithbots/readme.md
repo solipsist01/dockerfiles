@@ -112,30 +112,46 @@ account set gmlevel <username> 3 -1
 Changing `Realm Name`, `Realm Public Address`, or `World Server Port` and
 restarting is enough to take effect - no manual SQL required.
 
-## Updating world content
+## World database (how it's built)
 
-The image bakes in a snapshot of `classic-db`'s `Full_DB` dump at build
-time. To pick up newer content later without rebuilding the image, open
-a console/shell on the server and run the real, interactive installer
-against the copy that ships alongside it:
+`classic-db`'s `Full_DB/*.sql.gz` is only the **base milestone** (z2815,
+"Melting Pot v2" - years old). Everything since then lives in its
+`Updates/` folder (~400 content updates), and the spell data
+(`spell_template` - cmangos reads spells from the DB, not `Spell.dbc`)
+comes from core's `sql/base/dbc/`. Earlier versions of this image only
+imported `Full_DB`, which left the server on years-old content and stale
+spell data (e.g. spell power from gear not applying).
 
-```bash
-cd /home/container/classic-db
-./InstallFullDB.sh
-```
+The world DB is now built by **`build-worlddb.sh`** (baked into the
+image at `/opt/mangos/build-worlddb.sh`), which runs classic-db's own
+`InstallFullDB.sh -World` headlessly. That applies, in upstream's order:
+`Full_DB` -> all `Updates/` -> newer core `sql/updates/mangos` -> AHBot
+command docs -> dbc/spell data + cmangos fixes -> scriptdev2 -> ACID ->
+`cmangos_custom.sql`; then playerbots' world SQL is applied on top.
 
-It'll ask for your MySQL root password and walk you through its menu -
-use `mangos`/`characters`/`realmd` as the database names and
-`127.0.0.1` / socket `/home/container/mysql.sock` for connection
-details.
+The working copy lives at `/home/container/classic-db`, with a
+ready-made `InstallFullDB.config` - so you can also run
+`./InstallFullDB.sh` interactively from there if you ever need to.
 
 ## Self-healing on rebuild
 
-`start.sh` re-applies core's `sql/updates/mangos/*.sql` migrations and
-re-ensures databases/grants/config on every boot, not just at install.
-That means rebuilding the image against a newer `mangos-classic` commit
-and restarting an existing server is enough on its own to catch the
-database up - no reinstall required.
+The image records which `mangos-classic` and `classic-db` commits it
+was built from in `/opt/mangos/BUILD_INFO`. On every boot, `start.sh`
+compares that with `/home/container/.worlddb-build` (what the world DB
+was last built from) and **rebuilds the world DB automatically** when
+they differ - a few minutes on that boot. This is safe: the world DB is
+pure content; accounts and characters live in `realmd`/`characters` and
+are never touched by it.
+
+`start.sh` also runs `InstallFullDB.sh -UpdateCore` every boot, which
+applies only the core schema updates newer than each database's current
+revision - for all four databases, so existing `characters`/`realmd`
+data gets migrated too.
+
+Net effect: the monthly CI rebuild of the image + a server restart is
+enough to pick up the latest core *and* content. No reinstall needed
+(and note that **Reinstall re-imports the base `realmd`/`characters`
+schema, wiping accounts and characters**).
 
 ## Playerbots (AI-controlled bot characters)
 
