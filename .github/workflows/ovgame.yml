@@ -1,0 +1,73 @@
+name: ovgame
+
+# Bouwt de OV Game server-image (server + OVGame.exe + OVLauncher.exe) uit de repo solipsist01/ovgame.
+# Start: met de hand (Actions -> ovgame -> Run workflow), of vanuit de ovgame-repo met een repository_dispatch
+# (event type "ovgame"), bijv. in een workflow daar:
+#   curl -X POST -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/solipsist01/dockerfiles/dispatches \
+#        -d '{"event_type":"ovgame","client_payload":{"ref":"main"}}'
+# Is de ovgame-repo privé, zet dan een token met leesrechten erop als secret OVGAME_TOKEN.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag of commit van solipsist01/ovgame"
+        required: false
+        default: "main"
+  repository_dispatch:
+    types: [ovgame]
+
+env:
+  dockerhub_repo: ovgame
+  gcrio_repo: ovgame
+  git_subdir: ovgame
+  buildx_arches: linux/amd64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Get version
+      id: version
+      run: |
+        echo "date_version=$(date -u '+%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
+        ref="${{ github.event.inputs.ref || github.event.client_payload.ref || 'main' }}"
+        echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: ./${{env.git_subdir}}
+        file: ./${{env.git_subdir}}/Dockerfile
+        platforms: ${{env.buildx_arches}}
+        push: true
+        build-args: |
+          OVGAME_REPO=${{ github.repository_owner }}/ovgame
+          OVGAME_REF=${{ steps.version.outputs.ref }}
+        secrets: |
+          github_token=${{ secrets.OVGAME_TOKEN }}
+        tags: |
+          ${{github.repository_owner}}/${{env.dockerhub_repo}}:latest
+          ${{github.repository_owner}}/${{env.dockerhub_repo}}:${{steps.version.outputs.date_version}}
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo}}:latest
+          ghcr.io/${{github.repository_owner}}/${{env.gcrio_repo}}:${{steps.version.outputs.date_version}}
