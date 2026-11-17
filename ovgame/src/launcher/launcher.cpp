@@ -2,8 +2,9 @@
 //
 //  - Het serveradres zit in de exe zelf: de server schrijft het in g_serverSlot als je de launcher downloadt
 //    (zie server/web.go). Anders: server.txt in de installatiemap, of de speler typt het in.
-//  - Installatiemap: %LOCALAPPDATA%\OVGame. Daar staan OVGame.exe, OVLauncher.exe en data\ (de wereld die tijdens het
-//    spelen binnenkomt blijft ook daar bewaard).
+//  - Installatiemap: geïnstalleerd met OVGameSetup.exe (installer/ovgame.nsi) = de map van de launcher zelf
+//    (daar staat Uninstall.exe). Losse launcher gedownload: %LOCALAPPDATA%\OVGame. Daar staan OVGame.exe,
+//    OVLauncher.exe en data\ (de wereld die tijdens het spelen binnenkomt blijft ook daar bewaard).
 //  - /api/client geeft per bestand crc32, grootte en pad. Alleen wat anders is wordt gedownload; bestanden die de server
 //    niet meer heeft (en die de launcher zelf ooit installeerde) worden opgeruimd.
 //  - Een nieuwe versie van de launcher zelf: de draaiende exe wordt hernoemd (dat mag in Windows), de nieuwe komt
@@ -51,7 +52,14 @@ std::string U(const std::wstring& w) {
     return s;
 }
 
+std::wstring selfPath();
+bool exists(const std::wstring& p);
+bool g_viaInstaller = false;  // geïnstalleerd met de installer: die maakt de snelkoppelingen
+
 std::wstring installDir() {
+    std::wstring self = selfPath();
+    std::wstring dir = self.substr(0, self.find_last_of(L"\\/"));
+    if (exists(dir + L"\\Uninstall.exe")) { g_viaInstaller = true; return dir; }
     wchar_t buf[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, buf))) return std::wstring(buf) + L"\\OVGame";
     return L"C:\\OVGame";
@@ -316,7 +324,7 @@ DWORD WINAPI worker(LPVOID) {
         if (!still) DeleteFileW(winPath(g_dir, kv.first).c_str());
     }
     writeFile(g_dir + L"\\installed.idx", idx);
-    createShortcut();
+    if (!g_viaInstaller) createShortcut();
 
     EnterCriticalSection(&g.cs);
     g.phase = Shared::DONE;

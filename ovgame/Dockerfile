@@ -2,10 +2,10 @@
 #
 # Alles wat nodig is om te bouwen staat in deze map (bijwerken vanuit de game: /workspace/ovgame/tools/sync_dockerfiles.sh):
 #   server/                  de server (Go)
-#   src/ + tools/build_windows.sh   de game en de launcher (Windows, gebouwd met mingw-w64)
+#   src/ + tools/build_windows.sh   de game, de launcher (mingw-w64) en de installer (NSIS)
 # In de image zitten:
 #   /usr/local/bin/ovserver
-#   /opt/ovgame/client/OVGame.exe, OVLauncher.exe
+#   /opt/ovgame/client/OVGame.exe, OVLauncher.exe, OVGameSetup.exe
 # De wereld en de rest van de clientdata zitten NIET in de image: mount de data-map van de game op /gamedata (ro).
 
 # ---------- server (Go) ----------
@@ -14,11 +14,11 @@ WORKDIR /build
 COPY server/ ./
 RUN go mod download && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ovserver .
 
-# ---------- Windows-client (mingw-w64) ----------
+# ---------- Windows-client (mingw-w64) en installer (NSIS) ----------
 FROM ubuntu:24.04 AS client
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-       g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 \
+       g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 nsis \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY src/ ./src/
@@ -32,7 +32,7 @@ RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /data /gamedata /opt/ovgame/client \
     && chown ovgame:ovgame /data
 COPY --from=server /ovserver /usr/local/bin/ovserver
-COPY --from=client /out/OVGame.exe /out/OVLauncher.exe /opt/ovgame/client/
+COPY --from=client /out/OVGame.exe /out/OVLauncher.exe /out/OVGameSetup.exe /opt/ovgame/client/
 
 ENV PORT=8080 \
     DATA=/data \

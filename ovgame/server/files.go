@@ -149,7 +149,8 @@ func ext(exts ...string) func(string) bool {
 func (s *FileStore) clientSources() []source {
 	gd := s.cfg.GameData
 	return []source{
-		{"", s.cfg.ClientBin, ext(".exe", ".dll")},
+		// de installer niet: die is alleen voor de eerste download via de website
+		{"", s.cfg.ClientBin, func(r string) bool { return ext(".exe", ".dll")(r) && !strings.EqualFold(r, "OVGameSetup.exe") }},
 		{"data/world/", filepath.Join(gd, "world"), func(r string) bool { return r == "world.bin" || r == "map.bin" }},
 		{"data/bus/", filepath.Join(gd, "bus"), func(r string) bool {
 			return strings.HasSuffix(r, ".txt") && !strings.Contains(r, "/") && r != "omroep_nieuw.txt"

@@ -94,6 +94,7 @@ func main() {
 	mux.HandleFunc("/", web.index)
 	mux.HandleFunc("/api/status", web.status)
 	mux.HandleFunc("/download/OVLauncher.exe", web.launcher)
+	mux.HandleFunc("/download/OVGameSetup.exe", web.installer)
 	mux.HandleFunc("/api/client", files.clientManifest)
 	mux.HandleFunc("/c/", files.clientFile)
 	mux.HandleFunc("/api/world", files.worldIndex)
@@ -195,7 +196,7 @@ func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 func logRequests(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// alleen de interessante aanvragen loggen (niet elke tegel)
-		if r.URL.Path == "/download/OVLauncher.exe" || r.URL.Path == "/api/client" {
+		if strings.HasPrefix(r.URL.Path, "/download/") || r.URL.Path == "/api/client" {
 			log.Printf("%s %s %s", clientIP(r), r.Method, r.URL.Path)
 		}
 		h.ServeHTTP(w, r)

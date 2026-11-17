@@ -26,6 +26,7 @@ main { padding: 26px 0 40px; }
 @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
 .card h2 { font-size: 17px; margin: 0 0 12px; }
+.card a:not(.download) { color: var(--blue); }
 .download { display: inline-flex; align-items: center; gap: 10px; background: var(--blue); color: #fff; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-weight: 650; font-size: 17px; }
 @media (prefers-color-scheme: dark) { .download { background: #2457c5; } }
 .download:hover { filter: brightness(1.1); }
@@ -56,17 +57,18 @@ footer { font-size: 13px; color: var(--muted); padding: 0 0 30px; }
   <div class="grid">
     <section class="card">
       <h2>Meespelen</h2>
-      <a class="download{{if not .Launcher}} off{{end}}" href="/download/OVLauncher.exe" download>
+      <a class="download{{if not .Installer}} off{{end}}" href="/download/OVGameSetup.exe" download>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-        Download de launcher
+        Download OV Game
       </a>
-      {{if not .Launcher}}<p class="muted">De launcher staat nog niet op de server.</p>{{end}}
+      {{if not .Installer}}<p class="muted">De installer staat nog niet op de server.</p>{{end}}
       <ol>
-        <li>Start <b>OVLauncher.exe</b> (Windows 10/11). Windows kan waarschuwen omdat het programma niet ondertekend is: kies <i>Meer informatie</i> → <i>Toch uitvoeren</i>.</li>
-        <li>De launcher installeert de game in <code>%LOCALAPPDATA%\OVGame</code>, zet een snelkoppeling op het bureaublad en houdt alles automatisch bij.</li>
-        <li>De wereld wordt tijdens het spelen gestreamd: alleen wat je in de buurt nodig hebt, eenmaal gedownload blijft het bewaard.</li>
+        <li>Start <b>OVGameSetup.exe</b> (Windows 10/11). Windows kan waarschuwen omdat het programma niet ondertekend is: kies <i>Meer informatie</i> → <i>Toch uitvoeren</i>. Dat gebeurt alleen bij deze eerste download.</li>
+        <li>Kies waar je OV Game wilt installeren en of je snelkoppelingen wilt. Beheerdersrechten zijn niet nodig.</li>
+        <li>De launcher downloadt daarna de game en houdt hem automatisch bij. De wereld komt tijdens het spelen binnen: alleen wat je in de buurt nodig hebt.</li>
         <li>Kies in het hoofdmenu <b>Multiplayer</b> om samen te spelen.{{if .Password}} Deze server heeft een wachtwoord.{{end}}</li>
       </ol>
+      {{if .Launcher}}<p class="row muted">Liever zonder installatie? <a href="/download/OVLauncher.exe">Alleen de launcher</a> (installeert in <code>%LOCALAPPDATA%\OVGame</code>).</p>{{end}}
       <p class="row muted">Serveradres: <code>{{.URL}}</code></p>
     </section>
     <section class="card">

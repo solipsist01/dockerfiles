@@ -52,6 +52,7 @@ type statusJSON struct {
 	WorldSize   string       `json:"worldSize"`
 	WorldSent   string       `json:"worldSent"`
 	Launcher    bool         `json:"launcher"`
+	Installer   bool         `json:"installer"`
 }
 
 func (u *webUI) statusData() statusJSON {
@@ -72,6 +73,8 @@ func (u *webUI) statusData() statusJSON {
 	s.WorldFiles, s.WorldSize, s.WorldSent = st.worldFiles, human(st.worldBytes), human(st.worldZBytes)
 	_, err := os.Stat(u.launcherPath())
 	s.Launcher = err == nil
+	_, err = os.Stat(filepath.Join(u.cfg.ClientBin, "OVGameSetup.exe"))
+	s.Installer = err == nil
 	return s
 }
 
@@ -126,4 +129,22 @@ func (u *webUI) launcher(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.microsoft.portable-executable")
 	w.Header().Set("Content-Disposition", `attachment; filename="OVLauncher.exe"`)
 	w.Write(b)
+}
+
+// De installer (NSIS, gecomprimeerd) kan niet van binnen worden aangepast. Daarom komt het adres erachter:
+// 512 bytes "OVURL=https://...\r\n" + nullen. NSIS negeert data na het einde van het installatiepakket;
+// de installer leest de laatste 512 bytes van zichzelf (src/installer/ovgame.nsi, .onInit).
+func (u *webUI) installer(w http.ResponseWriter, r *http.Request) {
+	b, err := os.ReadFile(filepath.Join(u.cfg.ClientBin, "OVGameSetup.exe"))
+	if err != nil {
+		http.Error(w, "De installer staat (nog) niet op de server.", http.StatusNotFound)
+		return
+	}
+	tail := make([]byte, urlSlot)
+	copy(tail, "OVURL="+u.baseURL(r)+"\r\n")
+	noCache(w)
+	w.Header().Set("Content-Type", "application/vnd.microsoft.portable-executable")
+	w.Header().Set("Content-Disposition", `attachment; filename="OVGameSetup.exe"`)
+	w.Write(b)
+	w.Write(tail)
 }

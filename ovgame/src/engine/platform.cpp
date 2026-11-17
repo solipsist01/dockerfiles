@@ -137,7 +137,8 @@ bool init(const char* title, int width, int height) {
     wc.lpfnWndProc = wndProc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(1));  // game.rc
+    if (!wc.hIcon) wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     wc.lpszClassName = "OVGameWindow";
     RegisterClassA(&wc);
 
