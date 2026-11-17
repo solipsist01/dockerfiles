@@ -1,43 +1,17 @@
-# syntax=docker/dockerfile:1.7
 # OV Game server: webinterface + launcher/client-downloads + wereld-streaming + multiplayer (WebSocket).
 #
-# De broncode komt uit de ovgame-repo (git clone). In de image zitten:
-#   /usr/local/bin/ovserver        de server (Go)
-#   /opt/ovgame/client/OVGame.exe  de game (Windows, gebouwd met mingw-w64)
-#   /opt/ovgame/client/OVLauncher.exe
+# Alles wat nodig is om te bouwen staat in deze map (bijwerken vanuit de game: /workspace/ovgame/tools/sync_dockerfiles.sh):
+#   server/                  de server (Go)
+#   src/ + tools/build_windows.sh   de game en de launcher (Windows, gebouwd met mingw-w64)
+# In de image zitten:
+#   /usr/local/bin/ovserver
+#   /opt/ovgame/client/OVGame.exe, OVLauncher.exe
 # De wereld en de rest van de clientdata zitten NIET in de image: mount de data-map van de game op /gamedata (ro).
-#
-# Lokaal bouwen vanuit een werkmap in plaats van git:
-#   docker buildx build --build-context src=/pad/naar/ovgame -t ovgame .
-# Private repo: geef een token mee als secret (id github_token).
-
-ARG OVGAME_REPO=solipsist01/ovgame
-ARG OVGAME_REF=main
-
-# ---------- broncode ----------
-FROM alpine:3.20 AS fetch
-ARG OVGAME_REPO
-ARG OVGAME_REF
-RUN apk add --no-cache git ca-certificates
-RUN --mount=type=secret,id=github_token \
-    set -e; \
-    if [ -s /run/secrets/github_token ]; then \
-        url="https://x-access-token:$(cat /run/secrets/github_token)@github.com/${OVGAME_REPO}.git"; \
-    else \
-        url="https://github.com/${OVGAME_REPO}.git"; \
-    fi; \
-    git clone --depth 1 --branch "${OVGAME_REF}" "$url" /src || \
-        { git clone "$url" /src && git -C /src checkout "${OVGAME_REF}"; }; \
-    git -C /src rev-parse --short HEAD > /src/.commit; \
-    rm -rf /src/.git
-
-FROM scratch AS src
-COPY --from=fetch /src /
 
 # ---------- server (Go) ----------
 FROM golang:1.23-alpine AS server
 WORKDIR /build
-COPY --from=src /server/ ./
+COPY server/ ./
 RUN go mod download && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /ovserver .
 
 # ---------- Windows-client (mingw-w64) ----------
@@ -47,8 +21,8 @@ RUN apt-get update \
        g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
-COPY --from=src /src/ ./src/
-COPY --from=src /tools/build_windows.sh ./tools/build_windows.sh
+COPY src/ ./src/
+COPY tools/build_windows.sh ./tools/build_windows.sh
 RUN sh tools/build_windows.sh /out && ls -la /out
 
 # ---------- runtime ----------

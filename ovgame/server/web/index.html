@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OV Game – {{.Name}}</title>
+<style>
+:root {
+  --bg: #f4f1ea; --card: #ffffff; --ink: #1d232b; --muted: #5d6773; --line: #e2ddd2;
+  --ns: #ffc917; --ns-ink: #1d232b; --blue: #003082; --ok: #1f8a4c; --warn: #b4540a;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #11151b; --card: #1a2029; --ink: #e8ebef; --muted: #98a2ae; --line: #2a323d; --blue: #8fb1ff; --ok: #4cc283; --warn: #f0a050; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--ns); color: var(--ns-ink); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header .wrap { display: flex; align-items: center; gap: 14px; padding-top: 22px; padding-bottom: 22px; }
+.logo { width: 46px; height: 46px; border-radius: 10px; background: var(--blue); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; flex: none; }
+@media (prefers-color-scheme: dark) { .logo { background: #003082; } }
+h1 { font-size: 26px; margin: 0; line-height: 1.15; }
+header p { margin: 2px 0 0; opacity: .8; font-size: 15px; }
+main { padding: 26px 0 40px; }
+.grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
+.card h2 { font-size: 17px; margin: 0 0 12px; }
+.download { display: inline-flex; align-items: center; gap: 10px; background: var(--blue); color: #fff; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-weight: 650; font-size: 17px; }
+@media (prefers-color-scheme: dark) { .download { background: #2457c5; } }
+.download:hover { filter: brightness(1.1); }
+.download.off { background: var(--muted); pointer-events: none; }
+ol { padding-left: 20px; margin: 16px 0 0; }
+ol li { margin: 6px 0; }
+.muted { color: var(--muted); font-size: 14px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+.dot.prep { background: var(--warn); }
+ul.players { list-style: none; padding: 0; margin: 0; }
+ul.players li { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); }
+ul.players li:last-child { border-bottom: 0; }
+code { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; word-break: break-all; }
+footer { font-size: 13px; color: var(--muted); padding: 0 0 30px; }
+.row { margin-top: 18px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="logo">OV</div>
+  <div><h1>{{.Name}}</h1><p>Multiplayer-server voor OV Game – Eindhoven, 's-Hertogenbosch en omgeving</p></div>
+</div></header>
+<main class="wrap">
+  <div class="grid">
+    <section class="card">
+      <h2>Meespelen</h2>
+      <a class="download{{if not .Launcher}} off{{end}}" href="/download/OVLauncher.exe" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Download de launcher
+      </a>
+      {{if not .Launcher}}<p class="muted">De launcher staat nog niet op de server.</p>{{end}}
+      <ol>
+        <li>Start <b>OVLauncher.exe</b> (Windows 10/11). Windows kan waarschuwen omdat het programma niet ondertekend is: kies <i>Meer informatie</i> → <i>Toch uitvoeren</i>.</li>
+        <li>De launcher installeert de game in <code>%LOCALAPPDATA%\OVGame</code>, zet een snelkoppeling op het bureaublad en houdt alles automatisch bij.</li>
+        <li>De wereld wordt tijdens het spelen gestreamd: alleen wat je in de buurt nodig hebt, eenmaal gedownload blijft het bewaard.</li>
+        <li>Kies in het hoofdmenu <b>Multiplayer</b> om samen te spelen.{{if .Password}} Deze server heeft een wachtwoord.{{end}}</li>
+      </ol>
+      <p class="row muted">Serveradres: <code>{{.URL}}</code></p>
+    </section>
+    <section class="card">
+      <h2><span class="dot{{if not .Ready}} prep{{end}}" id="dot"></span><span id="state">{{if .Ready}}Online{{else}}Wereld wordt voorbereid…{{end}}</span></h2>
+      <div class="stats">
+        <div class="stat"><b id="np">{{len .Players}}</b><span>van {{.MaxPlayers}} spelers</span></div>
+        <div class="stat"><b id="clock">{{.Clock}}</b><span>spelklok</span></div>
+        <div class="stat"><b>{{.Version}}</b><span>server</span></div>
+      </div>
+      <ul class="players" id="players">
+        {{range .Players}}<li><span>{{.Name}}</span><span class="muted">{{.Minutes}} min</span></li>{{else}}<li class="muted">Nog niemand online</li>{{end}}
+      </ul>
+    </section>
+  </div>
+  <section class="card row">
+    <h2>Wat staat er op deze server</h2>
+    <p class="muted" style="margin:0">Client: {{.ClientFiles}} bestanden ({{.ClientSize}}). Wereld: {{.WorldFiles}} bestanden ({{.WorldSize}}, gecomprimeerd {{.WorldSent}}).</p>
+  </section>
+</main>
+<footer class="wrap">
+  Databronnen: 3D BAG (CC BY 4.0), AHN via PDOK (CC0), BGT via PDOK (CC BY 4.0), PDOK Luchtfoto (CC BY 4.0), © OpenStreetMap-bijdragers (ODbL).
+</footer>
+<script>
+(function () {
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
+  function refresh() {
+    fetch("/api/status", {cache: "no-store"}).then(function (r) { return r.json(); }).then(function (s) {
+      document.getElementById("np").textContent = s.players.length;
+      document.getElementById("clock").textContent = s.clock;
+      document.getElementById("state").textContent = s.ready ? "Online" : "Wereld wordt voorbereid…";
+      document.getElementById("dot").className = "dot" + (s.ready ? "" : " prep");
+      var ul = document.getElementById("players");
+      ul.innerHTML = s.players.length ? s.players.map(function (p) {
+        return "<li><span>" + esc(p.name) + "</span><span class=\"muted\">" + p.minutes + " min</span></li>";
+      }).join("") : "<li class=\"muted\">Nog niemand online</li>";
+    }).catch(function () {
+      document.getElementById("state").textContent = "Geen verbinding";
+      document.getElementById("dot").className = "dot prep";
+    });
+  }
+  setInterval(refresh, 5000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+package main
+
+import (
+	"bytes"
+	_ "embed"
+	"encoding/json"
+	"html/template"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+//go:embed web/index.html
+var indexHTML string
+
+var indexTmpl = template.Must(template.New("index").Parse(indexHTML))
+
+type webUI struct {
+	cfg   Config
+	hub   *Hub
+	files *FileStore
+	clk   *Clock
+}
+
+// publieke basis-URL: PUBLIC_URL, anders uit de aanvraag (Cloudflare zet X-Forwarded-Proto)
+func (u *webUI) baseURL(r *http.Request) string {
+	if u.cfg.PublicURL != "" {
+		return u.cfg.PublicURL
+	}
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+type statusJSON struct {
+	Name        string       `json:"name"`
+	Version     string       `json:"version"`
+	Protocol    int          `json:"protocol"`
+	Players     []PlayerInfo `json:"players"`
+	MaxPlayers  int          `json:"maxPlayers"`
+	Clock       string       `json:"clock"`
+	Password    bool         `json:"password"`
+	Ready       bool         `json:"ready"`
+	ClientFiles int          `json:"clientFiles"`
+	ClientSize  string       `json:"clientSize"`
+	WorldFiles  int          `json:"worldFiles"`
+	WorldSize   string       `json:"worldSize"`
+	WorldSent   string       `json:"worldSent"`
+	Launcher    bool         `json:"launcher"`
+}
+
+func (u *webUI) statusData() statusJSON {
+	c, _ := u.clk.now()
+	s := statusJSON{
+		Name: u.cfg.Name, Version: serverVersion, Protocol: protocolVersion,
+		Players: u.hub.playerInfo(), MaxPlayers: u.cfg.MaxPlayers, Password: u.cfg.Password != "",
+		Ready: u.files.ready.Load(),
+	}
+	if s.Players == nil {
+		s.Players = []PlayerInfo{}
+	}
+	s.Clock = time.Date(2000, 1, 1, 0, 0, int(c), 0, time.UTC).Format("15:04")
+	u.files.mu.RLock()
+	st := u.files.stats
+	u.files.mu.RUnlock()
+	s.ClientFiles, s.ClientSize = st.clientFiles, human(st.clientBytes)
+	s.WorldFiles, s.WorldSize, s.WorldSent = st.worldFiles, human(st.worldBytes), human(st.worldZBytes)
+	_, err := os.Stat(u.launcherPath())
+	s.Launcher = err == nil
+	return s
+}
+
+func (u *webUI) index(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	noCache(w)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct {
+		statusJSON
+		URL string
+	}{u.statusData(), u.baseURL(r)}
+	if err := indexTmpl.Execute(w, data); err != nil {
+		log.Printf("webpagina: %v", err)
+	}
+}
+
+func (u *webUI) status(w http.ResponseWriter, r *http.Request) {
+	noCache(w)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(u.statusData())
+}
+
+func (u *webUI) launcherPath() string {
+	return filepath.Join(u.cfg.ClientBin, "OVLauncher.exe")
+}
+
+// De launcher bevat een vaste plek "@@OVSERVERURL@@" + nullen (zie src/launcher/launcher.cpp).
+// Bij het downloaden schrijft de server daar zijn eigen adres in, zodat de speler niets hoeft in te stellen.
+var urlMarker = []byte("@@OVSERVERURL@@")
+
+const urlSlot = 512
+
+func (u *webUI) launcher(w http.ResponseWriter, r *http.Request) {
+	b, err := os.ReadFile(u.launcherPath())
+	if err != nil {
+		http.Error(w, "De launcher staat (nog) niet op de server.", http.StatusNotFound)
+		return
+	}
+	if i := bytes.Index(b, urlMarker); i >= 0 && i+urlSlot <= len(b) {
+		url := u.baseURL(r)
+		slot := make([]byte, urlSlot)
+		copy(slot, "OVURL="+url)
+		copy(b[i:i+urlSlot], slot)
+	} else {
+		log.Printf("LET OP: launcher zonder URL-plek; spelers moeten het adres zelf invullen")
+	}
+	noCache(w)
+	w.Header().Set("Content-Type", "application/vnd.microsoft.portable-executable")
+	w.Header().Set("Content-Disposition", `attachment; filename="OVLauncher.exe"`)
+	w.Write(b)
+}
