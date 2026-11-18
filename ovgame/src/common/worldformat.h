@@ -85,6 +85,14 @@ constexpr double ZWOLLE_PTS[][2] = {
 // Voorbij Zwolle richting Meppel (IC's naar Groningen en Leeuwarden) en voorbij Amersfoort richting Apeldoorn (IC 1700)
 constexpr double ZW_NORTH_PTS[][2] = {{202738, 502201}, {203168, 501946}, {203595, 501686}, {204031, 501444}, {204526, 501408}, {205013, 501502}, {205416, 501796}, {205820, 502091}, {206199, 502413}, {206579, 502737}, {206971, 503048}, {207362, 503359}, {207753, 503671}};
 constexpr double AMF_EAST_PTS[][2] = {{154083, 462810}, {154496, 463051}, {154800, 463448}, {155103, 463846}, {155411, 464239}, {155726, 464627}, {156151, 464881}, {156646, 464905}, {157131, 464783}, {157615, 464657}, {158099, 464531}};
+// Traject Eindhoven Centraal -> Helmond Brandevoort -> Helmond 't Hout -> Helmond -> Helmond Brouwhuis (OSM-spoor, elke km)
+// en daarachter een stuk richting Deurne (Sprinter 6500 naar Deurne, IC 3500 naar Venlo)
+constexpr double HELMOND_PTS[][2] = {{161443, 383730}, {161948, 383874}, {162934, 384008}, {163919, 384151}, {164898, 384354}, {165877, 384558},
+                                     {166856, 384762}, {167835, 384965}, {168775, 385302}, {169703, 385674}, {170632, 386045}, {171560, 386417},
+                                     {172489, 386788}, {173417, 387159}, {174312, 387474}, {175291, 387314}, {176255, 387045}, {176777, 386902}};
+constexpr double HELMOND_STUB_PTS[][2] = {{176777, 386902}, {177263, 386783}, {177747, 386661}, {178231, 386532}, {178714, 386404},
+                                          {179197, 386275}, {179680, 386147}, {180163, 386018}, {180647, 385890}};
+constexpr int HELMOND_STUB_N = 9;
 constexpr double BEST_CX = 155125, BEST_CY = 391198;
 // Buslijnen (18, 8, 9, 24, 156, 401, 402): detail binnen 400 m van de routes (tools\bus_route.ps1)
 #include "busroutes.inc"
@@ -99,7 +107,9 @@ constexpr StationArea STATION_AREAS[] = {
     {"Utrecht Overvecht", 137050, 458040, 700}, {"Bilthoven", 142547, 460261, 750}, {"Den Dolder", 145065, 461346, 700},
     {"Amersfoort Centraal", 154095, 462805, 1000}, {"Amersfoort Schothorst", 156150, 465174, 700}, {"Amersfoort Vathorst", 158160, 467120, 700},
     {"Nijkerk", 162259, 470453, 750}, {"Putten", 167871, 475262, 700}, {"Ermelo", 170502, 479268, 700}, {"Harderwijk", 170891, 483349, 800},
-    {"Nunspeet", 182070, 487090, 750}, {"'t Harde", 189409, 491383, 700}, {"Wezep", 196814, 496373, 700}, {"Zwolle", 202756, 502218, 1100}};
+    {"Nunspeet", 182070, 487090, 750}, {"'t Harde", 189409, 491383, 700}, {"Wezep", 196814, 496373, 700}, {"Zwolle", 202756, 502218, 1100},
+    {"Helmond Brandevoort", 170293, 385925, 700}, {"Helmond 't Hout", 171919, 386562, 700}, {"Helmond", 174073, 387433, 900},
+    {"Helmond Brouwhuis", 176770, 386960, 700}};
 
 inline double distToSquare(double px, double py, int x0, int y0) {
     double dx = std::max({(double)x0 - px, 0.0, px - (x0 + TILE)});
@@ -124,7 +134,8 @@ inline bool isDetailTile(int x0, int y0) {
     if (nearLine(UTRECHT_PTS, OV_N(UTRECHT_PTS), 600) || nearLine(UT_NORTH_PTS, OV_N(UT_NORTH_PTS), 600) ||
         nearLine(UT_WEST_PTS, OV_N(UT_WEST_PTS), 600) || nearLine(TIEL_PTS, OV_N(TIEL_PTS), 600) ||
         nearLine(ZWOLLE_PTS, OV_N(ZWOLLE_PTS), 600) || nearLine(ZW_NORTH_PTS, OV_N(ZW_NORTH_PTS), 600) ||
-        nearLine(AMF_EAST_PTS, OV_N(AMF_EAST_PTS), 600))
+        nearLine(AMF_EAST_PTS, OV_N(AMF_EAST_PTS), 600) || nearLine(HELMOND_PTS, OV_N(HELMOND_PTS), 600) ||
+        nearLine(HELMOND_STUB_PTS, OV_N(HELMOND_STUB_PTS), 600))
         return true;
 #undef OV_N
     return nearLine(ROUTE_PTS, sizeof(ROUTE_PTS) / sizeof(ROUTE_PTS[0]), 600) || nearLine(BRANCH_PTS, sizeof(BRANCH_PTS) / sizeof(BRANCH_PTS[0]), 600) ||

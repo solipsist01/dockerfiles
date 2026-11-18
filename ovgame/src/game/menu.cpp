@@ -485,6 +485,14 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
         row(x, y, fpsL, 4, fpsIdx);
         wrap(x, y, fpsIdx < 3 ? "Minder beelden per seconde: stiller, koeler en langer op de accu (laptop, Steam Deck)."
                               : "Zo veel beelden als de videokaart aankan (met VSync: tot de verversing van je scherm).");
+        y += 14 * ui;
+        text.text(x, y, "Daglicht", 19 * ui, GREY);
+        y += 30 * ui;
+        if (button(text, in, x, y, hw, sh, "Echt", true, !alwaysLight, 19 * ui) && alwaysLight) { alwaysLight = false; act = SETTINGS; }
+        if (button(text, in, x + hw + 8 * ui, y, hw, sh, "Altijd licht", true, alwaysLight, 19 * ui) && !alwaysLight) { alwaysLight = true; act = SETTINGS; }
+        y += sh + 8 * ui;
+        wrap(x, y, alwaysLight ? "De klok en de dienstregeling lopen gewoon door, maar het blijft midden op de dag licht (handig in multiplayer)."
+                               : "De zon staat zoals op de echte datum en tijd: 's avonds wordt het schemerig.");
         // ---- rechterkolom ----
         float ry = y0;
         text.text(x2, ry, "Kwaliteit", 22 * ui, YEL);

@@ -193,6 +193,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         if (e == UTW) { bMid = rdArr(UT_WEST_PTS, 3); bFar = rdArr(UT_WEST_PTS, 6); return true; }
         if (e == TIEL) { bMid = rdArr(TIEL_PTS, 3); bFar = rdArr(TIEL_PTS, 6); return true; }
         if (e == ZWN) { bMid = rdArr(ZW_NORTH_PTS, 7); bFar = rdArr(ZW_NORTH_PTS, 12); return true; }
+        if (e == HELMOND) { bMid = rdArr(HELMOND_STUB_PTS, 2); bFar = rdArr(HELMOND_STUB_PTS, HELMOND_STUB_N - 1); return true; }
         if (e == AMFE) { bMid = rdArr(AMF_EAST_PTS, 8); bFar = rdArr(AMF_EAST_PTS, 10); return true; }
         return false;
     };
@@ -246,6 +247,14 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         if (branch(southEnd, bm, bf)) {
             if (variant < 2) { base0pts.push_back(endPt(southEnd)); base0req.push_back(true); }
             base0pts.push_back(bm); base0req.push_back(variant == 2);
+        }
+        if (southEnd == HELMOND) {
+            // van voorbij Helmond Brouwhuis langs de Helmondse stations naar Eindhoven Centraal (oostkant binnen)
+            for (const char* hs : {"Helmond Brouwhuis", "Helmond", "Helmond 't Hout", "Helmond Brandevoort"}) {
+                Vec3 c;
+                if (stationPt(hs, c)) { base0pts.push_back(c); base0req.push_back(false); }
+            }
+            for (Vec3 q : {csE, csStop, csW}) { base0pts.push_back(q); base0req.push_back(true); }
         }
         for (int k = i0; k <= i1; k++) {
             // Utrecht Centraal met een uitloper erachter: niet via het stationsmidden (dat ligt bij spoor 14; vandaar is
@@ -357,8 +366,17 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         }
         return found;
     };
+    const bool viaHelmond = df.origin == HELMOND || df.exit == HELMOND;
     for (const StopDef& s : df.stops) {
-        if (std::string(s.station) == CS) continue;
+        if (std::string(s.station) == CS) {
+            // lijn naar Helmond: Eindhoven Centraal ligt midden in de rit; het perronspoor (csTrack) vastleggen
+            if (viaHelmond) {
+                bool fromEast = df.origin == HELMOND;
+                for (Vec3 q : fromEast ? std::vector<Vec3>{csE, csStop, csW} : std::vector<Vec3>{csW, csStop, csE})
+                    anchors.push_back(Anchor{"(Eindhoven Centraal)", q, -1, true});
+            }
+            continue;
+        }
         Vec3 c;
         if (!stationPt(s.station, c)) { err = std::string("Station niet gevonden: ") + s.station; return false; }
         Anchor a{s.station, c, 0, s.stop || s.track != nullptr};
@@ -434,7 +452,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         Vec3 d = out ? bf - bm : bm - bf, r;
         int cnt = 0;
         if (rail.rankedTrack(bm, d, 30.0f, branchRank(e), r, &cnt) && cnt >= 2) {
-            Anchor a{e == TILBURG ? "(Tilburg-lijn)" : e == TIEL ? "(Tiel-lijn)" : e == ZWN ? "(voorbij Zwolle)" : e == AMFE ? "(Apeldoorn-lijn)" : "(voorbij Utrecht)", r, cnt, true};
+            Anchor a{e == TILBURG ? "(Tilburg-lijn)" : e == TIEL ? "(Tiel-lijn)" : e == ZWN ? "(voorbij Zwolle)" : e == AMFE ? "(Apeldoorn-lijn)" : e == HELMOND ? "(voorbij Helmond)" : "(voorbij Utrecht)", r, cnt, true};
             if (out) anchors.push_back(a);
             else anchors.insert(anchors.begin(), a);
         }
@@ -729,6 +747,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     const char *ES = "Eindhoven Strijp-S", *BE = "Best", *BX = "Boxtel", *VU = "Vught", *DB = "'s-Hertogenbosch";
     const char *ZB = "Zaltbommel", *GM = "Geldermalsen", *CL = "Culemborg", *HC = "Houten Castellum", *HT = "Houten",
                *UL = "Utrecht Lunetten", *UV = "Utrecht Vaartsche Rijn", *UT = "Utrecht Centraal";
+    const char *HBV = "Helmond Brandevoort", *HTH = "Helmond 't Hout", *HM = "Helmond", *HBW = "Helmond Brouwhuis";
     const char *UO = "Utrecht Overvecht", *BH = "Bilthoven", *DD = "Den Dolder", *AMF = "Amersfoort Centraal", *AS = "Amersfoort Schothorst",
                *AV = "Amersfoort Vathorst", *NK = "Nijkerk", *PT = "Putten", *EM = "Ermelo", *HD = "Harderwijk", *NS = "Nunspeet",
                *TH = "'t Harde", *WZ = "Wezep", *ZL = "Zwolle";
@@ -765,15 +784,17 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     std::vector<Def> defs = {
         // ---- noordwaarts (vanaf Eindhoven Centraal) ----
         {"2700", "Alkmaar", 1, 5, EAST, UTN, cat(cat({{CS, true, -1, 4}}, ehvNorth), icNorth(26, 30, 57, 59))},
-        {"6500", "'s-Hertogenbosch", 0, 6, EAST, DENBOSCH, {{CS, true, -1, 5}, {ES, true, -1, 9}, {BE, true, -1, 14}, {BX, true, -1, 21, "2"}, {VU, true, -1, 28, "1"}, {DB, true, -1, -1, "4b"}}},
+        // uit Deurne via Helmond (GTFS; een halfuur eerder gerekend dan Eindhoven, zodat alle tijden positief zijn)
+        {"6500", "'s-Hertogenbosch", 0, 6, HELMOND, DENBOSCH, {{HBW, true, -1, 12, "1"}, {HM, true, -1, 16, "1"}, {HTH, true, -1, 19, "1"}, {HBV, true, -1, 21, "1"},
+                                                                 {CS, true, 29, 35}, {ES, true, -1, 39}, {BE, true, -1, 44}, {BX, true, -1, 51, "2"}, {VU, true, -1, 58, "1"}, {DB, true, -1, -1, "4b"}}},
         {"1100", "Den Haag Centraal", 1, 5, EAST, TILBURG, {{CS, true, -1, 13}, {ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "6"}}},
-        {"3500", "Dordrecht", 1, 6, EAST, UTW, cat(cat({{CS, true, -1, 16}}, ehvNorth), icNorth(36, 39, 65, 71, "8"))},
+        {"3500", "Dordrecht", 1, 6, HELMOND, UTW, cat(cat({{HM, true, -1, 1, "1"}, {HTH, false, -1, -1, "1"}, {HBV, false, -1, -1, "1"}, {CS, true, 11, 16}}, ehvNorth), icNorth(36, 39, 65, 71, "8"))},
         {"6400", "Tilburg Universiteit", 0, 4, EAST, TILBURG, {{CS, true, -1, 21}, {ES, true, -1, 24}, {BE, true, -1, 30}, {BX, true, -1, 37, "6"}}},
         {"3900", "Enkhuizen", 1, 5, EAST, UTN, cat(cat({{CS, true, -1, 26}}, ehvNorth), icNorth(46, 50, 76, 79))},
         // ---- zuidwaarts (naar Eindhoven Centraal) ----
-        {"6500", "Deurne", 0, 2, DENBOSCH, EAST, {{DB, true, -1, 28}, {VU, true, -1, 32.5, "2"}, {BX, true, -1, 39, "3"}, {BE, true, -1, 45}, {ES, true, -1, 51}, {CS, true, -1, 66}}, 1, -30},
+        {"6500", "Deurne", 0, 2, DENBOSCH, HELMOND, {{DB, true, -1, 28}, {VU, true, -1, 32.5, "2"}, {BX, true, -1, 39, "3"}, {BE, true, -1, 45}, {ES, true, -1, 51}, {CS, true, -1, 66}, {HBV, true, -1, 73, "2"}, {HTH, true, -1, 76, "2"}, {HM, true, -1, 80, "2"}, {HBW, true, -1, 83, "2"}}, 1, -60},
         {"3900", "Heerlen", 1, 1, UTN, EAST, cat(cat(icSouth(11, 14, 42, 45), ehvSouth), {{CS, true, 65, 68}})},
-        {"3500", "Venlo", 1, 2, UTN, EAST, cat(cat(icSouth(18, 24, 52, 55), ehvSouth), {{CS, true, 74.5, 79}})},
+        {"3500", "Venlo", 1, 2, UTN, HELMOND, cat(cat(icSouth(18, 24, 52, 55), ehvSouth), {{CS, true, 74.5, 79}, {HBV, false, -1, -1, "2"}, {HTH, false, -1, -1, "2"}, {HM, true, 88, 89, "2"}})},
         {"2700", "Maastricht", 1, 3, UTN, EAST, cat(cat(icSouth(1, 4, 32, 34), ehvSouth), {{CS, true, 54, 57}})},
         {"6400", "Weert", 0, 3, TILBURG, EAST, {{BX, true, -1, 23, "7"}, {BE, true, -1, 29}, {ES, true, -1, 35}, {CS, true, -1, 47}}},
         // ---- Sprinters 's-Hertogenbosch - Utrecht (8800, kopmaken in Den Bosch) en Tiel - Utrecht (6900) ----
@@ -834,9 +855,9 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
         p->number = d.number;
         p->dest = d.dest;
         // "noord" = van Eindhoven af (richting Utrecht); volgorde van de eindpunten langs de lijn
-        auto rankOf = [](End e) { return e == EAST || e == TILBURG ? 0 : e == DENBOSCH || e == NORTH ? 4 : e == TIEL ? 6 : 12; };
+        auto rankOf = [](End e) { return e == EAST || e == HELMOND || e == TILBURG ? 0 : e == DENBOSCH || e == NORTH ? 4 : e == TIEL ? 6 : 12; };
         if (zwEnd(d.origin) || zwEnd(d.exit)) p->north = d.exit == ZWOLLE || d.exit == ZWN || d.exit == AMFE;  // richting Zwolle
-        else p->north = d.origin == EAST || (d.exit != EAST && rankOf(d.origin) < rankOf(d.exit));
+        else p->north = d.origin == EAST || d.origin == HELMOND || (d.exit != EAST && d.exit != HELMOND && rankOf(d.origin) < rankOf(d.exit));
         p->rs = stock_[d.stock].get();
         std::string perr;
         if (!buildPattern(*p, world, rail, st, perr)) {
@@ -897,6 +918,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     }
     for (const char* n : {CS, ES, BE, BX, VU, DB, ZB, GM, CL, HC, HT, UL, UV, UT}) nameIndex(n);
     for (const char* n : {UO, BH, DD, AMF, AS, AV, NK, PT, EM, HD, NS, TH, WZ, ZL}) nameIndex(n);
+    for (const char* n : {HBV, HTH, HM, HBW}) nameIndex(n);
     for (auto& p : patterns_) nameIndex(p->dest);
     for (auto& s : stock_) s->build(atlas, names_);
 

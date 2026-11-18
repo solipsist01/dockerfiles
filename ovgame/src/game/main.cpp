@@ -132,6 +132,10 @@ static const Spawn SPAWNS[] = {
     {"'t Harde - Perron", 0, 0, 1, 0, 4},
     {"Wezep - Perron", 0, 0, 1, 0, 4},
     {"Zwolle - Perron", 0, 0, 1, 0, 4},
+    {"Helmond Brandevoort - Perron", 0, 0, 1, 0, 4},
+    {"Helmond 't Hout - Perron", 0, 0, 1, 0, 4},
+    {"Helmond - Perron", 0, 0, 1, 0, 4},
+    {"Helmond Brouwhuis - Perron", 0, 0, 1, 0, 4},
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
@@ -215,6 +219,7 @@ int main(int argc, char** argv) {
     std::string setServer;
     bool setVsync = true;
     int setQuality = -1, setScale = -1, setFps = 3;
+    bool setAlwaysLight = false;  // daglicht: altijd licht
     int setQualityAuto = 1;      // 1 = kwaliteit is door het spel gekozen (niet zelf aangepast): opnieuw kiezen als de videokaart wisselt
     std::string setGpu;          // videokaart waarvoor die keuze gemaakt is  // -1 = nog niet gekozen: bij de eerste start raden aan de hand van de videokaart
     if (FILE* f = fopen(settingsPath.c_str(), "r")) {
@@ -231,6 +236,7 @@ int main(int argc, char** argv) {
             else if (sscanf(line, "kwaliteit = %d", &v) == 1) setQuality = std::max(0, std::min(3, v));
             else if (sscanf(line, "resolutie = %d", &v) == 1) setScale = v <= 50 ? 0 : v <= 67 ? 1 : v <= 75 ? 2 : 3;
             else if (sscanf(line, "fpslimiet = %d", &v) == 1) setFps = v <= 0 ? 3 : v <= 30 ? 0 : v <= 40 ? 1 : v <= 60 ? 2 : 3;
+            else if (sscanf(line, "altijdlicht = %d", &v) == 1) setAlwaysLight = v != 0;
             else if (sscanf(line, "treinrealisme = %d", &v) == 1) setRealism = std::max(0, std::min(2, v));
             else if (strncmp(line, "server = ", 9) == 0) {
                 setServer = line + 9;
@@ -244,10 +250,10 @@ int main(int argc, char** argv) {
             fprintf(f, "# OV Game instellingen\n# venster: 0 = venster, 1 = volledig scherm (venster), 2 = volledig scherm\nvenster = %d\nvsync = %d\n"
                        "# kwaliteit: 0 = laag, 1 = middel, 2 = hoog, 3 = ultra; resolutie van de 3D-wereld in procenten (50/67/75/100)\n"
                        "kwaliteit = %d\nresolutie = %d\n# kwaliteitauto = 1: door het spel gekozen voor deze videokaart (wisselt mee met de videokaart)\n"
-                       "kwaliteitauto = %d\nvideokaart = %s\n# fpslimiet: 30, 40, 60 of 0 (geen)\nfpslimiet = %d\n"
+                       "kwaliteitauto = %d\nvideokaart = %s\n# fpslimiet: 30, 40, 60 of 0 (geen)\nfpslimiet = %d\n# altijdlicht: 1 = het blijft licht (de klok loopt wel door)\naltijdlicht = %d\n"
                        "# treinrealisme: 0 = simpel, 1 = middel, 2 = zo echt mogelijk\ntreinrealisme = %d\n"
                        "# laatst gebruikte multiplayer-server\nserver = %s\n",
-                    setWindowMode, setVsync ? 1 : 0, std::max(0, setQuality), SCALE_PCT[std::max(0, setScale)], setQualityAuto, setGpu.c_str(), FPS_LIMIT[setFps], setRealism, setServer.c_str());
+                    setWindowMode, setVsync ? 1 : 0, std::max(0, setQuality), SCALE_PCT[std::max(0, setScale)], setQualityAuto, setGpu.c_str(), FPS_LIMIT[setFps], setAlwaysLight ? 1 : 0, setRealism, setServer.c_str());
             fclose(f);
         }
     };
@@ -542,7 +548,8 @@ int main(int argc, char** argv) {
             {"Eindhoven Centraal", 3}, {"Busstation Centraal", 9}, {"Eindhoven Strijp-S", 6}, {"Best", 7},
             {"Boxtel", 10}, {"Vught", 11}, {"'s-Hertogenbosch", 12}, {"Zaltbommel", 13}, {"Geldermalsen", 14}, {"Culemborg", 15},
             {"Houten Castellum", 16}, {"Houten", 17}, {"Utrecht Lunetten", 18}, {"Utrecht Vaartsche Rijn", 19}, {"Utrecht Centraal", 20},
-            {"Utrecht Overvecht", 22}, {"Bilthoven", 23}, {"Den Dolder", 24}, {"Amersfoort Centraal", 25}, {"Amersfoort Schothorst", 26}, {"Amersfoort Vathorst", 27}, {"Nijkerk", 28}, {"Putten", 29}, {"Ermelo", 30}, {"Harderwijk", 31}, {"Nunspeet", 32}, {"'t Harde", 33}, {"Wezep", 34}, {"Zwolle", 35}};
+            {"Utrecht Overvecht", 22}, {"Bilthoven", 23}, {"Den Dolder", 24}, {"Amersfoort Centraal", 25}, {"Amersfoort Schothorst", 26}, {"Amersfoort Vathorst", 27}, {"Nijkerk", 28}, {"Putten", 29}, {"Ermelo", 30}, {"Harderwijk", 31}, {"Nunspeet", 32}, {"'t Harde", 33}, {"Wezep", 34}, {"Zwolle", 35},
+            {"Helmond Brandevoort", 36}, {"Helmond 't Hout", 37}, {"Helmond", 38}, {"Helmond Brouwhuis", 39}};
         for (auto& pl : places) {
             Player tmp;
             computeSpawn(pl.spawn, tmp);
@@ -689,6 +696,7 @@ int main(int argc, char** argv) {
     menu.fpsIdx = setFps;
     menu.gpuName = gpuName;
     menu.realism = setRealism;
+    menu.alwaysLight = setAlwaysLight;
     menu.chars = chars;
     menu.activeChar = activeChar;
     {
@@ -1460,7 +1468,8 @@ int main(int argc, char** argv) {
 
         // ---------- daglicht ----------
         double clock = trainOk ? traffic.clock() : defaultMinutes * 60.0;
-        SkyState sky = computeSky(dayOfYear, std::fmod(clock, 86400.0));
+        // altijd licht (Opties): de klok loopt door, de zon blijft op 13:00
+        SkyState sky = computeSky(dayOfYear, setAlwaysLight ? 13 * 3600.0 : std::fmod(clock, 86400.0));
         world.skyColor = sky.sky;
         world.sunDir = sky.sunDir;
         world.sunColor = sky.sunColor;
@@ -1762,6 +1771,7 @@ int main(int argc, char** argv) {
                 setFps = menu.fpsIdx;
                 applyQuality();
                 setRealism = menu.realism;
+                setAlwaysLight = menu.alwaysLight;
                 Train::defaultRealism = setRealism;
                 Platform::setWindowMode(setWindowMode);
                 Platform::setVSync(setVsync);

@@ -35,6 +35,7 @@ public:
     // opties
     int windowMode = 0;               // Platform::WindowMode: 0 venster, 1 randloos volledig scherm, 2 volledig scherm
     bool vsync = true;
+    bool alwaysLight = false;         // daglicht: altijd licht (de klok loopt wel door), handig in multiplayer
     int quality = 2;                  // grafische kwaliteit: 0 laag, 1 middel, 2 hoog, 3 ultra
     int scaleIdx = 3;                 // resolutie van de 3D-wereld: 50 / 67 / 75 / 100 %
     int fpsIdx = 3;                   // fps-limiet: 30 / 40 / 60 / geen (accu sparen, Steam Deck)

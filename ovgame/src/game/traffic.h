@@ -59,7 +59,8 @@ public:
     // (NORTH = vroeger: de mist in ten noorden van 's-Hertogenbosch; niet meer gebruikt)
     // Lijn Utrecht - Zwolle: keren in Utrecht Centraal (UTC) of Zwolle (ZWOLLE), voorbij Zwolle richting Meppel (ZWN),
     // voorbij Amersfoort richting Apeldoorn (AMFE).
-    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE };
+    // HELMOND: via Helmond voorbij Helmond Brouwhuis de mist in (richting Deurne/Venlo)
+    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE, HELMOND };
     static bool isTerm(End e) { return e == DENBOSCH || e == UTC || e == ZWOLLE; }   // keren op een perron (kopmaken)
     static bool zwEnd(End e) { return e == UTC || e == ZWOLLE || e == ZWN || e == AMFE; }  // hoort bij de lijn naar Zwolle
     struct StopDef { const char* station; bool stop; double arr, dep; const char* track = nullptr; };  // track: echt spoor (bijv. "4b"), anders rechts rijden
