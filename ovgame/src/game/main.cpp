@@ -1267,7 +1267,7 @@ int main(int argc, char** argv) {
             bool trainDriving = player.driving && player.vehicle && player.vehicle->railVehicle();
             if (in.pressed[(unsigned char)(trainDriving ? 'Y' : 'T')]) { chatOpen = true; chatJustOpened = true; chatText.clear(); in.pressed['T'] = in.pressed['Y'] = false; }
         }
-        bool showPlayers = net.connected() && in.down[VK_TAB] && state == PLAYING;
+        bool showPlayers = net.connected() && (in.down[VK_TAB] || (in.down[VK_F7] && !player.fly)) && state == PLAYING;  // F7 = controller Y
 
         // ---------- toetsen ----------
         bool mapToggle = in.pressed['M'] || in.pressed[VK_HOME];
@@ -2130,7 +2130,9 @@ int main(int argc, char** argv) {
                 help = "WASD lopen   E kiezen (richtkruis)   B stopknop (bus)   O kaartje laten zien   F5 camera   M kaart   Esc menu";
             }
             if (in.pad) {  // controller in gebruik: knoppen in plaats van toetsen
-                help = "L-stick lopen   R-stick kijken   A springen (2x vliegen)   X kiezen   LT snel/omlaag   Y spelers   View kaart   Menu menu";
+                help = player.fly ? (player.flyFast ? "Vliegen (snel):  A/RT omhoog   LT omlaag   Y snel uit   2x A landen   R-stick kijken"
+                                                    : "Vliegen:  A/RT omhoog   LT omlaag   Y snel aan   2x A landen   R-stick kijken")
+                                  : "L-stick lopen   R-stick kijken   A springen (2x vliegen)   X kiezen   LT sneller   Y spelers   View kaart   Menu menu";
                 if (player.driving && inTrain)
                     help = "L-stick op/neer rijremschakelaar   B deuren   A bevestigen   LB snelrem   kruis omhoog cabine   kruis omlaag stroomafnemer   X opstaan";
                 else if (player.driving)

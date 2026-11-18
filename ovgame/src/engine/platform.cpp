@@ -111,11 +111,11 @@ void pollPad(Input& in, double now) {
             if (b & XINPUT_GAMEPAD_A) keys[VK_SPACE] = true;           // springen / omhoog (2x = vliegen)
             if (b & XINPUT_GAMEPAD_X) keys['E'] = true;                // kiezen / instappen
             if (b & XINPUT_GAMEPAD_B) keys['Q'] = true;                // deuren
-            if (b & XINPUT_GAMEPAD_Y) keys[VK_TAB] = true;             // spelerslijst
+            if (b & XINPUT_GAMEPAD_Y) keys[VK_F7] = true;              // vliegen: snel aan/uit; anders spelerslijst
             if (b & XINPUT_GAMEPAD_LEFT_SHOULDER) keys['B'] = true;    // stopknop
             if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) keys['R'] = true;   // deur rechts
             if (lt) keys[VK_SHIFT] = true;                             // sneller / omlaag (vliegen)
-            if (rt) keys[VK_CONTROL] = true;                           // snel vliegen
+            if (rt) keys[VK_CONTROL] = true;                           // omhoog (vliegen)
             if (b & XINPUT_GAMEPAD_DPAD_UP) keys['K'] = true;          // cabine activeren
             if (b & XINPUT_GAMEPAD_DPAD_DOWN) keys['P'] = true;        // pantograaf
             if (b & XINPUT_GAMEPAD_DPAD_LEFT) keys['O'] = true;        // kaartje laten zien
