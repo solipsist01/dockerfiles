@@ -121,6 +121,14 @@ static const Spawn SPAWNS[] = {
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
 
+// Laptops met twee videokaarten (NVIDIA Optimus / AMD Switchable Graphics): zonder deze exports start Windows het spel
+// op de zuinige ingebouwde Intel/AMD-graphics in plaats van de echte videokaart (bijv. RTX 3050 Laptop). De drivers
+// kijken bij het starten van het proces of het .exe deze symbolen exporteert.
+extern "C" {
+__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 // grafische kwaliteit (Opties): renderresolutie en fps-limiet per keuze, en het raden van een startwaarde
 static const int SCALE_PCT[4] = {50, 67, 75, 100};
 static const int FPS_LIMIT[4] = {30, 40, 60, 0};
@@ -189,13 +197,20 @@ int main(int argc, char** argv) {
     int setWindowMode = 0, setRealism = 1;
     std::string setServer;
     bool setVsync = true;
-    int setQuality = -1, setScale = -1, setFps = 3;  // -1 = nog niet gekozen: bij de eerste start raden aan de hand van de videokaart
+    int setQuality = -1, setScale = -1, setFps = 3;
+    int setQualityAuto = 1;      // 1 = kwaliteit is door het spel gekozen (niet zelf aangepast): opnieuw kiezen als de videokaart wisselt
+    std::string setGpu;          // videokaart waarvoor die keuze gemaakt is  // -1 = nog niet gekozen: bij de eerste start raden aan de hand van de videokaart
     if (FILE* f = fopen(settingsPath.c_str(), "r")) {
         char line[256];
         while (fgets(line, sizeof line, f)) {
             int v;
             if (sscanf(line, "venster = %d", &v) == 1) setWindowMode = std::max(0, std::min(2, v));
             else if (sscanf(line, "vsync = %d", &v) == 1) setVsync = v != 0;
+            else if (sscanf(line, "kwaliteitauto = %d", &v) == 1) setQualityAuto = v != 0;
+            else if (strncmp(line, "videokaart = ", 13) == 0) {
+                setGpu = line + 13;
+                while (!setGpu.empty() && (setGpu.back() == '\n' || setGpu.back() == '\r' || setGpu.back() == ' ')) setGpu.pop_back();
+            }
             else if (sscanf(line, "kwaliteit = %d", &v) == 1) setQuality = std::max(0, std::min(3, v));
             else if (sscanf(line, "resolutie = %d", &v) == 1) setScale = v <= 50 ? 0 : v <= 67 ? 1 : v <= 75 ? 2 : 3;
             else if (sscanf(line, "fpslimiet = %d", &v) == 1) setFps = v <= 0 ? 3 : v <= 30 ? 0 : v <= 40 ? 1 : v <= 60 ? 2 : 3;
@@ -211,10 +226,11 @@ int main(int argc, char** argv) {
         if (FILE* f = fopen(settingsPath.c_str(), "w")) {
             fprintf(f, "# OV Game instellingen\n# venster: 0 = venster, 1 = volledig scherm (venster), 2 = volledig scherm\nvenster = %d\nvsync = %d\n"
                        "# kwaliteit: 0 = laag, 1 = middel, 2 = hoog, 3 = ultra; resolutie van de 3D-wereld in procenten (50/67/75/100)\n"
-                       "kwaliteit = %d\nresolutie = %d\n# fpslimiet: 30, 40, 60 of 0 (geen)\nfpslimiet = %d\n"
+                       "kwaliteit = %d\nresolutie = %d\n# kwaliteitauto = 1: door het spel gekozen voor deze videokaart (wisselt mee met de videokaart)\n"
+                       "kwaliteitauto = %d\nvideokaart = %s\n# fpslimiet: 30, 40, 60 of 0 (geen)\nfpslimiet = %d\n"
                        "# treinrealisme: 0 = simpel, 1 = middel, 2 = zo echt mogelijk\ntreinrealisme = %d\n"
                        "# laatst gebruikte multiplayer-server\nserver = %s\n",
-                    setWindowMode, setVsync ? 1 : 0, std::max(0, setQuality), SCALE_PCT[std::max(0, setScale)], FPS_LIMIT[setFps], setRealism, setServer.c_str());
+                    setWindowMode, setVsync ? 1 : 0, std::max(0, setQuality), SCALE_PCT[std::max(0, setScale)], setQualityAuto, setGpu.c_str(), FPS_LIMIT[setFps], setRealism, setServer.c_str());
             fclose(f);
         }
     };
@@ -259,10 +275,11 @@ int main(int argc, char** argv) {
     renderer.init();
     // eerste start: kwaliteit raden aan de hand van de videokaart (Steam Deck, ingebouwde graphics, software-OpenGL)
     std::string gpuName = (const char*)glGetString(GL_RENDERER);
-    if (setQuality < 0 || setScale < 0) {
+    if (setQuality < 0 || setScale < 0 || (setQualityAuto && setGpu != gpuName)) {
         int gq = guessQuality(gpuName);
-        if (setQuality < 0) setQuality = gq;
-        if (setScale < 0) setScale = gq == 0 ? 1 : 3;
+        if (setQuality < 0 || setQualityAuto) setQuality = gq;
+        if (setScale < 0 || setQualityAuto) setScale = gq == 0 ? 1 : 3;
+        setGpu = gpuName;
         if (!shotPath) saveSettings();
     }
     for (int i = 1; i + 2 < argc; i++)  // test: --quality Q S (kwaliteit 0..3, resolutie-index 0..3), wordt niet opgeslagen
@@ -1718,6 +1735,7 @@ int main(int argc, char** argv) {
             else if (act == Menu::SETTINGS) {
                 setWindowMode = menu.windowMode;
                 setVsync = menu.vsync;
+                if (menu.quality != setQuality || menu.scaleIdx != setScale) setQualityAuto = 0;  // zelf gekozen: niet meer automatisch
                 setQuality = menu.quality;
                 setScale = menu.scaleIdx;
                 setFps = menu.fpsIdx;
