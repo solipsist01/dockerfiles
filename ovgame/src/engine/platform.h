@@ -29,6 +29,7 @@ int width();
 int height();
 double time();
 void setCapture(bool capture);
+bool focused();              // venster is actief (voorgrond, niet geminimaliseerd)
 void setTitle(const char* title);
 // Venstermodus: WINDOWED = gewoon venster, BORDERLESS = randloos venster over het hele scherm (snel wisselen met
 // Alt+Tab), FULLSCREEN = exclusief volledig scherm (eigen beeldschermmodus, op de oorspronkelijke resolutie)

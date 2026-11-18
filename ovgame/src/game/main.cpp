@@ -1296,6 +1296,8 @@ int main(int argc, char** argv) {
         in.padMap = state == PLAYING && map.isOpen();
         in.autoCapture = !uiMode && !shotPath;
         if (uiMode && in.captured) Platform::setCapture(false);
+        // in het spel altijd meteen spelen: muis vangen zodra het venster actief is (geen "klik om te spelen")
+        else if (!uiMode && !in.captured && !shotPath && Platform::focused()) Platform::setCapture(true);
 
         // ---------- multiplayer: berichten, klok gelijk houden met de server ----------
         worldDt = -1;
@@ -2144,8 +2146,8 @@ int main(int argc, char** argv) {
             text.rect((w - hw) / 2 - 10 * ui, h - 34 * ui, hw + 20 * ui, 26 * ui, {0, 0, 0, 0.45f});
             text.text((w - hw) / 2, h - 32 * ui, help, 16 * ui, {1, 1, 1, 0.9f});
 
-            if (!in.captured && !shotPath) {
-                std::string s = in.pad ? "Beweeg de rechterstick om te spelen" : "Klik in het venster om te spelen";
+            if (!in.captured && !shotPath && !Platform::focused()) {  // alleen als een ander venster voor staat
+                std::string s = "Klik in het venster om verder te spelen";
                 float sw = text.measure(s, 30 * ui);
                 text.rect((w - sw) / 2 - 20 * ui, h / 2.0f - 30 * ui, sw + 40 * ui, 60 * ui, {0, 0, 0, 0.55f});
                 text.text((w - sw) / 2, h / 2.0f - 20 * ui, s, 30 * ui, WHITE);

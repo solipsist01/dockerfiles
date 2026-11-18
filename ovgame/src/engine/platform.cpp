@@ -358,6 +358,8 @@ void setCapture(bool capture) {
     applyClip();
 }
 
+bool focused() { return g_hwnd && GetForegroundWindow() == g_hwnd && !IsIconic(g_hwnd); }
+
 void setTitle(const char* title) { SetWindowTextA(g_hwnd, title); }
 
 void setWindowMode(int mode) {
