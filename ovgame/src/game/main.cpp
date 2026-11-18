@@ -2038,8 +2038,8 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            std::string help = "WASD lopen   Muis kijken   Shift snel   Spatie springen   E kiezen (richtkruis)   F vliegen   F5 camera   M kaart   1-9 startpunten   Esc menu";
-            if (net.connected()) help = "WASD lopen   Muis kijken   Spatie springen   E kiezen   F vliegen   F5 camera   M kaart   T chat   Tab spelers   Esc menu";
+            std::string help = "WASD lopen   Muis kijken   Shift snel   Spatie springen   E kiezen (richtkruis)   2x Spatie/F vliegen   F5 camera   M kaart   1-9 startpunten   Esc menu";
+            if (net.connected()) help = "WASD lopen   Muis kijken   Spatie springen   E kiezen   2x Spatie/F vliegen   F5 camera   M kaart   T chat   Tab spelers   Esc menu";
             if (player.driving && inTrain) {
                 int rl = inTrain->cabState().realism;
                 help = rl == 0 ? "W gas   S rem   E opstaan   F5 camera   M kaart   Esc menu"

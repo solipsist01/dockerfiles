@@ -96,8 +96,14 @@ void Menu::startList(TextRenderer& text, Input& in, float x, float y, float bw, 
     if (over && in.wheel != 0) startScroll -= (int)in.wheel;
     startScroll = std::max(0, std::min(startScroll, std::max(0, n - visible)));
     // gekozen startpunt in beeld houden (bijv. na terugkomen in het menu)
-    if (startChoice < startScroll) startScroll = startChoice;
-    if (startChoice >= startScroll + visible && n > visible && !over) startScroll = startChoice - visible + 1;
+    // alleen bij een nieuwe keuze (of terugkomen in het menu) de keuze in beeld schuiven,
+    // anders trekt die het scrollen steeds terug
+    if (startChoice != lastStartChoice) {
+        if (startChoice < startScroll) startScroll = startChoice;
+        if (startChoice >= startScroll + visible) startScroll = startChoice - visible + 1;
+        startScroll = std::max(0, std::min(startScroll, std::max(0, n - visible)));
+        lastStartChoice = startChoice;
+    }
     bool bar = n > visible;
     float w = bar ? bw - 14 * ui_ : bw;
     for (int i = startScroll; i < n && i < startScroll + visible; i++) {

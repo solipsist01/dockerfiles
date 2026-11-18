@@ -25,6 +25,7 @@ public:
     Screen screen = MAIN;
     std::vector<std::string> starts;  // namen van de startpunten (index 0 = startpunt 1)
     int startChoice = 0;
+    int lastStartChoice = -1;         // keuze waarvoor de lijst laatst in beeld is geschoven
     int startScroll = 0;              // eerste zichtbare regel in de lijst met startpunten
     int minutes = 12 * 60;            // gekozen tijd (minuten na middernacht)
     bool editing = false;             // tijd wordt met de toetsen ingetypt

@@ -59,6 +59,17 @@ void Player::update(float dt, const Input& in, const World& world, const Collisi
         fly = !fly;
         vy_ = 0;
     }
+    // dubbel spatie: vliegen aan/uit (zoals in Minecraft)
+    spaceTimer_ += dt;
+    if (in.captured && in.pressed[VK_SPACE] && !vehicle) {
+        if (spaceTimer_ < 0.3f) {
+            fly = !fly;
+            vy_ = 0;
+            spaceTimer_ = 1e9f;
+        } else {
+            spaceTimer_ = 0;
+        }
+    }
     float f = 0, r = 0;
     if (in.captured) {
         if (in.down['W']) f += 1;
@@ -250,12 +261,13 @@ void Player::update(float dt, const Input& in, const World& world, const Collisi
 
     float ground = world.heightAt(pos.x, pos.z);
     if (fly) {
-        float speed = fast ? 90.0f : 22.0f;
+        // vliegen: spatie omhoog, shift omlaag, ctrl snel
+        float speed = (in.down[VK_CONTROL]) ? 90.0f : 22.0f;
         Vec3 dir = forward() * f + right * r;
         float dl = length(dir);
         if (dl > 0) pos += dir * (speed * dt / dl);
         if (in.captured && in.down[VK_SPACE]) pos.y += speed * dt;
-        if (in.captured && (in.down[VK_CONTROL] || in.down['C'])) pos.y -= speed * dt;
+        if (in.captured && (in.down[VK_SHIFT] || in.down['C'])) pos.y -= speed * dt;
         ground = world.heightAt(pos.x, pos.z);
         if (pos.y < ground) pos.y = ground;
         return;
