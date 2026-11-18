@@ -16,7 +16,7 @@ GAME="engine/gl.cpp engine/platform.cpp engine/renderer.cpp engine/text.cpp engi
  game/world.cpp game/player.cpp game/bus.cpp game/citybus.cpp game/character.cpp game/people.cpp game/announcer.cpp
  game/busstation.cpp game/beststation.cpp game/collision.cpp game/signs.cpp game/railways.cpp game/station.cpp
  game/train.cpp game/flirt.cpp game/virm.cpp game/traffic.cpp game/mapview.cpp game/menu.cpp game/trainsound.cpp
- game/datastore.cpp game/netplay.cpp net/net.cpp net/inflate.cpp game/main.cpp"
+ game/utrechtstation.cpp game/datastore.cpp game/netplay.cpp net/net.cpp net/inflate.cpp game/main.cpp"
 echo "[1/3] Launcher..."
 (cd launcher && $WINDRES launcher.rc -O coff -o "$OUT/launcher_res.o")
 $CXX $FLAGS -municode -mwindows -o "$OUT/OVLauncher.exe" launcher/launcher.cpp net/net.cpp "$OUT/launcher_res.o" \

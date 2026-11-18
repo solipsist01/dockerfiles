@@ -36,7 +36,15 @@ struct RemotePlayer {
     bool modelDirty = true;
     bool hasPose = false;
     NetPose target;        // laatst ontvangen
-    Vec3 pos;              // getekende positie (afgevlakt)
+    double targetAt = 0;   // wanneer ontvangen
+    Vec3 vel;              // geschatte snelheid (buiten voertuigen, om tussen berichten door te voorspellen)
+    // In een voertuig wordt alleen binnen de bak afgevlakt (lokale coördinaten); de wereldpositie volgt pas uit de
+    // pose van de bak na de simulatie (place). Zo rijdt iemand exact mee, hoe hard de trein ook gaat.
+    int vkind = 0, vid = -1, car = 0;
+    float lx = 0, ly = 0, lz = 0, lh = 0;
+    bool inVehicle = false;   // het voertuig bestaat hier ook: pos komt uit lx/ly/lz
+    Vec3 wpos;             // afgevlakte wereldpositie (als er geen voertuig is)
+    Vec3 pos;              // getekende positie
     float h = 0;
     float phase = 0;
     double lastSeen = 0;
@@ -59,6 +67,8 @@ public:
 
     // Elke frame: berichten verwerken, andere spelers afvlakken. findVehicle: voertuig bij (soort, id) of nullptr.
     void update(double now, float dt, const std::function<Vehicle*(int, int)>& findVehicle);
+    // Na de simulatie (treinen en bussen staan op hun plek van deze frame): getekende posities bepalen.
+    void place(double now, float dt, const std::function<Vehicle*(int, int)>& findVehicle);
     void sendPose(double now, const NetPose& p);   // stuurt zelf maximaal ~10x per seconde
     void sendLook(const Appearance& a);
     void sendChat(const std::string& text);

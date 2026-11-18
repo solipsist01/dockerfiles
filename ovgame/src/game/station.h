@@ -45,6 +45,9 @@ public:
     Vec3 bestCenter;       // midden station Best (perronniveau)
     float bestPlatformY = 10.3f;
     float bestHallY = 16.8f;
+    // Utrecht Centraal (utrechtstation.cpp): startpunten in de hal en op perron 18/19, hoogte van de halvloer
+    Vec3 utrechtHall, utrechtPlatform;
+    float utrechtHallY = 0;
 
 private:
     std::vector<Mesh> opaque_, glass_;

@@ -86,7 +86,10 @@ bool smartRoute(const Railways& rail, const std::vector<Vec3>& fixed, Vec3 dir, 
             if (std::hypot(p.x - f.x, p.z - f.z) < 120) skip = true;
         if (skip) continue;
         Vec3 r;
-        if (rail.rankedTrack(p, dirAt(base, d), 30.0f, rank, r)) pts.push_back({d, r, false});
+        // ten noorden van 's-Hertogenbosch lopen andere lijnen (Tiel, Dordrecht, Betuweroute) soms op 15-30 m naast
+        // de lijn naar Utrecht: daar alleen de sporen van de eigen lijn bekijken
+        float radius = p.z < -28500.0f ? 14.0f : 30.0f;
+        if (rail.rankedTrack(p, dirAt(base, d), radius, p.z < -28500.0f ? 0 : rank, r)) pts.push_back({d, r, false});
     }
     std::stable_sort(pts.begin(), pts.end(), [](const Pt& a, const Pt& b) { return a.d < b.d; });
     std::vector<Vec3> all;
@@ -154,45 +157,78 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         if (rail.routeVia({csStop, a}, a.x - csStop.x, a.z - csStop.z, t, 90)) csE = t.pts.back();
         if (rail.routeVia({csStop, b}, b.x - csStop.x, b.z - csStop.z, t, 90)) csW = t.pts.back();
     }
-    const int NR = sizeof(ROUTE_PTS) / sizeof(ROUTE_PTS[0]);
     const Vec3 tilburg = rdPoint(148058, 399976), tilburgMid = rdPoint(149265, 400058);  // op het spoor naar Tilburg (OSM)
-    Vec3 dbC, boxC;
+    Vec3 dbC, boxC, utC, gdmC;
     stationPt("'s-Hertogenbosch", dbC);
     stationPt("Boxtel", boxC);
+    stationPt("Utrecht Centraal", utC);
+    stationPt("Geldermalsen", gdmC);
     bool toTilburg = df.exit == TILBURG || df.origin == TILBURG;
-    bool viaDB = df.exit == NORTH || df.exit == DENBOSCH || df.origin == NORTH || df.origin == DENBOSCH;
+    // Stations langs de lijn (van Eindhoven naar Utrecht). Een rit gebruikt het stuk tussen zijn begin en eind.
+    static const char* LINE_ST[] = {"Eindhoven Strijp-S", "Best", "Boxtel", "Vught", "'s-Hertogenbosch", "Zaltbommel", "Geldermalsen",
+                                     "Culemborg", "Houten Castellum", "Houten", "Utrecht Lunetten", "Utrecht Vaartsche Rijn", "Utrecht Centraal"};
+    const int NLS = sizeof(LINE_ST) / sizeof(LINE_ST[0]);
+    const End southEnd = north ? df.origin : df.exit, northEnd = north ? df.exit : df.origin;
+    int i0 = southEnd == DENBOSCH ? 4 : southEnd == TIEL ? 6 : 0;
+    int i1 = northEnd == DENBOSCH || northEnd == NORTH ? 4 : northEnd == TILBURG ? 1 : NLS - 1;
+    const bool viaDB = i0 < 4 && i1 >= 4;  // rijdt ten zuiden van 's-Hertogenbosch
+    // uitlopers (de mist in): punten in de rijrichting "naar buiten"
+    auto rdArr = [](const double (*p)[2], int k) { return rdPoint(p[k][0], p[k][1]); };
+    auto branch = [&](End e, Vec3& bMid, Vec3& bFar) {
+        if (e == TILBURG) { bMid = tilburgMid; bFar = tilburg; return true; }
+        if (e == UTN) { bMid = rdArr(UT_NORTH_PTS, 3); bFar = rdArr(UT_NORTH_PTS, 7); return true; }
+        if (e == UTW) { bMid = rdArr(UT_WEST_PTS, 3); bFar = rdArr(UT_WEST_PTS, 6); return true; }
+        if (e == TIEL) { bMid = rdArr(TIEL_PTS, 3); bFar = rdArr(TIEL_PTS, 6); return true; }
+        return false;
+    };
 
-    // ---- voorlopige route langs de corridor (voor de rijrichting bij de stations) ----
-    // (langs de stations zelf; tussenpunten zouden op een andere lijn kunnen liggen)
-    std::vector<Vec3> cor;
-    std::vector<bool> creq;
-    for (const char* name : {"Eindhoven Strijp-S", "Best", "Boxtel", "Vught", "'s-Hertogenbosch"}) {
-        if (!viaDB && std::string(name) == "Boxtel") break;  // richting Tilburg: Boxtel via het aftakpunt
-        Vec3 c;
-        if (stationPt(name, c)) { cor.push_back(c); creq.push_back(false); }
-    }
-    (void)NR;
-    if (toTilburg) { cor.push_back(tilburgMid); creq.push_back(false); cor.push_back(tilburg); creq.push_back(true); }
-    std::vector<Vec3> base0pts;
-    std::vector<bool> base0req;
-    if (north) {
-        base0pts = {csE, csStop, csW};
-        base0req = {true, true, true};
-        base0pts.insert(base0pts.end(), cor.begin(), cor.end());
-        base0req.insert(base0req.end(), creq.begin(), creq.end());
-    } else {
-        std::reverse(cor.begin(), cor.end());
-        std::reverse(creq.begin(), creq.end());
-        if (df.origin == DENBOSCH && df.linkFrom >= 0) cor.insert(cor.begin(), patterns_[df.linkFrom]->terminal), creq.insert(creq.begin(), true);
-        base0pts = cor;
-        base0req = creq;
-        base0req[0] = true;
-        for (Vec3 q : {csW, csStop, csE}) { base0pts.push_back(q); base0req.push_back(true); }
-    }
-    Vec3 d0 = base0pts[1] - base0pts[0];
-    if (df.origin == DENBOSCH && df.linkFrom >= 0) d0 = rdPoint(ROUTE_PTS[24][0], ROUTE_PTS[24][1]) - base0pts[0];
+    // ---- voorlopige route langs de corridor (voor de rijrichting bij de stations), eerst in noordelijke volgorde ----
+    // (langs de stations zelf; tussenpunten zouden op een andere lijn kunnen liggen). Voor de uitlopers drie pogingen:
+    // het ruwe eindpunt, het rechter spoor in de rijrichting, of alleen tot het middelpunt van de uitloper.
+    // voorbij Utrecht is de lijn viersporig: Intercity's op de binnenste sporen (die leiden naar de IC-perrons 7/18)
+    auto branchRank = [&](End e) { return e == UTW && p.rs->product == "Intercity" ? 1 : 0; };
+    auto rightOf = [&](End e, Vec3 bMid, Vec3 bFar) {
+        Vec3 d = e == df.exit ? bFar - bMid : bMid - bFar, r = bFar;
+        rail.rankedTrack(bFar, d, 30.0f, branchRank(e), r);
+        return r;
+    };
     TrackPath base0;
-    if (!rail.routeSmart(base0pts, base0req, d0.x, d0.z, base0, 0)) { err = "Geen route " + std::string(df.number) + " naar " + df.dest; return false; }
+    bool base0ok = false;
+    for (int variant = 0; variant < 3 && !base0ok; variant++) {
+        std::vector<Vec3> base0pts;
+        std::vector<bool> base0req;
+        Vec3 bm, bf;
+        auto endPt = [&](End e) { return variant == 0 ? bf : variant == 1 ? rightOf(e, bm, bf) : bm; };
+        if (southEnd == EAST) for (Vec3 q : {csE, csStop, csW}) { base0pts.push_back(q); base0req.push_back(true); }
+        if (branch(southEnd, bm, bf)) {
+            if (variant < 2) { base0pts.push_back(endPt(southEnd)); base0req.push_back(true); }
+            base0pts.push_back(bm); base0req.push_back(variant == 2);
+        }
+        for (int k = i0; k <= i1; k++) {
+            // Utrecht Centraal met een uitloper erachter: niet via het stationsmidden (dat ligt bij spoor 14; vandaar is
+            // niet elk spoor naar Amsterdam/Woerden bereikbaar). Het perronspoor (anker) bepaalt daar de weg.
+            if (k == NLS - 1 && (northEnd == UTN || northEnd == UTW)) continue;
+            Vec3 c;
+            if (stationPt(LINE_ST[k], c)) { base0pts.push_back(c); base0req.push_back(false); }
+        }
+        if (branch(northEnd, bm, bf)) {
+            base0pts.push_back(bm); base0req.push_back(variant == 2);
+            if (variant < 2) { base0pts.push_back(endPt(northEnd)); base0req.push_back(true); }
+        }
+        if (!north) {
+            std::reverse(base0pts.begin(), base0pts.end());
+            std::reverse(base0req.begin(), base0req.end());
+        }
+        if (df.origin == DENBOSCH && df.linkFrom >= 0) { base0pts.insert(base0pts.begin(), patterns_[df.linkFrom]->terminal); base0req.insert(base0req.begin(), true); }
+        base0req[0] = true;
+        base0req.back() = true;
+        Vec3 d0 = base0pts[1] - base0pts[0];
+        if (df.origin == DENBOSCH && df.linkFrom >= 0)
+            d0 = (north ? rdPoint(UTRECHT_PTS[2][0], UTRECHT_PTS[2][1]) : rdPoint(ROUTE_PTS[24][0], ROUTE_PTS[24][1])) - base0pts[0];
+        base0ok = rail.routeSmart(base0pts, base0req, d0.x, d0.z, base0, 0);
+    }
+    if (!base0ok) { err = "Geen route " + std::string(df.number) + " naar " + df.dest; return false; }
+    Vec3 bm, bf;
 
     std::string diag;
     // ---- spoor per station (rechts rijden: Sprinter buitenspoor, Intercity middenspoor op viersporig baanvak) ----
@@ -245,8 +281,27 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         else if (s.track && trackAt(c, s.track, a.p)) a.count = -1;
         else {
             float d = base0.closest(c.x, c.z);
-            if (!rail.rankedTrack(base0.pos(d), dirAt(base0, d), 30.0f, rank, a.p, &a.count)) a.p = base0.pos(d);
-            if (a.count >= 4) a.fixed = true;  // viersporig: ook bij doorkomst het juiste spoor vastleggen
+            // ten noorden van 's-Hertogenbosch (Houten, Houten Castellum): Sprinters langs het eilandperron tussen de
+            // binnenste sporen, Intercity's over de buitenste - dus ook voor IC's het meest rechtse spoor
+            // (gemeten vanaf het stationsmidden, niet vanaf de voorlopige route: die kan aan de verkeerde kant liggen)
+            int rk = c.z < -28500.0f ? 0 : rank;
+            Vec3 q = c.z < -28500.0f ? Vec3(c.x, base0.pos(d).y, c.z) : base0.pos(d);
+            if (!rail.rankedTrack(q, dirAt(base0, d), c.z < -28500.0f ? 14.0f : 30.0f, rk, a.p, &a.count)) a.p = base0.pos(d);
+            // viersporig: ook bij doorkomst het juiste spoor vastleggen (niet vlak bij Utrecht Centraal: daar lopen de lijnen
+            // naar Arnhem en 's-Hertogenbosch naast elkaar; de route naar het perronspoor zoekt de router zelf)
+            // Ten noorden van 's-Hertogenbosch is alleen Houten Castellum - Houten echt viersporig; Geldermalsen en Zaltbommel
+            // hebben extra perronsporen (daar zou "middenspoor" het hoofdspoor van de tegenrichting zijn).
+            // Geldermalsen: het meest rechtse spoor binnen 14 m is daar het doorgaande spoor naast het eiland 3/4
+            bool fourTrackLine = c.z > -28500.0f || std::string(s.station) == "Houten" || std::string(s.station) == "Houten Castellum" ||
+                                 std::string(s.station) == "Geldermalsen";
+            if (a.count >= 4 && fourTrackLine && std::hypot(c.x - utC.x, c.z - utC.z) > 3500) a.fixed = true;
+            if (std::string(s.station) == "Geldermalsen" && !s.stop) {
+                // vanaf het stationsmidden: perronsporen 3/4 op +11/-13 m, de doorgaande sporen zonder perron op +16/-17 m,
+                // spoor 1 en 6 op +21/-22 m. Binnen 18 m is het meest rechtse spoor dus het doorgaande spoor.
+                Vec3 r;
+                int cnt = 0;
+                if (rail.rankedTrack(c, dirAt(base0, d), 18.0f, 0, r, &cnt) && cnt >= 2) { a.p = r; a.count = cnt; a.fixed = true; }
+            }
             if (s.track) diag += std::string(" (spoor ") + s.track + " in " + s.station + " niet gevonden)";
         }
         anchors.push_back(a);
@@ -272,39 +327,61 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
             else if (it != anchors.end()) anchors.insert(it + 1, a);
         }
     }
-    // controlepunt op de lijn naar Tilburg (~1 km ten westen van Boxtel): rechter spoor per rijrichting
-    if (toTilburg) {
-        Vec3 d = df.exit == TILBURG ? tilburg - tilburgMid : tilburgMid - tilburg, r;
+    // controlepunt ~1 km ten noorden van 's-Hertogenbosch (lijn naar Utrecht): rechter spoor, zodat een trein niet al
+    // kilometers voor het station naar een perronspoor aan de andere kant oversteekt
+    if (i0 <= 4 && i1 > 4 && (df.exit == DENBOSCH || df.origin == DENBOSCH)) {  // alleen ritten die daar keren
+        float dDB = base0.closest(dbC.x, dbC.z);
+        float dc = north ? dDB + 1000 : dDB - 1000;
+        Vec3 r;
         int cnt = 0;
-        if (rail.rankedTrack(tilburgMid, d, 30.0f, 0, r, &cnt) && cnt >= 2) {
-            Anchor a{"(Tilburg-lijn)", r, cnt, true};
-            if (df.exit == TILBURG) anchors.push_back(a);
+        if (dc > 0 && dc < base0.length && rail.rankedTrack(base0.pos(dc), dirAt(base0, dc), 14.0f, 0, r, &cnt) && cnt >= 2) {
+            Anchor a{"(Den Bosch-noord)", r, cnt, true};
+            auto it = std::find_if(anchors.begin(), anchors.end(), [](const Anchor& x) { return x.name == "'s-Hertogenbosch"; });
+            if (it == anchors.end()) anchors.push_back(a);
+            else if (north) anchors.insert(it + 1, a);
+            else anchors.insert(it, a);
+        }
+    }
+    // controlepunt op een uitloper (Tilburg-, Tiel-lijn, voorbij Utrecht): rechter spoor per rijrichting
+    for (End e : {df.origin, df.exit}) {
+        if (!branch(e, bm, bf)) continue;
+        bool out = e == df.exit;  // naar buiten rijden
+        Vec3 d = out ? bf - bm : bm - bf, r;
+        int cnt = 0;
+        if (rail.rankedTrack(bm, d, 30.0f, branchRank(e), r, &cnt) && cnt >= 2) {
+            Anchor a{e == TILBURG ? "(Tilburg-lijn)" : e == TIEL ? "(Tiel-lijn)" : "(voorbij Utrecht)", r, cnt, true};
+            if (out) anchors.push_back(a);
             else anchors.insert(anchors.begin(), a);
         }
     }
     // ---- definitieve route ----
-    std::vector<Vec3> fixed;
+    // eind- en beginpunten op een uitloper: het rechter spoor voor deze rijrichting
+    auto farPt = [&](End e, Vec3& out) {
+        if (!branch(e, bm, bf)) return false;
+        Vec3 d = e == df.exit ? bf - bm : bm - bf;
+        out = bf;
+        rail.rankedTrack(bf, d, 30.0f, branchRank(e), out);
+        return true;
+    };
+    auto assemble = [&]() {
+        std::vector<Vec3> f;
+        Vec3 q;
+        if (df.origin == EAST) f = {csE, csStop, csW};
+        else if (farPt(df.origin, q)) f.push_back(q);
+        for (auto& a : anchors) if (a.fixed) f.push_back(a.p);
+        if (df.exit == EAST) for (Vec3 c : {csW, csStop, csE}) f.push_back(c);
+        else if (farPt(df.exit, q)) f.push_back(q);
+        return f;
+    };
+    std::vector<Vec3> fixed = assemble();
     Vec3 dir;
-    if (north) {
-        fixed = {csE, csStop, csW};
-        for (auto& a : anchors) if (a.fixed) fixed.push_back(a.p);
-        if (df.exit == TILBURG) fixed.push_back(tilburg);
-        dir = csW - csE;
-    } else {
-        if (df.origin == TILBURG) fixed.push_back(tilburg);
-        for (auto& a : anchors) if (a.fixed) fixed.push_back(a.p);
-        for (Vec3 q : {csW, csStop, csE}) fixed.push_back(q);
+    if (df.origin == EAST) dir = csW - csE;
+    else {
         float d = base0.closest(fixed[0].x, fixed[0].z);
         dir = dirAt(base0, d + 15);
     }
-    std::vector<std::pair<Vec3, float>> protect{{csStop, YARD_ZONE}, {dbC, 120.0f}, {boxC, 600.0f}};
-    if (toTilburg) {
-        // eindpunt richting Tilburg: het rechter spoor voor deze rijrichting
-        Vec3 d = df.exit == TILBURG ? tilburg - tilburgMid : tilburgMid - tilburg, r;
-        if (rail.rankedTrack(tilburg, d, 30.0f, 0, r)) {
-            for (Vec3& f : fixed) if (std::hypot(f.x - tilburg.x, f.z - tilburg.z) < 0.1f) f = r;
-        }
-    }
+    std::vector<std::pair<Vec3, float>> protect{{csStop, YARD_ZONE}, {dbC, 120.0f}, {boxC, 600.0f}, {utC, 1300.0f}};
+    if (df.origin == TIEL || df.exit == TIEL) protect.push_back({gdmC, 700.0f});  // aftakking: de router kiest de wissels zelf
     float extEnd = df.exit == DENBOSCH ? 160.0f : 6000.0f;
     TrackPath main;
     // onbereikbaar vast punt (bijv. ontbrekende overloopwissel in de OSM-data): dat station terugvallen op rechts rijden
@@ -343,10 +420,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
             }
         if (!fixedIt) break;
         // vaste punten opnieuw samenstellen
-        std::vector<Vec3> nf;
-        if (north) { nf = {csE, csStop, csW}; for (auto& a : anchors) if (a.fixed) nf.push_back(a.p); if (df.exit == TILBURG) nf.push_back(tilburg); }
-        else { if (df.origin == TILBURG) nf.push_back(tilburg); for (auto& a : anchors) if (a.fixed) nf.push_back(a.p); for (Vec3 q : {csW, csStop, csE}) nf.push_back(q); }
-        fixed = nf;
+        fixed = assemble();
     }
     if (!smartRoute(rail, fixed, dir, rank, extEnd, protect, main)) {
         err = "Geen route " + std::string(df.number) + " naar " + df.dest + ": vast punt";
@@ -449,18 +523,48 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         }
     // snelheidsbeperkingen: emplacementen 80 km/u; aftakking Boxtel 80 km/u voor treinen van/naar Tilburg
     p.zones.clear();
-    for (Vec3 c : {csStop, dbC}) {
+    for (Vec3 c : {csStop, dbC, utC}) {
         float d = main.closest(c.x, c.z);
-        if (std::hypot(main.pos(d).x - c.x, main.pos(d).z - c.z) < 200) p.zones.push_back({d - YARD_ZONE, d + YARD_ZONE, 22.2f});
+        float zone = c.x == utC.x && c.z == utC.z ? 1300.0f : YARD_ZONE;  // Utrecht: groot emplacement
+        if (std::hypot(main.pos(d).x - c.x, main.pos(d).z - c.z) < 200) p.zones.push_back({d - zone, d + zone, 22.2f});
     }
     if (toTilburg) {
         float d = main.closest(boxC.x, boxC.z);
         p.zones.push_back({d - 450, d + 450, 22.2f});
     }
+    if (df.origin == TIEL || df.exit == TIEL) {  // aftakking Geldermalsen
+        float d = main.closest(gdmC.x, gdmC.z);
+        p.zones.push_back({d - 500, d + 500, 22.2f});
+    }
     std::sort(p.zones.begin(), p.zones.end(), [](const SpeedZone& a, const SpeedZone& b) { return a.d0 < b.d0; });
     snprintf(buf, sizeof(buf), "%s %s naar %s (%s, CS spoor %d): pad %.0f m\n   sporen:%s\n", p.rs->product.c_str(), df.number, df.dest,
              p.rs->typeName.c_str(), df.csTrack, main.length, diag.c_str());
     p.info = buf;
+    // diagnose: per 500 m welk spoor (0 = meest rechts in de rijrichting, binnen 14 m) - '.' = enkel spoor
+    {
+        std::string lane = "   rijstrook per 500 m: ";
+        for (float d = 0; d < main.length; d += 500) {
+            Vec3 q = main.pos(d), dd = dirAt(main, d);
+            float dl = std::hypot(dd.x, dd.z);
+            if (dl < 1e-3f) { lane += '?'; continue; }
+            float rx = -dd.z / dl, rz = dd.x / dl;
+            int right = 0, total = 0;
+            for (const RailLine& rl : world.rails) {
+                if (rl.pts.size() < 2) continue;
+                float bestLat = 1e9f;
+                for (size_t k = 0; k + 1 < rl.pts.size(); k++) {
+                    float ax = rl.pts[k].x - q.x, az = rl.pts[k].z - q.z;
+                    float along = (ax * dd.x + az * dd.z) / dl;
+                    if (std::fabs(along) > 30) continue;
+                    float lat = ax * rx + az * rz;
+                    if (std::fabs(lat) < std::fabs(bestLat)) bestLat = lat;
+                }
+                if (std::fabs(bestLat) < 14.0f) { total++; if (bestLat > 1.2f) right++; }
+            }
+            lane += total <= 1 ? '.' : (char)('0' + std::min(9, right));
+        }
+        p.info += lane + "\n";
+    }
     return true;
 }
 
@@ -527,39 +631,90 @@ void Traffic::timetable(Pattern& p, std::string& log) {
 bool Traffic::setup(const World& world, const Railways& rail, const Stations& st, SignAtlas& atlas, std::string& err) {
     stock_.emplace_back(makeFlirt());
     stock_.emplace_back(makeVirm());
-    // Dienstregeling 2026 (OV in Nederland Wiki, vertrektijden per station). Minuten na het begin van het halfuur
-    // (de rit een halfuur later rijdt 30 minuten later). -1 = uitrekenen uit de rijtijd.
-    // Alle Intercity's worden (voorlopig) met VIRM gereden.
+    // Dienstregeling 2026 (OV in Nederland Wiki; 's-Hertogenbosch - Utrecht uit de GTFS van OVapi, november 2026), vertrektijden
+    // per station. Minuten na het begin van het halfuur (de rit een halfuur later rijdt 30 minuten later; tijden > 30 lopen
+    // door in het volgende halfuur). -1 = uitrekenen uit de rijtijd. Sporen in Den Bosch en Utrecht zoals in de GTFS.
+    // Alle Intercity's worden (voorlopig) met VIRM gereden, alle Sprinters met FLIRT.
+    // Utrecht: de IC 3500 naar Dordrecht (via Woerden/Gouda) vertrekt van spoor 8 - in de spoordata sluiten alleen 8/9/11/12
+    // en 20/21 aan op de lijn naar Woerden (in werkelijkheid spoor 7). De 3500 naar Venlo komt van de kant van Amsterdam
+    // binnen en vertrekt, zoals in de GTFS, van spoor 18.
     const char *ES = "Eindhoven Strijp-S", *BE = "Best", *BX = "Boxtel", *VU = "Vught", *DB = "'s-Hertogenbosch";
+    const char *ZB = "Zaltbommel", *GM = "Geldermalsen", *CL = "Culemborg", *HC = "Houten Castellum", *HT = "Houten",
+               *UL = "Utrecht Lunetten", *UV = "Utrecht Vaartsche Rijn", *UT = "Utrecht Centraal";
+    // Intercity's tussen 's-Hertogenbosch en Utrecht: alle tussenstations zonder te stoppen
+    auto icNorth = [&](double dbArr, double dbDep, double utArr, double utDep, const char* utTrack = "7") {
+        // doorkomen langs de doorgaande sporen: Zaltbommel 1/2, Culemborg 1/2 (Geldermalsen: rechts rijden, niet langs de
+        // perronsporen 3/6 waar de Sprinters 6 minuten staan)
+        return std::vector<StopDef>{{DB, true, dbArr, dbDep, "3a"}, {ZB, false, -1, -1, "1"}, {GM, false, -1, -1}, {CL, false, -1, -1, "1"},
+                                    {HC, false, -1, -1}, {HT, false, -1, -1}, {UL, false, -1, -1}, {UV, false, -1, -1},
+                                    {UT, true, utArr, utDep, utTrack}};
+    };
+    auto icSouth = [&](double utArr, double utDep, double dbArr, double dbDep, const char* utTrack = "18") {
+        return std::vector<StopDef>{{UT, true, utArr, utDep, utTrack}, {UV, false, -1, -1}, {UL, false, -1, -1}, {HT, false, -1, -1},
+                                    {HC, false, -1, -1}, {CL, false, -1, -1, "2"}, {GM, false, -1, -1}, {ZB, false, -1, -1, "2"},
+                                    {DB, true, dbArr, dbDep, "6a"}};
+    };
+    auto cat = [](std::vector<StopDef> a, const std::vector<StopDef>& b) { a.insert(a.end(), b.begin(), b.end()); return a; };
+    const std::vector<StopDef> ehvNorth{{ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "2"}, {VU, false, -1, -1, "1"}};
+    const std::vector<StopDef> ehvSouth{{VU, false, -1, -1, "2"}, {BX, false, -1, -1, "3"}, {BE, false, -1, -1}, {ES, false, -1, -1}};
     std::vector<Def> defs = {
         // ---- noordwaarts (vanaf Eindhoven Centraal) ----
-        {"2700", "Alkmaar", 1, 5, EAST, NORTH, {{CS, true, -1, 4}, {ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "2"}, {VU, false, -1, -1, "1"}, {DB, true, 24, 26, "3a"}}},
+        {"2700", "Alkmaar", 1, 5, EAST, UTN, cat(cat({{CS, true, -1, 4}}, ehvNorth), icNorth(26, 30, 57, 59))},
         {"6500", "'s-Hertogenbosch", 0, 6, EAST, DENBOSCH, {{CS, true, -1, 5}, {ES, true, -1, 9}, {BE, true, -1, 14}, {BX, true, -1, 21, "2"}, {VU, true, -1, 28, "1"}, {DB, true, -1, -1, "4b"}}},
         {"1100", "Den Haag Centraal", 1, 5, EAST, TILBURG, {{CS, true, -1, 13}, {ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "6"}}},
-        {"3500", "Dordrecht", 1, 6, EAST, NORTH, {{CS, true, -1, 16}, {ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "2"}, {VU, false, -1, -1, "1"}, {DB, true, 36, 38, "3a"}}},
+        {"3500", "Dordrecht", 1, 6, EAST, UTW, cat(cat({{CS, true, -1, 16}}, ehvNorth), icNorth(36, 39, 65, 71, "8"))},
         {"6400", "Tilburg Universiteit", 0, 4, EAST, TILBURG, {{CS, true, -1, 21}, {ES, true, -1, 24}, {BE, true, -1, 30}, {BX, true, -1, 37, "6"}}},
-        {"3900", "Enkhuizen", 1, 5, EAST, NORTH, {{CS, true, -1, 26}, {ES, false, -1, -1}, {BE, false, -1, -1}, {BX, false, -1, -1, "2"}, {VU, false, -1, -1, "1"}, {DB, true, 46, 48, "3a"}}},
+        {"3900", "Enkhuizen", 1, 5, EAST, UTN, cat(cat({{CS, true, -1, 26}}, ehvNorth), icNorth(46, 50, 76, 79))},
         // ---- zuidwaarts (naar Eindhoven Centraal) ----
         {"6500", "Deurne", 0, 2, DENBOSCH, EAST, {{DB, true, -1, 28}, {VU, true, -1, 32.5, "2"}, {BX, true, -1, 39, "3"}, {BE, true, -1, 45}, {ES, true, -1, 51}, {CS, true, -1, 66}}, 1, -30},
-        {"3900", "Heerlen", 1, 1, NORTH, EAST, {{DB, true, -1, 14, "6a"}, {VU, false, -1, -1, "2"}, {BX, false, -1, -1, "3"}, {BE, false, -1, -1}, {ES, false, -1, -1}, {CS, true, 35, 38}}},
-        {"3500", "Venlo", 1, 2, NORTH, EAST, {{DB, true, -1, 24, "6a"}, {VU, false, -1, -1, "2"}, {BX, false, -1, -1, "3"}, {BE, false, -1, -1}, {ES, false, -1, -1}, {CS, true, 44.5, 49}}},
-        {"2700", "Maastricht", 1, 3, NORTH, EAST, {{DB, true, -1, 3, "6a"}, {VU, false, -1, -1, "2"}, {BX, false, -1, -1, "3"}, {BE, false, -1, -1}, {ES, false, -1, -1}, {CS, true, 24, 27}}},
+        {"3900", "Heerlen", 1, 1, UTN, EAST, cat(cat(icSouth(11, 14, 42, 45), ehvSouth), {{CS, true, 65, 68}})},
+        {"3500", "Venlo", 1, 2, UTN, EAST, cat(cat(icSouth(18, 24, 52, 55), ehvSouth), {{CS, true, 74.5, 79}})},
+        {"2700", "Maastricht", 1, 3, UTN, EAST, cat(cat(icSouth(1, 4, 32, 34), ehvSouth), {{CS, true, 54, 57}})},
         {"6400", "Weert", 0, 3, TILBURG, EAST, {{BX, true, -1, 23, "7"}, {BE, true, -1, 29}, {ES, true, -1, 35}, {CS, true, -1, 47}}},
+        // ---- Sprinters 's-Hertogenbosch - Utrecht (8800, kopmaken in Den Bosch) en Tiel - Utrecht (6900) ----
+        {"8800", "'s-Hertogenbosch", 0, 0, UTW, DENBOSCH,
+         {{UT, true, 6, 10, "21"}, {UV, true, -1, 12, "4"}, {UL, true, -1, 15, "2"}, {HT, true, 18, 19, "2"}, {HC, true, -1, 22, "2"},
+          {CL, true, -1, 28, "2"}, {GM, true, 36, 42, "6"}, {ZB, true, -1, 48, "2"}, {DB, true, 57, -1, "4a"}}},
+        {"8800", "Bodegraven", 0, 0, DENBOSCH, UTW,
+         {{DB, true, -1, 3, "4a"}, {ZB, true, -1, 11, "1"}, {GM, true, 18, 24, "3"}, {CL, true, -1, 29, "1"}, {HC, true, 35, 36, "1"},
+          {HT, true, -1, 39, "1"}, {UL, true, -1, 43, "1"}, {UV, true, -1, 46, "3"}, {UT, true, 49, 54, "20"}}, 11, -60},
+        {"6900", "Den Haag Centraal", 0, 0, TIEL, UTW,
+         {{GM, true, 34, 44, "1"}, {CL, true, -1, 50, "1"}, {HC, true, -1, 56, "1"}, {HT, true, -1, 59, "1"}, {UL, true, -1, 63, "1"},
+          {UV, true, -1, 66, "3"}, {UT, true, 69, 74, "20"}}},
+        {"6900", "Tiel", 0, 0, UTW, TIEL,
+         {{UT, true, 14, 20, "21"}, {UV, true, -1, 22, "4"}, {UL, true, -1, 25, "2"}, {HT, true, 28, 29, "2"}, {HC, true, -1, 32, "2"},
+          {CL, true, -1, 38, "2"}, {GM, true, 46, 54, "4"}}},
     };
     std::string log;
-    for (const Def& d : defs) {
+    // Een serie zonder route (bijv. een gat in de spoordata) wordt overgeslagen; de rest rijdt gewoon.
+    std::vector<int> patOf(defs.size(), -1);  // def-index -> patroon-index
+    for (size_t di = 0; di < defs.size(); di++) {
+        const Def& d = defs[di];
         auto p = std::make_unique<Pattern>();
         p->def = d;
+        if (d.linkFrom >= 0) {
+            p->def.linkFrom = patOf[d.linkFrom];
+            if (p->def.linkFrom < 0) { warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + " (aansluitende rit ontbreekt)\n"; continue; }
+        }
         p->number = d.number;
         p->dest = d.dest;
-        p->north = d.origin == EAST;
+        // "noord" = van Eindhoven af (richting Utrecht); volgorde van de eindpunten langs de lijn
+        auto rankOf = [](End e) { return e == EAST || e == TILBURG ? 0 : e == DENBOSCH || e == NORTH ? 4 : e == TIEL ? 6 : 12; };
+        p->north = d.origin == EAST || (d.exit != EAST && rankOf(d.origin) < rankOf(d.exit));
         p->rs = stock_[d.stock].get();
-        if (!buildPattern(*p, world, rail, st, err)) return false;
+        std::string perr;
+        if (!buildPattern(*p, world, rail, st, perr)) {
+            warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + ": " + perr + "\n";
+            printf("Trein %s naar %s overgeslagen: %s\n", d.number, d.dest, perr.c_str());
+            continue;
+        }
         std::string tl;
         timetable(*p, tl);
         p->info += tl;
+        patOf[di] = (int)patterns_.size();
         patterns_.push_back(std::move(p));
     }
+    if (patterns_.empty()) { err = "Geen enkele treinserie kon worden opgebouwd. " + warnings_; return false; }
     // controle: rijden twee tegengestelde series ergens over hetzelfde spoor? (zou kunnen vastlopen)
     {
         std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> grid;  // cel -> (patroon, monster)
@@ -601,7 +756,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
                 }
             }
     }
-    for (const char* n : {CS, ES, BE, BX, VU, DB}) nameIndex(n);
+    for (const char* n : {CS, ES, BE, BX, VU, DB, ZB, GM, CL, HC, HT, UL, UV, UT}) nameIndex(n);
     for (auto& p : patterns_) nameIndex(p->dest);
     for (auto& s : stock_) s->build(atlas, names_);
 
@@ -860,8 +1015,22 @@ Train* Traffic::trainOf(int serviceId) const {
     return nullptr;
 }
 
-std::string Traffic::debugInfo() const {
+std::string Traffic::pathsInfo() const {
     std::string s;
+    char b[64];
+    for (auto& p : patterns_) {
+        s += "PAD " + p->number + " " + p->dest + "\n";
+        for (float d = 0; d < p->path.length; d += 100) {
+            Vec3 q = p->path.pos(d);
+            snprintf(b, sizeof b, "%.1f %.1f\n", q.x, q.z);
+            s += b;
+        }
+    }
+    return s;
+}
+
+std::string Traffic::debugInfo() const {
+    std::string s = warnings_;
     for (auto& p : patterns_) s += p->info;
     char buf[256];
     snprintf(buf, sizeof(buf), "%zu ritten, %zu actief\n", services_.size(), active_.size());

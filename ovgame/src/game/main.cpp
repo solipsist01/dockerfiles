@@ -106,6 +106,15 @@ static const Spawn SPAWNS[] = {
     {"Boxtel - Perron", 0, 0, 1, 0, 4},
     {"Vught - Perron", 0, 0, 1, 0, 4},
     {"'s-Hertogenbosch - Perron", 0, 0, 1, 0, 4},
+    {"Zaltbommel - Perron", 0, 0, 1, 0, 4},
+    {"Geldermalsen - Perron", 0, 0, 1, 0, 4},
+    {"Culemborg - Perron", 0, 0, 1, 0, 4},
+    {"Houten Castellum - Perron", 0, 0, 1, 0, 4},
+    {"Houten - Perron", 0, 0, 1, 0, 4},
+    {"Utrecht Lunetten - Perron", 0, 0, 1, 0, 4},
+    {"Utrecht Vaartsche Rijn - Perron", 0, 0, 1, 0, 4},
+    {"Utrecht Centraal - Stationshal", 0, 0, 0, 0, 5},
+    {"Utrecht Centraal - Perron 18/19", 0, 0, 1, 0, 5},
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
@@ -333,6 +342,7 @@ int main(int argc, char** argv) {
             FILE* df = fopen(argv[i + 1], "w");
             if (df) {
                 fputs(traffic.debugInfo().c_str(), df);
+                fputs(traffic.pathsInfo().c_str(), df);
                 if (!trainOk) fprintf(df, "FOUT: %s\n", err.c_str());
                 for (const OsmPlatform& op : world.platforms) {
                     float cx = 0, cz = 0;
@@ -388,6 +398,11 @@ int main(int argc, char** argv) {
             float want = s.level ? stations.bestPlatformY : stations.bestHallY;
             y = collision.floorAt(x, z, want + 0.5f);
             if (y < want - 1.0f) y = want;
+        } else if (s.frame == 5) {
+            // Utrecht Centraal: in de stationshal of op perron 18/19 (utrechtstation.cpp)
+            Vec3 q = s.level == 0 ? stations.utrechtHall : stations.utrechtPlatform;
+            x = q.x; z = q.z; y = q.y;
+            p.yaw = s.level == 0 ? -2.62f : 0.52f;
         } else if (s.frame == 4) {
             // station langs de lijn: op het grootste perron, bij het punt dat het dichtst bij het stationsmidden ligt
             std::string st = std::string(s.name).substr(0, std::string(s.name).find(" - "));
@@ -433,7 +448,7 @@ int main(int argc, char** argv) {
             }
         }
         p.pos = Vec3(x, y, z);
-        if (s.frame != 3 && s.frame != 4) p.yaw = s.yawDeg * PI / 180;
+        if (s.frame != 3 && s.frame != 4 && s.frame != 5) p.yaw = s.yawDeg * PI / 180;
         p.pitch = 0;
     };
     auto doSpawn = [&](int n) { computeSpawn(n, player); };
@@ -441,7 +456,8 @@ int main(int argc, char** argv) {
     {
         const struct { const char* name; int spawn; } places[] = {
             {"Eindhoven Centraal", 3}, {"Busstation Centraal", 9}, {"Eindhoven Strijp-S", 6}, {"Best", 7},
-            {"Boxtel", 10}, {"Vught", 11}, {"'s-Hertogenbosch", 12}};
+            {"Boxtel", 10}, {"Vught", 11}, {"'s-Hertogenbosch", 12}, {"Zaltbommel", 13}, {"Geldermalsen", 14}, {"Culemborg", 15},
+            {"Houten Castellum", 16}, {"Houten", 17}, {"Utrecht Lunetten", 18}, {"Utrecht Vaartsche Rijn", 19}, {"Utrecht Centraal", 20}};
         for (auto& pl : places) {
             Player tmp;
             computeSpawn(pl.spawn, tmp);
@@ -523,6 +539,18 @@ int main(int argc, char** argv) {
                     if (!w) { waits.push_back({a, 0}); w = &waits.back().second; }
                     if (a->waitingForSignal()) *w += 0.5; else *w = 0;
                     if (*w > maxWait) { maxWait = *w; maxInfo = a->label() + " om " + hhmm(traffic.clock()); }
+                    static std::map<int, bool> lateLogged;
+                    if (a->maxDelay() > 300 && !lateLogged[a->service().id] && lateLogged.size() < 12) {
+                        lateLogged[a->service().id] = true;
+                        fprintf(lf, "TE LAAT GERAAKT: %s om %s: %.0f s, laatste halte %s, snelheid %.1f m/s%s\n", a->label().c_str(), hhmm(traffic.clock()).c_str(),
+                                a->maxDelay(), a->lastStopIndex() >= 0 ? a->service().stops[a->lastStopIndex()].station.c_str() : "-", a->speed(),
+                                a->waitingForSignal() ? " (wacht voor sein)" : "");
+                    }
+                    static bool dumped = false;
+                    if (*w > 900 && !dumped) {  // eerste vastloper: toestand van alle treinen
+                        dumped = true;
+                        fprintf(lf, "VASTLOPER: %s wacht al %.0f s om %s\n%s\n", a->label().c_str(), *w, hhmm(traffic.clock()).c_str(), traffic.trainsInfo().c_str());
+                    }
                 }
                 // controle: geen twee treinen dichter dan 2,5 m bij elkaar (rijtuigmiddens/einden)
                 if (((int)(t * 2)) % 20 == 0)
@@ -1069,6 +1097,46 @@ int main(int argc, char** argv) {
         player.pitch = startPitch * PI / 180;
         world.preload(player.eye());
     }
+    // test: na verbinden instappen in de snelste rijdende trein (bij iedereen dezelfde) en evt. gaan zitten:
+    //   --mpride BESTEMMING [--mpseat N | --mpnear N] [--yaw GRADEN t.o.v. de kijkrichting van de stoel]
+    for (int i = 1; i < argc; i++)
+        if (strcmp(argv[i], "--mpride") == 0 && i + 1 < argc && net.connected() && trainOk) {
+            Train* best = nullptr;  // de rijdende trein met deze bestemming (bij iedereen dezelfde)
+            for (Train* t : traffic.trains())
+                if (t->destination().find(argv[i + 1]) != std::string::npos && (!best || t->speed() > best->speed())) best = t;
+            if (!best) break;
+            player.board(best, 1, 0.0f, 0.0f);
+            player.pos = best->carToWorld(1, 0, best->floorAt(1, 0), 0);
+            for (int k = 1; k + 1 < argc; k++)
+                if (strcmp(argv[k], "--mpseat") == 0) {
+                    int s = atoi(argv[k + 1]);
+                    if (s >= 0 && s < best->seatCount()) {
+                        SeatInfo si = best->seat(s);
+                        player.seat = s;
+                        player.car = si.car;
+                        player.yaw = PI - best->carPose(si.car).h - si.facing + (yawSet ? startYaw * PI / 180 : 0.0f);
+                        player.pitch = startPitch * PI / 180;
+                    }
+                }
+            for (int k = 1; k + 1 < argc; k++)
+                if (strcmp(argv[k], "--mpnear") == 0) {  // test: in het gangpad naast stoel N staan en ernaar kijken
+                    int s = atoi(argv[k + 1]);
+                    if (s >= 0 && s < best->seatCount()) {
+                        SeatInfo si = best->seat(s);
+                        player.car = si.car;
+                        player.lx = 0;
+                        player.lz = si.lz + 1.6f;
+                        player.pos = best->carToWorld(si.car, 0, best->floorAt(si.car, player.lz), player.lz);
+                        Vec3 to = best->carToWorld(si.car, si.lx, best->floorAt(si.car, si.lz) + 1.0f, si.lz) - player.eye();
+                        player.yaw = std::atan2(to.x, -to.z);
+                        player.pitch = std::atan2(to.y, std::hypot(to.x, to.z));
+                    }
+                }
+            world.preload(player.eye());
+            notice = "Test: in " + best->label() + fmt(" (%.0f km/u)", best->speed() * 3.6f);
+            noticeT = 5;
+            break;
+        }
 
     double fpsTimer = 0;
     int fpsFrames = 0, fps = 0, frame = 0;
@@ -1173,6 +1241,7 @@ int main(int argc, char** argv) {
 
         // ---------- simulatie ----------
         simulate(dt, uiMode ? noInput : in);
+        net.place(now, dt, findVehicle);  // andere spelers op de plek van deze frame (mee in treinen en bussen)
         if (!uiMode && in.pressed['O'] && !tpeople.prompt.empty()) {
             tpeople.showTicket();
             notice = tpeople.notice;

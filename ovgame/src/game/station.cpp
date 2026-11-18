@@ -10,6 +10,8 @@
 
 using namespace WorldFormat;
 
+void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, MeshBuilder& op, MeshBuilder& gl,
+                          std::vector<Elevator>& elevators, Vec3& hallSpawn, Vec3& platformSpawn, float& hallY);
 void buildBestStation(const World& world, Collision& col, SignAtlas& atlas, MeshBuilder& op, MeshBuilder& gl,
                       std::vector<Elevator>& elevators, Vec3& center, float& platformY, float& hallY);
 
@@ -1015,6 +1017,12 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
     buildStrijpS(ss, world, pss);
     buildBestStation(world, col, atlas, s.op, s.gl, elevators, bestCenter, bestPlatformY, bestHallY);
     split(s.op, opaque_);
+    {
+        MeshBuilder uo, ug;  // Utrecht Centraal: eigen meshes (groot)
+        buildUtrechtCentraal(world, col, atlas, uo, ug, elevators, utrechtHall, utrechtPlatform, utrechtHallY);
+        if (!uo.v.empty()) split(uo, opaque_);
+        if (!ug.v.empty()) split(ug, glass_);
+    }
     split(s.gl, glass_);
     split(ss.op, opaque_);
     split(ss.gl, glass_);

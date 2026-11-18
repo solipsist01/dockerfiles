@@ -135,7 +135,15 @@ void NetPlay::handle(const std::string& raw, double now) {
         p.lh = (float)atof(f[17].c_str());
         p.fly = f.size() > 18 && f[18] == "1";
         RemotePlayer& r = it->second;
-        if (!r.hasPose) { r.pos = p.pos; r.h = p.h; }
+        if (!r.hasPose) { r.pos = r.wpos = p.pos; r.h = p.h; }
+        // snelheid uit twee berichten (alleen buiten voertuigen nodig)
+        if (r.hasPose && !p.vkind && !r.target.vkind && now - r.targetAt > 0.02 && now - r.targetAt < 1.5) {
+            Vec3 v = (p.pos - r.target.pos) * (float)(1.0 / (now - r.targetAt));
+            r.vel = length(v) < 80.0f ? v : Vec3();
+        } else if (p.vkind) {
+            r.vel = Vec3();
+        }
+        r.targetAt = now;
         r.target = p;
         r.hasPose = true;
         r.lastSeen = now;
@@ -196,33 +204,44 @@ void NetPlay::update(double now, float dt, const std::function<Vehicle*(int, int
         snprintf(b, sizeof b, "ping\t%.0f", now * 1000.0);
         ws_.send(b);
     }
-    // andere spelers: naar de laatst ontvangen positie toe bewegen
+}
+
+void NetPlay::place(double now, float dt, const std::function<Vehicle*(int, int)>& findVehicle) {
     for (auto& kv : players_) {
         RemotePlayer& r = kv.second;
         if (!r.hasPose) continue;
         const NetPose& p = r.target;
-        Vec3 want = p.pos;
-        float wh = p.h;
-        if (p.vkind) {
-            if (Vehicle* v = findVehicle(p.vkind, p.vid)) {
-                if (p.car >= 0 && p.car < v->carCount()) {
-                    want = v->carToWorld(p.car, p.lx, p.ly, p.lz);
-                    wh = v->carPose(p.car).h + p.lh;
-                    // in een voertuig: direct meebewegen met de (lokale) bak, alleen de stap in de bak afvlakken
-                    Vec3 d = want - r.pos;
-                    if (length(d) > 3.0f) r.pos = want;
-                    else r.pos = r.pos + d * std::min(1.0f, dt * 12.0f);
-                    r.h = wh;
-                    continue;
-                }
-            }
-        }
-        Vec3 d = want - r.pos;
-        if (length(d) > 25.0f) r.pos = want;  // teleport
-        else r.pos = r.pos + d * std::min(1.0f, dt * 10.0f);
-        float dh = std::remainder(wh - r.h, 6.2831853f);
-        r.h += dh * std::min(1.0f, dt * 10.0f);
         r.phase = std::fmod(r.phase + p.speed * dt / 1.35f, 1.0f);
+        Vehicle* v = p.vkind ? findVehicle(p.vkind, p.vid) : nullptr;
+        if (v && (p.car < 0 || p.car >= v->carCount())) v = nullptr;
+        if (v) {
+            // in een voertuig: afvlakken binnen de bak; andere bak / net ingestapt = meteen goed zetten
+            bool same = r.inVehicle && r.vkind == p.vkind && r.vid == p.vid && r.car == p.car;
+            float k = std::min(1.0f, dt * 12.0f);
+            float d = std::hypot(std::hypot(p.lx - r.lx, p.lz - r.lz), p.ly - r.ly);
+            if (!same || d > 2.5f) {
+                r.lx = p.lx; r.ly = p.ly; r.lz = p.lz; r.lh = p.lh;
+            } else {
+                r.lx += (p.lx - r.lx) * k;
+                r.ly += (p.ly - r.ly) * k;
+                r.lz += (p.lz - r.lz) * k;
+                r.lh += std::remainder(p.lh - r.lh, 6.2831853f) * k;
+            }
+            r.vkind = p.vkind; r.vid = p.vid; r.car = p.car;
+            r.inVehicle = true;
+            r.pos = r.wpos = v->carToWorld(r.car, r.lx, r.ly, r.lz);
+            r.h = v->carPose(r.car).h + r.lh;
+            continue;
+        }
+        // in de wereld (of het voertuig bestaat hier niet): naar de voorspelde positie toe
+        r.inVehicle = false;
+        float ahead = (float)std::min(0.5, std::max(0.0, now - r.targetAt));
+        Vec3 want = p.pos + r.vel * ahead;
+        Vec3 d = want - r.wpos;
+        if (length(d) > 25.0f) r.wpos = want;  // teleport
+        else r.wpos = r.wpos + d * std::min(1.0f, dt * 10.0f);
+        r.pos = r.wpos;
+        r.h += std::remainder(p.h - r.h, 6.2831853f) * std::min(1.0f, dt * 10.0f);
     }
 }
 

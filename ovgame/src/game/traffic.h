@@ -1,7 +1,9 @@
 ﻿#pragma once
-// Treinverkeer volgens de dienstregeling (NS, dienstregeling 2026, OV in Nederland Wiki) op Eindhoven Centraal -
-// Strijp-S - Best - Boxtel - Vught - 's-Hertogenbosch, met de aftakking Boxtel - Tilburg. De tabel staat in
-// Traffic::setup. Sprinters stoppen overal; Intercity's stoppen alleen in Eindhoven en 's-Hertogenbosch.
+// Treinverkeer volgens de dienstregeling (NS, dienstregeling 2026, OV in Nederland Wiki en GTFS) op Eindhoven Centraal -
+// Strijp-S - Best - Boxtel - Vught - 's-Hertogenbosch - Zaltbommel - Geldermalsen - Culemborg - Houten Castellum -
+// Houten - Utrecht Lunetten - Utrecht Vaartsche Rijn - Utrecht Centraal, met de aftakkingen Boxtel - Tilburg en
+// Geldermalsen - Tiel. De tabel staat in Traffic::setup. Sprinters stoppen overal; Intercity's alleen in Eindhoven,
+// 's-Hertogenbosch en Utrecht.
 // Sprinters 6500 maken kop in 's-Hertogenbosch. Op het viersporige deel rijden Sprinters op de buitenste en
 // Intercity's op de middensporen (rechts rijden). Per baanvak kiest de trein zijn kruissnelheid zo, dat hij precies
 // op tijd rijdt (max. 140 km/u baanvaksnelheid, 80 km/u op de emplacementen).
@@ -43,6 +45,7 @@ public:
     std::function<void(Train*)> onLeave;
     std::string debugInfo() const;
     std::string trainsInfo() const;  // toestand van alle rijdende treinen (test)
+    std::string pathsInfo() const;   // paden per serie, elke 100 m "x z" (test)
     // dienst rijden: ritten die tussen from en to vertrekken vanaf hun eerste halte in de spelwereld
     struct DutyOption { int serviceId; int stop; double arr, dep; std::string label, info; };
     std::vector<DutyOption> dutyOptions(double from, double to) const;
@@ -51,7 +54,10 @@ public:
 private:
 public:
     // Dienstregeling: per treinserie de haltes met tijden (minuten na het begin van het halfuur; -1 = uitrekenen)
-    enum End { EAST, NORTH, TILBURG, DENBOSCH };  // waar het pad begint/eindigt
+    // waar het pad begint/eindigt: Eindhoven Centraal (oost), Tilburg-aftakking, kopmaken in 's-Hertogenbosch,
+    // voorbij Utrecht Centraal richting Amsterdam (UTN) of Woerden/Gouda (UTW), Tiel-aftakking bij Geldermalsen.
+    // (NORTH = vroeger: de mist in ten noorden van 's-Hertogenbosch; niet meer gebruikt)
+    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL };
     struct StopDef { const char* station; bool stop; double arr, dep; const char* track = nullptr; };  // track: echt spoor (bijv. "4b"), anders rechts rijden
     struct Def {
         const char* number; const char* dest; int stock;  // 0 = FLIRT, 1 = VIRM
@@ -91,6 +97,7 @@ private:
     size_t nextSpawn_ = 0;
     double clock_ = 0;
     std::vector<std::string> names_;
+    std::string warnings_;  // overgeslagen series (debugInfo)
 
     bool buildPattern(Pattern& p, const World& world, const Railways& rail, const Stations& st, std::string& err);
     void timetable(Pattern& p, std::string& log);

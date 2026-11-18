@@ -27,8 +27,8 @@ constexpr double ORIGIN_Y = 383770.0;
 //   - grove tegels: alleen hoogte (AHN DSM, 10 m) en luchtfoto 256 px, als achtergrond in de mist
 // Het onderstaande gebied is alleen een omhullende voor de converter; de game gebruikt de tegelindex.
 constexpr int TILE = 500;
-constexpr int AREA_X0 = 144500, AREA_Y0 = 366500;  // zuidgrens: Bergeijk (buslijn 18)
-constexpr int AREA_X1 = 176500, AREA_Y1 = 415500;  // oostgrens: Helmond (buslijn 24)
+constexpr int AREA_X0 = 130500, AREA_Y0 = 366500;  // zuidgrens: Bergeijk (buslijn 18); westgrens: Utrecht Leidsche Rijn
+constexpr int AREA_X1 = 176500, AREA_Y1 = 461500;  // oostgrens: Helmond (buslijn 24); noordgrens: Utrecht Zuilen
 
 constexpr int PHOTO_CELL = TILE;
 constexpr int BUILDING_CHUNK = 250;  // gebouwen gegroepeerd per 250 m (4 chunks per tegel)
@@ -47,6 +47,24 @@ constexpr double ROUTE_PTS[][2] = {{159794, 384658}, {159087, 385502}, {158346, 
                                    {148535, 411308}, {148600, 412300}};
 // Aftakking Boxtel -> Tilburg (een stuk, zodat treinen naar Tilburg de mist in kunnen rijden)
 constexpr double BRANCH_PTS[][2] = {{150275, 399505}, {149300, 399420}, {148100, 399350}};
+// Traject 's-Hertogenbosch -> Utrecht Centraal (48 km, OSM-spoor, ongeveer elke km een punt):
+// Zaltbommel, Geldermalsen, Culemborg, Houten Castellum, Houten, Utrecht Lunetten, Utrecht Vaartsche Rijn, Utrecht Centraal
+constexpr double UTRECHT_PTS[][2] = {
+    {148547, 411315}, {148833, 412306}, {148762, 413328}, {148306, 414235}, {147705, 415424}, {147267, 416344}, {147163, 417354},
+    {147093, 418365}, {146962, 419878}, {146848, 420903}, {146716, 422085}, {146605, 423081}, {146493, 424091}, {146378, 425119},
+    {146252, 426272}, {146138, 427275}, {146032, 428316}, {146120, 429307}, {146547, 430270}, {147002, 431270}, {147128, 432282},
+    {146867, 433287}, {146619, 434262}, {146185, 435284}, {145705, 436321}, {145179, 437460}, {144690, 438517}, {144177, 439480},
+    {143657, 440354}, {143143, 441221}, {142604, 442130}, {142059, 443049}, {141697, 444232}, {141466, 445285}, {141164, 446304},
+    {140845, 447273}, {140486, 448254}, {140105, 449188}, {139673, 450237}, {139114, 451585}, {138634, 452532}, {138107, 453421},
+    {137422, 454170}, {136587, 454726}, {136056, 455572}, {135969, 455709}};
+// Voorbij Utrecht Centraal (een stuk, daarna mist): richting Amsterdam (via Zuilen) en Woerden/Gouda (via Leidsche Rijn)
+constexpr double UT_NORTH_PTS[][2] = {{135962, 455722}, {135742, 456174}, {135346, 456486}, {134979, 456870}, {134611, 457231},
+                                      {134217, 457602}, {133831, 457961}, {133523, 458253}};
+constexpr double UT_WEST_PTS[][2] = {{136001, 455738}, {135750, 456193}, {135360, 456500}, {134823, 456564}, {134303, 456624},
+                                     {133663, 456698}, {133405, 456732}};
+// Aftakking Geldermalsen -> Tiel (Sprinters Tiel - Utrecht)
+constexpr double TIEL_PTS[][2] = {{147049, 432692}, {147155, 432198}, {147462, 431786}, {147920, 431577}, {148462, 431526},
+                                  {149006, 431477}, {149440, 431439}};
 constexpr double BEST_CX = 155125, BEST_CY = 391198;
 // Buslijnen (18, 8, 9, 24, 156, 401, 402): detail binnen 400 m van de routes (tools\bus_route.ps1)
 #include "busroutes.inc"
@@ -54,7 +72,10 @@ constexpr double BUS_CORRIDOR = 400;
 // Stations op het traject (centrum, straal van het gedetailleerde gebied)
 struct StationArea { const char* name; double x, y, r; };
 constexpr StationArea STATION_AREAS[] = {
-    {"Best", 155125, 391198, 900}, {"Boxtel", 150275, 399505, 750}, {"Vught", 148461, 406792, 750}, {"'s-Hertogenbosch", 148535, 411308, 1000}};
+    {"Best", 155125, 391198, 900}, {"Boxtel", 150275, 399505, 750}, {"Vught", 148461, 406792, 750}, {"'s-Hertogenbosch", 148535, 411308, 1000},
+    {"Zaltbommel", 146460, 424360, 750}, {"Geldermalsen", 147032, 432676, 800}, {"Culemborg", 143970, 439856, 750},
+    {"Houten Castellum", 140740, 447632, 700}, {"Houten", 139967, 449542, 750}, {"Utrecht Lunetten", 138273, 453152, 700},
+    {"Utrecht Vaartsche Rijn", 136811, 454531, 700}, {"Utrecht Centraal", 135989, 455717, 1500}};
 
 inline double distToSquare(double px, double py, int x0, int y0) {
     double dx = std::max({(double)x0 - px, 0.0, px - (x0 + TILE)});
@@ -75,6 +96,11 @@ inline bool isDetailTile(int x0, int y0) {
         }
         return false;
     };
+#define OV_N(a) (int)(sizeof(a) / sizeof(a[0]))
+    if (nearLine(UTRECHT_PTS, OV_N(UTRECHT_PTS), 600) || nearLine(UT_NORTH_PTS, OV_N(UT_NORTH_PTS), 600) ||
+        nearLine(UT_WEST_PTS, OV_N(UT_WEST_PTS), 600) || nearLine(TIEL_PTS, OV_N(TIEL_PTS), 600))
+        return true;
+#undef OV_N
     return nearLine(ROUTE_PTS, sizeof(ROUTE_PTS) / sizeof(ROUTE_PTS[0]), 600) || nearLine(BRANCH_PTS, sizeof(BRANCH_PTS) / sizeof(BRANCH_PTS[0]), 600) ||
            nearLine(BUS_PTS, sizeof(BUS_PTS) / sizeof(BUS_PTS[0]), BUS_CORRIDOR);
 }
@@ -165,6 +191,31 @@ inline void gameToStation(float x, float z, float& u, float& v) {
     double dx = rdX(x) - STATION_RD_X, dy = rdY(z) - STATION_RD_Y;
     u = (float)(dx * std::cos(b) + dy * std::sin(b));
     v = (float)(-dx * std::sin(b) + dy * std::cos(b));
+}
+
+// ---------- Station Utrecht Centraal ----------
+// Lokaal assenstelsel: u langs de sporen (naar het noordnoordwesten), v dwars erop (naar het oostnoordoosten, de
+// Centrumzijde; -v = Jaarbeurszijde). Oorsprong = midden van de stationshal (OSM). Spoorrichting uit OSM: 330,8 graden.
+constexpr double UT_RD_X = 135990.0, UT_RD_Y = 455714.0, UT_BEARING_DEG = 330.8;
+// Stationshal (OV-terminal, 2016): vloer op ~8 m boven het maaiveld, over alle sporen heen (OSM building=train_station)
+constexpr float UT_HALL_U0 = -40.0f, UT_HALL_U1 = 50.5f, UT_HALL_V0 = -123.5f, UT_HALL_V1 = 121.5f;
+// uitsparing in de zuidoosthoek (toren erboven)
+constexpr float UT_NOTCH_U0 = -40.0f, UT_NOTCH_U1 = -25.6f, UT_NOTCH_V0 = 56.5f, UT_NOTCH_V1 = 97.5f;
+inline void utToRd(float u, float v, double& rx, double& ry) {
+    const double b = UT_BEARING_DEG * 3.14159265358979 / 180.0;
+    rx = UT_RD_X + u * std::sin(b) + v * std::cos(b);
+    ry = UT_RD_Y + u * std::cos(b) - v * std::sin(b);
+}
+inline void rdToUt(double rx, double ry, float& u, float& v) {
+    const double b = UT_BEARING_DEG * 3.14159265358979 / 180.0;
+    double dx = rx - UT_RD_X, dy = ry - UT_RD_Y;
+    u = (float)(dx * std::sin(b) + dy * std::cos(b));
+    v = (float)(dx * std::cos(b) - dy * std::sin(b));
+}
+// ligt (u, v) onder de stationshal? (de converter laat de 3D BAG-hal daar weg: de game bouwt hem zelf)
+inline bool utInHall(float u, float v, float margin = 0) {
+    if (u < UT_HALL_U0 - margin || u > UT_HALL_U1 + margin || v < UT_HALL_V0 - margin || v > UT_HALL_V1 + margin) return false;
+    return !(u > UT_NOTCH_U0 && u < UT_NOTCH_U1 && v > UT_NOTCH_V0 && v < UT_NOTCH_V1);
 }
 
 // ---------- Station Best ----------
