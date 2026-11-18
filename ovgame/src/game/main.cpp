@@ -1293,6 +1293,7 @@ int main(int argc, char** argv) {
             }
         }
         bool uiMode = state == MENU || map.isOpen();
+        in.padMap = state == PLAYING && map.isOpen();
         in.autoCapture = !uiMode && !shotPath;
         if (uiMode && in.captured) Platform::setCapture(false);
 

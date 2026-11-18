@@ -143,7 +143,7 @@ void pollPad(Input& in, double now) {
             in.padLX = lx;
             in.padLY = ly;
             in.padDt = dt;
-            aNow = (b & XINPUT_GAMEPAD_A) != 0;
+            aNow = (b & XINPUT_GAMEPAD_A) != 0 || (rt && !in.padMap);  // menu's: RT = kiezen, net als A
             if (aNow && !g_padA) { in.lDown = true; in.lClick = true; }
             if (!aNow && g_padA) { in.lDown = false; in.lRelease = true; }
             if (b & XINPUT_GAMEPAD_B) keys[VK_ESCAPE] = true;
@@ -152,6 +152,7 @@ void pollPad(Input& in, double now) {
             if (!ly) g_padWheel = 0;
             while (g_padWheel >= 1) { in.wheel += 1; in.stickWheel += 1; g_padWheel -= 1; }
             while (g_padWheel <= -1) { in.wheel -= 1; in.stickWheel -= 1; g_padWheel += 1; }
+            if (!in.padMap) rt = lt = false;  // triggers zoomen alleen op de kaart
             g_padZoom += ((b & XINPUT_GAMEPAD_DPAD_UP) || rt ? 6.0f : 0.0f) * dt - ((b & XINPUT_GAMEPAD_DPAD_DOWN) || lt ? 6.0f : 0.0f) * dt;
             if (!(b & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN)) && !lt && !rt) g_padZoom = 0;
             if (((b & XINPUT_GAMEPAD_DPAD_UP) || rt) && !g_padZoomHeld) { in.wheel += 1; g_padZoom = 0; }      // meteen een stap

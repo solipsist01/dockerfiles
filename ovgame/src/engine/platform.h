@@ -14,7 +14,8 @@ struct Input {
     bool autoCapture = true; // klikken in het venster vangt de muis (uit in menu's en op de kaart)
     bool pad = false;
     float padLX = 0, padLY = 0;  // linkerstick (-1..1) als de muis niet gevangen is: de kaart verschuift ermee
-    float padDt = 0;             // frametijd voor padLX/padLY
+    float padDt = 0;
+    bool padMap = false;         // gezet door het spel: de kaart is open (RT/LT zoomen daar; in menu's is RT klikken, net als A)             // frametijd voor padLX/padLY
     float stickWheel = 0;        // deel van wheel dat van de linkerstick komt (de kaart zoomt daar niet mee)        // laatst gebruikt: controller (XInput: Xbox-controller, Steam Deck) i.p.v. muis/toetsenbord
     std::string chars;       // deze frame getypte tekens (Latin-1; '\b' = backspace), voor tekstvelden
 };
