@@ -14,12 +14,13 @@ layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aN;
 layout(location=2) in vec3 aC;
 layout(location=3) in float aE;
-uniform mat4 uViewProj;
-uniform mat4 uModel;
+uniform mat4 uViewProj;  // camera-relatief (camera in de oorsprong)
+uniform mat4 uModel;     // translatie al min uOrigin (zie World::setModel)
+uniform vec3 uOrigin;    // camerapositie: op 76 km van Eindhoven zijn floats te grof voor de projectie (z-fighting)
 out vec3 vW; out vec3 vN; out vec3 vC; out float vE;
 void main() {
     vec4 w = uModel * vec4(aPos, 1.0);
-    vW = w.xyz; vN = mat3(uModel) * aN; vC = aC; vE = aE;
+    vW = w.xyz + uOrigin; vN = mat3(uModel) * aN; vC = aC; vE = aE;
     gl_Position = uViewProj * w;
 })";
 
@@ -869,9 +870,11 @@ void World::beginDraw(const Mat4& viewProj, Vec3 cam) {
     frustum_.fromMatrix(viewProj);
     cam_ = cam;
     glUseProgram(prog_);
-    glUniformMatrix4fv(uViewProj_, 1, GL_FALSE, viewProj.m);
-    Mat4 id = Mat4::identity();
-    glUniformMatrix4fv(uModel_, 1, GL_FALSE, id.m);
+    // camera-relatief tekenen als main een relatieve kijkmatrix heeft gegeven (anders: absoluut, oorsprong 0)
+    origin_ = hasRel_ ? cam : Vec3(0, 0, 0);
+    glUniformMatrix4fv(uViewProj_, 1, GL_FALSE, hasRel_ ? relVP_.m : viewProj.m);
+    glUniform3f(glGetUniformLocation(prog_, "uOrigin"), origin_.x, origin_.y, origin_.z);
+    setModel(Mat4::identity());
     Vec3 sun = normalize(sunDir);
     glUniform3f(uSun_, sun.x, sun.y, sun.z);
     glUniform3f(glGetUniformLocation(prog_, "uSunCol"), sunColor.x, sunColor.y, sunColor.z);
@@ -913,7 +916,11 @@ void World::endTransparent() {
 }
 
 void World::setMode(DrawMode m) { glUniform1i(uMode_, (int)m); }
-void World::setModel(const Mat4& m) { glUniformMatrix4fv(uModel_, 1, GL_FALSE, m.m); }
+void World::setModel(const Mat4& m) {
+    Mat4 r = m;
+    r.m[12] -= origin_.x; r.m[13] -= origin_.y; r.m[14] -= origin_.z;  // relatief t.o.v. de camera
+    glUniformMatrix4fv(uModel_, 1, GL_FALSE, r.m);
+}
 
 void World::drawStatic() {
     drawnChunks = 0;

@@ -67,6 +67,11 @@ public:
     void setMode(DrawMode m);
     void setModel(const Mat4& m);
     GLint modelUniform() const { return uModel_; }
+    // Camera-relatief tekenen: projectie x kijkmatrix met de camera in de oorsprong (lookAt(0, fwd, up)). Elke frame
+    // vóór beginDraw zetten. Modelmatrices (setModel) worden dan automatisch t.o.v. de camera doorgegeven.
+    void setRelativeView(const Mat4& relVP) { relVP_ = relVP; hasRel_ = true; }
+    const Mat4& relativeView() const { return relVP_; }
+    Vec3 origin() const { return origin_; }
     Vec3 camPos() const { return cam_; }   // camera van de huidige frame
     float heightAt(float x, float z) const;              // maaiveldhoogte (NAP) op game-positie
 
@@ -144,6 +149,9 @@ private:
         uFogDist_;
     Frustum frustum_;
     Vec3 cam_;
+    Mat4 relVP_ = Mat4::identity();
+    bool hasRel_ = false;
+    Vec3 origin_;
 
     // laadthread
     void* thread_ = nullptr;

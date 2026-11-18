@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
     const char* shotPath = nullptr;
     const char* rideDest = nullptr;
     std::string serverArg, passwordArg;
+    bool noStations = false;  // test: stationsmodellen niet tekenen
     bool autoConnect = false;
     int shotFrames = 30;
     for (int i = 1; i < argc; i++) {
@@ -150,6 +151,7 @@ int main(int argc, char** argv) {
         else if (arg("--server")) serverArg = argv[++i];
         else if (arg("--password")) passwordArg = argv[++i];
         else if (strcmp(argv[i], "--connect") == 0) autoConnect = true;
+        else if (strcmp(argv[i], "--nostations") == 0) noStations = true;
         else if (strcmp(argv[i], "--menu") == 0) shotMenu = true;
         else if (strcmp(argv[i], "--newgame") == 0) shotMenu = shotNewGame = true;
         else if (strcmp(argv[i], "--map") == 0) shotMap = true;
@@ -1153,13 +1155,13 @@ int main(int argc, char** argv) {
         fpsTimer += dt; fpsFrames++;
         if (fpsTimer >= 0.5) { fps = (int)(fpsFrames / fpsTimer + 0.5); fpsTimer = 0; fpsFrames = 0; }
         // zichtafstand meeschalen met de framerate (drukke steden zoals Utrecht): onder 30 fps minder ver tekenen
-        // (minimaal 700 m), boven 50 fps weer verder (tot 1500 m); de mist schuift mee. Niet bij testopnames.
+        // (minimaal 500 m), boven 50 fps weer verder (tot 1500 m); de mist schuift mee. Niet bij testopnames.
         {
             static double adaptT = 0;
             adaptT += dt;
             if (!shotPath && state == PLAYING && adaptT > 1.0 && fps > 0) {
                 adaptT = 0;
-                if (fps < 30 && world.drawDistance > 700.0f) world.drawDistance = std::max(700.0f, world.drawDistance * 0.85f);
+                if (fps < 30 && world.drawDistance > 500.0f) world.drawDistance = std::max(500.0f, world.drawDistance * 0.85f);
                 else if (fps > 50 && world.drawDistance < 1500.0f) world.drawDistance = std::min(1500.0f, world.drawDistance * 1.08f);
                 world.fogDistance = 1300.0f * clampf(world.drawDistance / 1500.0f, 0.6f, 1.0f);
             }
@@ -1421,6 +1423,8 @@ int main(int argc, char** argv) {
         Mat4 view = Mat4::lookAt(eye, eye + fwd, Vec3(0, 1, 0));
         Mat4 vp = proj * view;
         lastVP = vp;
+        // camera-relatief tekenen: dezelfde kijkrichting, maar met de camera in de oorsprong (precisie ver van Eindhoven)
+        world.setRelativeView(proj * Mat4::lookAt(Vec3(0, 0, 0), fwd, Vec3(0, 1, 0)));
 
         MapContext mctx;
         mctx.player = player.pos;
@@ -1493,7 +1497,7 @@ int main(int argc, char** argv) {
             world.beginDraw(vp, eye);
             world.drawStatic();
             railways.draw(world);
-            stations.drawOpaque(world);
+            if (!noStations) stations.drawOpaque(world);
             busStation.draw(world);
             buses.drawOpaque(world, eye, trainOk ? traffic.clock() : fallbackClock);
             for (Train* t : traffic.trains()) {
@@ -1615,6 +1619,7 @@ int main(int argc, char** argv) {
                 for (const PersonDraw& p : persons) {
                     Vec3 to = p.pos - eye;
                     if (dot(to, fwd) < -2.0f && length(to) > 4.0f) continue;  // achter de camera
+                    if (length(to) > 150.0f && p.look != LOOK_PLAYER) continue;  // verder weg: niet tekenen (framerate)
                     const CharModel& m = p.model ? *p.model : people.model(p.look);
                     CharPose pose;
                     AnimState an = p.anim;

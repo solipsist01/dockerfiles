@@ -758,7 +758,7 @@ void FlirtStock::drawOpaque(World& world, const StockDraw& sd) const {
         Mat4 m = Mat4::pose(c.x, c.y, c.z, cs < 0 ? c.h + PI : c.h);
         world.setModel(m);
         drawMesh(car_[i]);
-        if (std::hypot(c.x - cam.x, c.z - cam.z) < 300) drawMesh(carInt_[i]);
+        if (std::hypot(c.x - cam.x, c.z - cam.z) < 150) drawMesh(carInt_[i]);  // interieur alleen dichtbij
         for (int s = 0; s < 2; s++)
             for (int leaf = 0; leaf < 2; leaf++) {
                 int meshSide = s ? 1 : -1;

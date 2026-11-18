@@ -1193,12 +1193,13 @@ layout(location=3) in vec3 aS;
 uniform mat4 uVP;
 uniform mat4 uModel;
 uniform mat4 uBones[17];
+uniform vec3 uOrigin;  // camera-relatief, zoals de wereld
 out vec3 vW; out vec3 vN; out vec3 vC;
 void main() {
     int b0 = int(aS.x + 0.5), b1 = int(aS.y + 0.5);
     mat4 S = uBones[b0] * (1.0 - aS.z) + uBones[b1] * aS.z;
     vec4 w = uModel * (S * vec4(aPos, 1.0));
-    vW = w.xyz;
+    vW = w.xyz + uOrigin;
     vN = mat3(uModel) * (mat3(S) * aN);
     vC = aC;
     gl_Position = uVP * w;
@@ -1267,7 +1268,10 @@ bool CharacterRenderer::init() {
 
 void CharacterRenderer::begin(const Mat4& vp, const World& world) {
     glUseProgram(prog_);
-    glUniformMatrix4fv(uVP_, 1, GL_FALSE, vp.m);
+    (void)vp;
+    origin_ = world.origin();
+    glUniformMatrix4fv(uVP_, 1, GL_FALSE, origin_.x != 0 || origin_.z != 0 ? world.relativeView().m : vp.m);
+    glUniform3f(glGetUniformLocation(prog_, "uOrigin"), origin_.x, origin_.y, origin_.z);
     Vec3 sun = normalize(world.sunDir), cam = world.camPos();
     glUniform3f(uSun_, sun.x, sun.y, sun.z);
     glUniform3f(uSunCol_, world.sunColor.x, world.sunColor.y, world.sunColor.z);
@@ -1281,6 +1285,8 @@ void CharacterRenderer::begin(const Mat4& vp, const World& world) {
 void CharacterRenderer::beginStudio(const Mat4& vp, Vec3 cam) {
     glUseProgram(prog_);
     glUniformMatrix4fv(uVP_, 1, GL_FALSE, vp.m);
+    origin_ = Vec3(0, 0, 0);
+    glUniform3f(glGetUniformLocation(prog_, "uOrigin"), 0, 0, 0);
     Vec3 sun = normalize(Vec3(0.45f, 0.8f, 0.55f));
     glUniform3f(uSun_, sun.x, sun.y, sun.z);
     glUniform3f(uSunCol_, 0.95f, 0.92f, 0.86f);
@@ -1294,7 +1300,9 @@ void CharacterRenderer::beginStudio(const Mat4& vp, Vec3 cam) {
 void CharacterRenderer::draw(const CharModel& m, const Mat4& world, const CharPose& p, bool interior) {
     if (!m.count) return;
     glUniform1i(uInterior_, interior ? 1 : 0);
-    glUniformMatrix4fv(uModel_, 1, GL_FALSE, world.m);
+    Mat4 r = world;
+    r.m[12] -= origin_.x; r.m[13] -= origin_.y; r.m[14] -= origin_.z;
+    glUniformMatrix4fv(uModel_, 1, GL_FALSE, r.m);
     glUniformMatrix4fv(uBones_, BONE_COUNT, GL_FALSE, p.skin[0].m);
     glBindVertexArray(m.vao);
     glDrawElements(GL_TRIANGLES, m.count, GL_UNSIGNED_INT, nullptr);
@@ -1305,6 +1313,7 @@ void CharacterRenderer::drawProp(int prop, const Mat4& world, const CharPose& p,
     Mat4 id = Mat4::identity();
     glUniform1i(uInterior_, interior ? 1 : 0);
     Mat4 m = world * p.global[bone];
+    m.m[12] -= origin_.x; m.m[13] -= origin_.y; m.m[14] -= origin_.z;
     glUniformMatrix4fv(uModel_, 1, GL_FALSE, m.m);
     glUniformMatrix4fv(uBones_, 1, GL_FALSE, id.m);
     glBindVertexArray(props_[prop].vao);

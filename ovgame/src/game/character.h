@@ -120,4 +120,5 @@ private:
     GLuint prog_ = 0;
     GLint uVP_ = -1, uModel_ = -1, uBones_ = -1, uSun_ = -1, uSunCol_ = -1, uAmb_ = -1, uSky_ = -1, uCam_ = -1, uFogDist_ = -1, uInterior_ = -1;
     CharModel props_[3];
+    Vec3 origin_;  // camera-relatief tekenen (zie World::setRelativeView)
 };
