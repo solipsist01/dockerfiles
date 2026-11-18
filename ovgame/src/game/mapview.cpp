@@ -415,10 +415,18 @@ bool MapView::drawFull(TextRenderer& text, Input& in, const MapContext& ctx, int
         z = cz_ + (sy - h / 2.0f) / scale_;
     };
     bool overMap = in.mouseX > mx0;
-    if (in.wheel != 0 && overMap) {
+    // controller: linkerstick verschuift de kaart (~half scherm per seconde op volle uitslag)
+    if (in.padLX != 0 || in.padLY != 0) {
+        float sp = h * 0.6f * in.padDt / scale_;
+        cx_ += in.padLX * std::fabs(in.padLX) * sp;
+        cz_ -= in.padLY * std::fabs(in.padLY) * sp;
+        follow_ = false;
+    }
+    const float wheel = in.wheel - in.stickWheel;
+    if (wheel != 0 && overMap) {
         float wx, wz;
         toWorld(in.mouseX, in.mouseY, wx, wz);
-        float ns = clampf(scale_ * std::pow(1.25f, in.wheel), 0.04f, 6.0f);
+        float ns = clampf(scale_ * std::pow(1.25f, wheel), 0.04f, 6.0f);
         // zoomen rond de muis
         cx_ = wx - (in.mouseX - (mx0 + mw / 2.0f)) / ns;
         cz_ = wz - (in.mouseY - h / 2.0f) / ns;

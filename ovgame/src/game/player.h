@@ -14,7 +14,7 @@ public:
     float yaw = 0;      // 0 = kijken naar noord (-z), positief = met de klok mee
     float pitch = 0;
     bool fly = false;
-    bool flyFast = false;       // controller: Y zet snel vliegen aan/uit
+    bool flyFast = false;       // controller: Y ingedrukt = snel vliegen
     float spaceTimer_ = 1e9f;   // tijd sinds de vorige spatie (dubbel spatie = vliegen aan/uit)
     float eyeH = 1.7f;  // ooghoogte boven de voeten (volgt het personage)
     float sitEye = 0.75f; // ooghoogte boven de zitting

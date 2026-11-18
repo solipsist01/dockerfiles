@@ -2130,8 +2130,7 @@ int main(int argc, char** argv) {
                 help = "WASD lopen   E kiezen (richtkruis)   B stopknop (bus)   O kaartje laten zien   F5 camera   M kaart   Esc menu";
             }
             if (in.pad) {  // controller in gebruik: knoppen in plaats van toetsen
-                help = player.fly ? (player.flyFast ? "Vliegen (snel):  A/RT omhoog   LT omlaag   Y snel uit   2x A landen   R-stick kijken"
-                                                    : "Vliegen:  A/RT omhoog   LT omlaag   Y snel aan   2x A landen   R-stick kijken")
+                help = player.fly ? "Vliegen:  A/RT omhoog   LT omlaag   Y vasthouden = snel   2x A landen   R-stick kijken"
                                   : "L-stick lopen   R-stick kijken   A springen (2x vliegen)   X kiezen   LT sneller   Y spelers   View kaart   Menu menu";
                 if (player.driving && inTrain)
                     help = "L-stick op/neer rijremschakelaar   B deuren   A bevestigen   LB snelrem   kruis omhoog cabine   kruis omlaag stroomafnemer   X opstaan";

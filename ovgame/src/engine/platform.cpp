@@ -61,6 +61,8 @@ bool g_xtried = false;
 bool g_padKeys[256] = {};
 bool g_padA = false;
 float g_padWheel = 0;
+float g_padZoom = 0;
+bool g_padZoomHeld = false;
 double g_padLast = 0;
 double g_padRetry = 0;   // geen controller: niet elke frame opnieuw zoeken (XInputGetState is dan traag)
 float g_curX = -1, g_curY = -1;
@@ -123,38 +125,45 @@ void pollPad(Input& in, double now) {
             if (b & XINPUT_GAMEPAD_LEFT_THUMB) keys['F'] = true;       // vliegen
             if (b & XINPUT_GAMEPAD_RIGHT_THUMB) keys[VK_F5] = true;    // camera
         } else {
-            // virtuele muis
-            if (lx || ly) {
+            // virtuele muis: rechterstick = cursor
+            if (rx || ry) {
                 POINT cp;
                 GetCursorPos(&cp);
                 float sp = 1100.0f * (g_h > 0 ? g_h / 900.0f : 1.0f) * dt;
                 if (g_curX < 0 || std::fabs(g_curX - cp.x) > 2 || std::fabs(g_curY - cp.y) > 2) { g_curX = (float)cp.x; g_curY = (float)cp.y; }
-                g_curX += lx * std::fabs(lx) * sp;
-                g_curY -= ly * std::fabs(ly) * sp;
+                g_curX += rx * std::fabs(rx) * sp;
+                g_curY -= ry * std::fabs(ry) * sp;
                 SetCursorPos((int)g_curX, (int)g_curY);
                 POINT c{(LONG)g_curX, (LONG)g_curY};
                 ScreenToClient(g_hwnd, &c);
                 in.mouseX = (float)c.x;
                 in.mouseY = (float)c.y;
             }
+            // linkerstick: kaart verschuiven (MapView leest padLX/padLY) en in menu's scrollen
+            in.padLX = lx;
+            in.padLY = ly;
+            in.padDt = dt;
             aNow = (b & XINPUT_GAMEPAD_A) != 0;
             if (aNow && !g_padA) { in.lDown = true; in.lClick = true; }
             if (!aNow && g_padA) { in.lDown = false; in.lRelease = true; }
             if (b & XINPUT_GAMEPAD_B) keys[VK_ESCAPE] = true;
-            if (b & XINPUT_GAMEPAD_DPAD_UP) keys[VK_UP] = true;
-            if (b & XINPUT_GAMEPAD_DPAD_DOWN) keys[VK_DOWN] = true;
-            // scrollen / zoomen met de rechterstick (en het kruis)
-            g_padWheel += ry * 8.0f * dt;
-            if (b & XINPUT_GAMEPAD_DPAD_UP) g_padWheel += 6.0f * dt;
-            if (b & XINPUT_GAMEPAD_DPAD_DOWN) g_padWheel -= 6.0f * dt;
-            if (!ry && !(b & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN))) g_padWheel = 0;
-            while (g_padWheel >= 1) { in.wheel += 1; g_padWheel -= 1; }
-            while (g_padWheel <= -1) { in.wheel -= 1; g_padWheel += 1; }
+            // scrollen: linkerstick; zoomen/scrollen: kruis omhoog/omlaag en RT/LT
+            g_padWheel += ly * 8.0f * dt;
+            if (!ly) g_padWheel = 0;
+            while (g_padWheel >= 1) { in.wheel += 1; in.stickWheel += 1; g_padWheel -= 1; }
+            while (g_padWheel <= -1) { in.wheel -= 1; in.stickWheel -= 1; g_padWheel += 1; }
+            g_padZoom += ((b & XINPUT_GAMEPAD_DPAD_UP) || rt ? 6.0f : 0.0f) * dt - ((b & XINPUT_GAMEPAD_DPAD_DOWN) || lt ? 6.0f : 0.0f) * dt;
+            if (!(b & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN)) && !lt && !rt) g_padZoom = 0;
+            if (((b & XINPUT_GAMEPAD_DPAD_UP) || rt) && !g_padZoomHeld) { in.wheel += 1; g_padZoom = 0; }      // meteen een stap
+            if (((b & XINPUT_GAMEPAD_DPAD_DOWN) || lt) && !g_padZoomHeld) { in.wheel -= 1; g_padZoom = 0; }
+            g_padZoomHeld = (b & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN)) || lt || rt;
+            while (g_padZoom >= 1) { in.wheel += 1; g_padZoom -= 1; }
+            while (g_padZoom <= -1) { in.wheel -= 1; g_padZoom += 1; }
         }
         if (b & XINPUT_GAMEPAD_START) keys[VK_ESCAPE] = true;          // menu
         if (b & XINPUT_GAMEPAD_BACK) keys['M'] = true;                 // kaart
         // in het spel maar muis (nog) niet gevangen: de controller vangt hem, zoals een klik
-        if (any && !in.captured && in.autoCapture && !(b & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_B)) && !(lx || ly))
+        if (any && !in.captured && in.autoCapture && !(b & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_B)) && !(rx || ry))
             Platform::setCapture(true);
     }
     if (g_padA && !aNow && !ok) { in.lDown = false; in.lRelease = true; }
@@ -317,6 +326,8 @@ bool pump() {
     memset(g_input.pressed, 0, sizeof(g_input.pressed));
     g_input.mouseDX = g_input.mouseDY = 0;
     g_input.wheel = 0;
+    g_input.stickWheel = 0;
+    g_input.padLX = g_input.padLY = 0;
     g_input.lClick = g_input.rClick = g_input.lRelease = false;
     g_input.chars.clear();
     MSG msg;

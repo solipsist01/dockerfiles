@@ -262,8 +262,8 @@ void Player::update(float dt, const Input& in, const World& world, const Collisi
     float ground = world.heightAt(pos.x, pos.z);
     if (fly) {
         // vliegen: spatie omhoog, shift omlaag, ctrl snel;
-        // controller: A of RT omhoog, LT omlaag, Y snel aan/uit
-        if (in.pressed[VK_F7]) flyFast = !flyFast;
+        // controller: A of RT omhoog, LT omlaag, Y vasthouden = snel
+        flyFast = in.down[VK_F7];
         bool padUp = in.pad && in.down[VK_CONTROL];
         float speed = ((in.down[VK_CONTROL] && !in.pad) || flyFast) ? 90.0f : 22.0f;
         Vec3 dir = forward() * f + right * r;
