@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"archive/zip"
+	"bytes"
 	"embed"
 	"encoding/json"
 	"html/template"

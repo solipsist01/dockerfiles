@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -205,13 +206,66 @@ func logRequests(h http.Handler) http.Handler {
 	})
 }
 
+// clientIP: het echte adres van de speler. Achter een proxy (Traefik, Cloudflare-tunnel, nginx) staat dat in een header;
+// die headers worden alleen geloofd als de aanvraag van een proxy op het eigen netwerk komt (privé- of loopbackadres),
+// anders zou iedereen zich met een zelfgemaakte header een ander adres kunnen geven.
+// Volgorde: CF-Connecting-IP / True-Client-IP (Cloudflare, ook als Traefik achter Cloudflare zit), X-Real-Ip (Traefik,
+// nginx), Forwarded (RFC 7239: for=...), X-Forwarded-For (eerste adres), en anders het adres van de verbinding.
 func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
-		return ip
+	peer := hostOnly(r.RemoteAddr)
+	if !trustedProxy(peer) {
+		return peer
 	}
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		ip, _, _ = strings.Cut(ip, ",")
-		return strings.TrimSpace(ip)
+	for _, h := range []string{"CF-Connecting-IP", "True-Client-IP", "X-Real-Ip"} {
+		if ip := validIP(r.Header.Get(h)); ip != "" {
+			return ip
+		}
 	}
-	return r.RemoteAddr
+	if f := r.Header.Get("Forwarded"); f != "" {
+		first, _, _ := strings.Cut(f, ",")
+		for _, part := range strings.Split(first, ";") {
+			k, v, ok := strings.Cut(strings.TrimSpace(part), "=")
+			if ok && strings.EqualFold(k, "for") {
+				if ip := validIP(strings.Trim(v, `"`)); ip != "" {
+					return ip
+				}
+			}
+		}
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		first, _, _ := strings.Cut(xff, ",")
+		if ip := validIP(first); ip != "" {
+			return ip
+		}
+	}
+	return peer
+}
+
+// hostOnly: "1.2.3.4:5678" / "[::1]:80" -> adres zonder poort
+func hostOnly(addr string) string {
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		return h
+	}
+	return strings.Trim(addr, "[]")
+}
+
+// validIP: een geldig IP-adres uit een headerwaarde (ook "[2001:db8::1]:443" of "1.2.3.4:80"), anders ""
+func validIP(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if ip := net.ParseIP(v); ip != nil {
+		return ip.String()
+	}
+	if ip := net.ParseIP(hostOnly(v)); ip != nil {
+		return ip.String()
+	}
+	return ""
+}
+
+// trustedProxy: verbinding vanaf het eigen netwerk (Docker-netwerk, LAN, localhost)
+func trustedProxy(addr string) bool {
+	ip := net.ParseIP(addr)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
 }
