@@ -940,7 +940,7 @@ void World::drawStatic() {
         if (d > drawDistance) continue;
         for (const Mesh& m : t.buildings)
             if (boxDistance(cam_, m.bmin, m.bmax) < drawDistance && frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }
-        const float detailDist = std::min(1100.0f, drawDistance * 0.7f);
+        const float detailDist = std::min(1300.0f, drawDistance * detailFactor);
         if (d < detailDist)
             for (const Mesh& m : t.details)
                 if (boxDistance(cam_, m.bmin, m.bmax) < detailDist && frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }

@@ -121,11 +121,11 @@ void Player::update(float dt, const Input& in, const World& world, const Collisi
                     dc.notch = (in.pressed['W'] ? 1 : 0) - (in.pressed['S'] ? 1 : 0);
                 }
                 dc.doorToggle = in.pressed['Q'];
-                dc.doorRelease = in.pressed['T'];
+                dc.doorRelease = in.pressed['T'] || (in.pad && in.pressed['Q']);  // controller: B
                 dc.doorLeft = in.pressed['Q'];
                 dc.doorRight = in.pressed['R'];
                 dc.ack = in.pressed[VK_SPACE];
-                dc.emergency = in.pressed[VK_BACK];
+                dc.emergency = in.pressed[VK_BACK] || (in.pad && in.pressed['B']);  // controller: LB
                 dc.activate = in.pressed['K'];
                 dc.panto = in.pressed['P'];
                 doorBlocked = !v->railVehicle() && dc.throttle > 0 && v->doorOpen() > 0.02f;

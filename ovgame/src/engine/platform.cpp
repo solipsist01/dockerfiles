@@ -1,6 +1,9 @@
 #include "platform.h"
 #include "gl.h"
 #include <cstring>
+#include <cmath>
+#include <algorithm>
+#include <xinput.h>
 
 namespace {
 HWND g_hwnd = nullptr;
@@ -49,6 +52,124 @@ void applyClip() {
     }
 }
 
+// ---------- controller (XInput; ook de Steam Deck onder Proton) ----------
+// In het spel worden knoppen vertaald naar de toetsen die het spel al kent; de rechterstick wordt muisbeweging.
+// In menu's en op de kaart (muis niet gevangen) is de linkerstick een muiscursor, A klikken, B terug.
+typedef DWORD(WINAPI* PFN_XInputGetState)(DWORD, XINPUT_STATE*);
+PFN_XInputGetState g_xget = nullptr;
+bool g_xtried = false;
+bool g_padKeys[256] = {};
+bool g_padA = false;
+float g_padWheel = 0;
+double g_padLast = 0;
+double g_padRetry = 0;   // geen controller: niet elke frame opnieuw zoeken (XInputGetState is dan traag)
+float g_curX = -1, g_curY = -1;
+
+float stick(SHORT v, float dead) {
+    float f = v / 32767.0f;
+    if (f > 1) f = 1;
+    if (f < -1) f = -1;
+    float a = std::fabs(f);
+    if (a < dead) return 0;
+    a = (a - dead) / (1 - dead);
+    return f < 0 ? -a : a;
+}
+
+void pollPad(Input& in, double now) {
+    if (!g_xtried) {
+        g_xtried = true;
+        const char* dlls[] = {"xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"};
+        for (const char* d : dlls)
+            if (HMODULE m = LoadLibraryA(d)) {
+                g_xget = (PFN_XInputGetState)(void*)GetProcAddress(m, "XInputGetState");
+                if (g_xget) break;
+            }
+    }
+    float dt = (float)std::min(0.05, now - g_padLast);
+    g_padLast = now;
+    bool keys[256] = {};
+    XINPUT_STATE st{};
+    bool ok = g_xget && now >= g_padRetry && g_xget(0, &st) == ERROR_SUCCESS;
+    if (g_xget && !ok && now >= g_padRetry) g_padRetry = now + 2.0;
+    bool aNow = false;
+    if (ok) {
+        const XINPUT_GAMEPAD& p = st.Gamepad;
+        WORD b = p.wButtons;
+        float lx = stick(p.sThumbLX, 0.24f), ly = stick(p.sThumbLY, 0.24f);
+        float rx = stick(p.sThumbRX, 0.20f), ry = stick(p.sThumbRY, 0.20f);
+        bool lt = p.bLeftTrigger > 100, rt = p.bRightTrigger > 100;
+        bool any = b || lx || ly || rx || ry || lt || rt;
+        if (any) in.pad = true;
+        if (in.captured) {
+            if (ly > 0.3f) keys['W'] = true;
+            if (ly < -0.3f) keys['S'] = true;
+            if (lx > 0.3f) keys['D'] = true;
+            if (lx < -0.3f) keys['A'] = true;
+            // kijken: kwadratische curve (fijn richten, snel draaien), ~3 rad/s op volle uitslag
+            in.mouseDX += rx * std::fabs(rx) * 1400.0f * dt;
+            in.mouseDY -= ry * std::fabs(ry) * 1000.0f * dt;
+            if (b & XINPUT_GAMEPAD_A) keys[VK_SPACE] = true;           // springen / omhoog (2x = vliegen)
+            if (b & XINPUT_GAMEPAD_X) keys['E'] = true;                // kiezen / instappen
+            if (b & XINPUT_GAMEPAD_B) keys['Q'] = true;                // deuren
+            if (b & XINPUT_GAMEPAD_Y) keys[VK_TAB] = true;             // spelerslijst
+            if (b & XINPUT_GAMEPAD_LEFT_SHOULDER) keys['B'] = true;    // stopknop
+            if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) keys['R'] = true;   // deur rechts
+            if (lt) keys[VK_SHIFT] = true;                             // sneller / omlaag (vliegen)
+            if (rt) keys[VK_CONTROL] = true;                           // snel vliegen
+            if (b & XINPUT_GAMEPAD_DPAD_UP) keys['K'] = true;          // cabine activeren
+            if (b & XINPUT_GAMEPAD_DPAD_DOWN) keys['P'] = true;        // pantograaf
+            if (b & XINPUT_GAMEPAD_DPAD_LEFT) keys['O'] = true;        // kaartje laten zien
+            if (b & XINPUT_GAMEPAD_DPAD_RIGHT) keys['N'] = true;       // navigatielijn
+            if (b & XINPUT_GAMEPAD_LEFT_THUMB) keys['F'] = true;       // vliegen
+            if (b & XINPUT_GAMEPAD_RIGHT_THUMB) keys[VK_F5] = true;    // camera
+        } else {
+            // virtuele muis
+            if (lx || ly) {
+                POINT cp;
+                GetCursorPos(&cp);
+                float sp = 1100.0f * (g_h > 0 ? g_h / 900.0f : 1.0f) * dt;
+                if (g_curX < 0 || std::fabs(g_curX - cp.x) > 2 || std::fabs(g_curY - cp.y) > 2) { g_curX = (float)cp.x; g_curY = (float)cp.y; }
+                g_curX += lx * std::fabs(lx) * sp;
+                g_curY -= ly * std::fabs(ly) * sp;
+                SetCursorPos((int)g_curX, (int)g_curY);
+                POINT c{(LONG)g_curX, (LONG)g_curY};
+                ScreenToClient(g_hwnd, &c);
+                in.mouseX = (float)c.x;
+                in.mouseY = (float)c.y;
+            }
+            aNow = (b & XINPUT_GAMEPAD_A) != 0;
+            if (aNow && !g_padA) { in.lDown = true; in.lClick = true; }
+            if (!aNow && g_padA) { in.lDown = false; in.lRelease = true; }
+            if (b & XINPUT_GAMEPAD_B) keys[VK_ESCAPE] = true;
+            if (b & XINPUT_GAMEPAD_DPAD_UP) keys[VK_UP] = true;
+            if (b & XINPUT_GAMEPAD_DPAD_DOWN) keys[VK_DOWN] = true;
+            // scrollen / zoomen met de rechterstick (en het kruis)
+            g_padWheel += ry * 8.0f * dt;
+            if (b & XINPUT_GAMEPAD_DPAD_UP) g_padWheel += 6.0f * dt;
+            if (b & XINPUT_GAMEPAD_DPAD_DOWN) g_padWheel -= 6.0f * dt;
+            if (!ry && !(b & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN))) g_padWheel = 0;
+            while (g_padWheel >= 1) { in.wheel += 1; g_padWheel -= 1; }
+            while (g_padWheel <= -1) { in.wheel -= 1; g_padWheel += 1; }
+        }
+        if (b & XINPUT_GAMEPAD_START) keys[VK_ESCAPE] = true;          // menu
+        if (b & XINPUT_GAMEPAD_BACK) keys['M'] = true;                 // kaart
+        // in het spel maar muis (nog) niet gevangen: de controller vangt hem, zoals een klik
+        if (any && !in.captured && in.autoCapture && !(b & (XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_B)) && !(lx || ly))
+            Platform::setCapture(true);
+    }
+    if (g_padA && !aNow && !ok) { in.lDown = false; in.lRelease = true; }
+    g_padA = aNow;
+    for (int k = 0; k < 256; k++) {
+        if (keys[k] && !g_padKeys[k]) {
+            if (!in.down[k]) in.pressed[k] = true;
+            in.down[k] = true;
+        } else if (!keys[k] && g_padKeys[k]) {
+            in.down[k] = false;
+        }
+        g_padKeys[k] = keys[k];
+    }
+}
+
 LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     Input& in = g_input;
     switch (msg) {
@@ -57,6 +178,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MOVE: applyClip(); return 0;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
+        in.pad = false;
         if (wp < 256) {
             if (!(lp & (1 << 30))) in.pressed[wp] = true;
             in.down[wp] = true;
@@ -202,6 +324,7 @@ bool pump() {
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
+    pollPad(g_input, Platform::time());
     return !g_quit;
 }
 

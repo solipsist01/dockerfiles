@@ -102,6 +102,11 @@ public:
     // Tekenafstand voor gebouwen en details (m). De game verlaagt hem als de framerate zakt (drukke steden zoals
     // Utrecht) en verhoogt hem weer als er ruimte is; laden gebeurt nog steeds tot DETAIL_RADIUS.
     float drawDistance = 1500.0f;
+    // grafische kwaliteit (Opties): bovengrens voor de meeschalende zichtafstand, fractie daarvan voor details
+    // (bankjes, lantaarns...) en de afstand waarbinnen interieurs en mensen worden getekend
+    float maxDrawDistance = 1500.0f;
+    float detailFactor = 0.7f;
+    float nearDistance = 150.0f;
     bool visible(Vec3 mn, Vec3 mx) const { return frustum_.boxVisible(mn, mx); }  // in beeld (na beginDraw)
     static float boxDistance(Vec3 p, Vec3 mn, Vec3 mx) {
         float dx = std::max({mn.x - p.x, 0.0f, p.x - mx.x}), dz = std::max({mn.z - p.z, 0.0f, p.z - mx.z});

@@ -69,6 +69,7 @@ footer { font-size: 13px; color: var(--muted); padding: 0 0 30px; }
         <li>Kies in het hoofdmenu <b>Multiplayer</b> om samen te spelen.{{if .Password}} Deze server heeft een wachtwoord.{{end}}</li>
       </ol>
       {{if .Launcher}}<p class="row muted">Liever zonder installatie? <a href="/download/OVLauncher.exe">Alleen de launcher</a> (installeert in <code>%LOCALAPPDATA%\OVGame</code>).</p>{{end}}
+      {{if .Launcher}}<p class="row muted"><b>Steam Deck / Linux:</b> download <a href="/download/OVLauncher.exe">de launcher</a>, voeg hem in Steam toe als <i>niet-Steam-game</i> en zet bij <i>Eigenschappen → Compatibiliteit</i> Proton aan. Controller werkt meteen; kies in Opties eventueel kwaliteit <i>Laag</i> of een fps-limiet voor langere accuduur.</p>{{end}}
       <p class="row muted">Serveradres: <code>{{.URL}}</code></p>
     </section>
     <section class="card">

@@ -113,35 +113,69 @@ bool Renderer::init() {
 }
 
 void Renderer::resize(int w, int h) {
-    if (w == w_ && h == h_) return;
+    if (w == w_ && h == h_ && fbo_) return;
     w_ = w;
     h_ = h;
+    rebuild();
+}
+
+void Renderer::setQuality(int samples, float scale) {
+    GLint maxS = 0;
+    glGetIntegerv(GL_MAX_SAMPLES, &maxS);
+    samples = std::max(0, std::min(samples, (int)maxS));
+    scale = std::max(0.4f, std::min(1.0f, scale));
+    if (samples == samples_ && scale == scale_) return;
+    samples_ = samples;
+    scale_ = scale;
+    if (w_ > 0) rebuild();
+}
+
+void Renderer::rebuild() {
     if (fbo_) {
         glDeleteFramebuffers(1, &fbo_);
         glDeleteRenderbuffers(1, &rbColor_);
         glDeleteRenderbuffers(1, &rbDepth_);
         fbo_ = 0;
     }
-    if (w <= 0 || h <= 0) return;
+    if (fboRes_) {
+        glDeleteFramebuffers(1, &fboRes_);
+        glDeleteRenderbuffers(1, &rbRes_);
+        fboRes_ = 0;
+    }
+    if (w_ <= 0 || h_ <= 0) return;
+    rw_ = std::max(1, (int)(w_ * scale_ + 0.5f));
+    rh_ = std::max(1, (int)(h_ * scale_ + 0.5f));
+    auto storage = [&](GLenum fmt, int smp) {
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, smp, fmt, rw_, rh_);  // 0 samples = gewone buffer
+    };
     glGenFramebuffers(1, &fbo_);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glGenRenderbuffers(1, &rbColor_);
     glBindRenderbuffer(GL_RENDERBUFFER, rbColor_);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples_, GL_RGBA8, w, h);
+    storage(GL_RGBA8, samples_);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbColor_);
     glGenRenderbuffers(1, &rbDepth_);
     glBindRenderbuffer(GL_RENDERBUFFER, rbDepth_);
-    glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples_, GL_DEPTH_COMPONENT24, w, h);
+    storage(GL_DEPTH_COMPONENT24, samples_);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbDepth_);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        Platform::showError("Kon geen anti-aliasing framebuffer maken.");
+        Platform::showError("Kon geen framebuffer maken.");
+    }
+    // multisample en geschaald: eerst oplossen op renderresolutie, dan pas (lineair) opschalen
+    if (samples_ > 0 && (rw_ != w_ || rh_ != h_)) {
+        glGenFramebuffers(1, &fboRes_);
+        glBindFramebuffer(GL_FRAMEBUFFER, fboRes_);
+        glGenRenderbuffers(1, &rbRes_);
+        glBindRenderbuffer(GL_RENDERBUFFER, rbRes_);
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_RGBA8, rw_, rh_);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbRes_);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Renderer::beginScene(Vec3 c) {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
-    glViewport(0, 0, w_, h_);
+    glViewport(0, 0, rw_, rh_);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
@@ -151,9 +185,17 @@ void Renderer::beginScene(Vec3 c) {
 }
 
 void Renderer::endScene() {
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    GLuint src = fbo_;
+    if (fboRes_) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboRes_);
+        glBlitFramebuffer(0, 0, rw_, rh_, 0, 0, rw_, rh_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        src = fboRes_;
+    }
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, src);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-    glBlitFramebuffer(0, 0, w_, h_, 0, 0, w_, h_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    bool same = rw_ == w_ && rh_ == h_;
+    glBlitFramebuffer(0, 0, rw_, rh_, 0, 0, w_, h_, GL_COLOR_BUFFER_BIT, same ? GL_NEAREST : GL_LINEAR);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, w_, h_);
 }

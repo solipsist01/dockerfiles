@@ -1095,13 +1095,13 @@ void Stations::drawOpaque(World& world) const {
     world.setModel(Mat4::identity());
     Vec3 cam = world.camPos();
     for (const Mesh& m : opaque_)
-        if (World::boxDistance(cam, m.bmin, m.bmax) < 2500.0f && world.visible(m.bmin, m.bmax)) drawMesh(m);
+        if (World::boxDistance(cam, m.bmin, m.bmax) < std::min(2500.0f, world.drawDistance + 1000.0f) && world.visible(m.bmin, m.bmax)) drawMesh(m);
 }
 
 void Stations::drawGlass(World& world) const {
     Vec3 cam = world.camPos();
     for (const Mesh& m : glass_)
-        if (World::boxDistance(cam, m.bmin, m.bmax) < 1500.0f && world.visible(m.bmin, m.bmax)) drawMesh(m);
+        if (World::boxDistance(cam, m.bmin, m.bmax) < world.drawDistance && world.visible(m.bmin, m.bmax)) drawMesh(m);
     for (const StationDoor& d : doors_) {
         float shift = d.open * 1.5f;
         world.setModel(Mat4::translation(-d.ax * shift, 0, -d.az * shift));

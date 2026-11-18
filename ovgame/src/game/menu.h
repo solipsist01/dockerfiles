@@ -35,6 +35,10 @@ public:
     // opties
     int windowMode = 0;               // Platform::WindowMode: 0 venster, 1 randloos volledig scherm, 2 volledig scherm
     bool vsync = true;
+    int quality = 2;                  // grafische kwaliteit: 0 laag, 1 middel, 2 hoog, 3 ultra
+    int scaleIdx = 3;                 // resolutie van de 3D-wereld: 50 / 67 / 75 / 100 %
+    int fpsIdx = 3;                   // fps-limiet: 30 / 40 / 60 / geen (accu sparen, Steam Deck)
+    std::string gpuName;              // getoond in Opties
     int realism = 1;                  // treinrijden: 0 simpel, 1 middel, 2 zo echt mogelijk
     // dienst rijden
     int dutyKind = 0;                 // 0 bus, 1 trein

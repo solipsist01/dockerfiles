@@ -35,14 +35,21 @@ class Renderer {
 public:
     bool init();
     void resize(int w, int h);
-    void beginScene(Vec3 clearColor);  // tekent naar multisample-buffer
-    void endScene();                   // kopieert naar het scherm
+    // kwaliteit: anti-aliasing (0 = uit, anders aantal samples) en resolutieschaal (0.5..1) van de 3D-wereld;
+    // het menu en de HUD blijven op volle resolutie
+    void setQuality(int samples, float scale);
+    void beginScene(Vec3 clearColor);  // tekent naar de (multisample-)buffer op renderresolutie
+    void endScene();                   // kopieert (geschaald) naar het scherm
     bool saveScreenshot(const char* path);
     int width() const { return w_; }
     int height() const { return h_; }
 
 private:
+    void rebuild();
     GLuint fbo_ = 0, rbColor_ = 0, rbDepth_ = 0;
-    int w_ = 0, h_ = 0;
+    GLuint fboRes_ = 0, rbRes_ = 0;    // tussenbuffer: multisample oplossen voordat er geschaald wordt
+    int w_ = 0, h_ = 0;                // scherm
+    int rw_ = 0, rh_ = 0;              // renderresolutie
     int samples_ = 4;
+    float scale_ = 1.0f;
 };

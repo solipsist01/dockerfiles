@@ -164,7 +164,7 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
     showPreview = false;
     text.begin(w, h);
     // donkere band links met titel
-    float pw = (screen == CHARACTER ? 640 : screen == DUTY ? 740 : 560) * ui;
+    float pw = (screen == CHARACTER ? 640 : screen == DUTY ? 740 : screen == OPTIONS ? 1100 : 560) * ui;
     text.rect(0, 0, pw, (float)h, {0.03f, 0.05f, 0.09f, 0.80f});
     text.rect(pw, 0, 4 * ui, (float)h, YEL);
     float x = 56 * ui, y = 50 * ui;
@@ -433,8 +433,32 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
         if (in.lDown && in.mouseX > previewX && in.mouseX < previewX + previewW && in.mouseY > previewY && in.mouseY < previewY + previewH) showPreview = true;
         showPreview = true;
     } else if (screen == OPTIONS) {
+        // twee kolommen: links weergave, rechts kwaliteit en spel
+        float cw = (bw - 40 * ui) / 2, x2 = x + cw + 40 * ui, y0 = y;
+        float sh = 40 * ui;
+        auto row = [&](float rx, float& ry, const char* const* labels, int n, int& val) {
+            float tw = (cw - (n - 1) * 8 * ui) / n;
+            for (int k = 0; k < n; k++)
+                if (button(text, in, rx + k * (tw + 8 * ui), ry, tw, sh, labels[k], true, val == k, 17 * ui) && val != k) { val = k; act = SETTINGS; }
+            ry += sh + 8 * ui;
+        };
+        auto wrap = [&](float rx, float& ry, const std::string& s) {
+            std::string line, word;
+            float fsz = 15 * ui;
+            for (size_t k = 0; k <= s.size(); k++) {
+                char ch = k < s.size() ? s[k] : ' ';
+                if (ch != ' ') { word += ch; continue; }
+                std::string tryL = line.empty() ? word : line + " " + word;
+                if (text.measure(tryL, fsz) > cw) { text.text(rx, ry, line, fsz, GREY); ry += fsz * 1.35f; line = word; }
+                else line = tryL;
+                word.clear();
+            }
+            if (!line.empty()) { text.text(rx, ry, line, fsz, GREY); ry += fsz * 1.35f; }
+        };
         text.text(x, y - 20 * ui, "Opties", 34 * ui, WHITE);
         y += 30 * ui;
+        y0 = y;
+        // ---- linkerkolom ----
         text.text(x, y, "Grafisch", 22 * ui, YEL);
         y += 36 * ui;
         text.text(x, y, "Weergave", 19 * ui, GREY);
@@ -443,43 +467,54 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
         const char* hints[] = {"Gewoon venster, vrij te verplaatsen en te vergroten.",
                                "Randloos venster over het hele scherm; snel wisselen met Alt+Tab.",
                                "Exclusief volledig scherm op de resolutie van je beeldscherm."};
-        float sh = 40 * ui;
         for (int k = 0; k < 3; k++) {
-            if (button(text, in, x, y, bw, sh, modes[k], true, windowMode == k, 19 * ui) && windowMode != k) { windowMode = k; act = SETTINGS; }
+            if (button(text, in, x, y, cw, sh, modes[k], true, windowMode == k, 19 * ui) && windowMode != k) { windowMode = k; act = SETTINGS; }
             y += sh + 6 * ui;
         }
-        text.text(x, y + 2 * ui, hints[windowMode], 15 * ui, GREY);
-        y += 36 * ui;
+        wrap(x, y, hints[windowMode]);
+        y += 14 * ui;
         text.text(x, y, "VSync  (geen scheuren in het beeld)", 19 * ui, GREY);
         y += 30 * ui;
-        float hw = (bw - 8 * ui) / 2;
+        float hw = (cw - 8 * ui) / 2;
         if (button(text, in, x, y, hw, sh, "Aan", true, vsync, 19 * ui) && !vsync) { vsync = true; act = SETTINGS; }
         if (button(text, in, x + hw + 8 * ui, y, hw, sh, "Uit", true, !vsync, 19 * ui) && vsync) { vsync = false; act = SETTINGS; }
-        y += sh + 26 * ui;
-        text.text(x, y, "Spel", 22 * ui, YEL);
-        y += 36 * ui;
-        text.text(x, y, "Treinrijden", 19 * ui, GREY);
+        y += sh + 20 * ui;
+        text.text(x, y, "Fps-limiet", 19 * ui, GREY);
         y += 30 * ui;
-        float tw3 = (bw - 16 * ui) / 3;
-        for (int k = 0; k < 3; k++)
-            if (button(text, in, x + k * (tw3 + 8 * ui), y, tw3, sh, REALISM[k], true, realism == k, 17 * ui) && realism != k) { realism = k; act = SETTINGS; }
-        y += sh + 10 * ui;
-        // uitleg met regelafbreking
-        {
-            std::string s = REALISM_INFO[realism], line, word;
-            float fsz = 15 * ui;
-            for (size_t k = 0; k <= s.size(); k++) {
-                char ch = k < s.size() ? s[k] : ' ';
-                if (ch != ' ') { word += ch; continue; }
-                std::string tryL = line.empty() ? word : line + " " + word;
-                if (text.measure(tryL, fsz) > bw) { text.text(x, y, line, fsz, GREY); y += fsz * 1.35f; line = word; }
-                else line = tryL;
-                word.clear();
-            }
-            if (!line.empty()) text.text(x, y, line, fsz, GREY);
-        }
+        const char* fpsL[] = {"30", "40", "60", "Geen"};
+        row(x, y, fpsL, 4, fpsIdx);
+        wrap(x, y, fpsIdx < 3 ? "Minder beelden per seconde: stiller, koeler en langer op de accu (laptop, Steam Deck)."
+                              : "Zo veel beelden als de videokaart aankan (met VSync: tot de verversing van je scherm).");
+        // ---- rechterkolom ----
+        float ry = y0;
+        text.text(x2, ry, "Kwaliteit", 22 * ui, YEL);
+        ry += 36 * ui;
+        text.text(x2, ry, "Grafische kwaliteit", 19 * ui, GREY);
+        ry += 30 * ui;
+        const char* qL[] = {"Laag", "Middel", "Hoog", "Ultra"};
+        row(x2, ry, qL, 4, quality);
+        const char* qInfo[] = {"Voor zwakke laptops: kortere zichtafstand, geen anti-aliasing, minder details en mensen dichtbij.",
+                               "Voor de Steam Deck en laptops met ingebouwde graphics: 1100 m zicht, 2x anti-aliasing.",
+                               "Voor een gewone gaming-pc: 1500 m zicht, 4x anti-aliasing.",
+                               "Voor een snelle videokaart: 8x anti-aliasing, details en mensen verder weg."};
+        wrap(x2, ry, qInfo[quality]);
+        ry += 14 * ui;
+        text.text(x2, ry, "Resolutie 3D-wereld", 19 * ui, GREY);
+        ry += 30 * ui;
+        const char* sL[] = {"50%", "67%", "75%", "100%"};
+        row(x2, ry, sL, 4, scaleIdx);
+        wrap(x2, ry, scaleIdx < 3 ? "De wereld wordt op een lagere resolutie getekend en opgeschaald; menu en tekst blijven scherp. Scheelt veel bij een zwakke videokaart."
+                                  : "De wereld op de volle resolutie van het venster.");
+        if (!gpuName.empty()) wrap(x2, ry, "Videokaart: " + gpuName);
+        ry += 20 * ui;
+        text.text(x2, ry, "Spel", 22 * ui, YEL);
+        ry += 36 * ui;
+        text.text(x2, ry, "Treinrijden", 19 * ui, GREY);
+        ry += 30 * ui;
+        row(x2, ry, REALISM, 3, realism);
+        wrap(x2, ry, REALISM_INFO[realism]);
         float by = h - 84 * ui;
-        if (button(text, in, x, by, bw, bh, "Terug") || in.pressed[VK_ESCAPE]) screen = back_;
+        if (button(text, in, x, by, cw, bh, "Terug") || in.pressed[VK_ESCAPE]) screen = back_;
     }
     text.end();
     return act;

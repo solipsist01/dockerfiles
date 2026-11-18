@@ -12,6 +12,7 @@ struct Input {
     float mouseX = 0, mouseY = 0;
     bool lDown = false, lClick = false, rClick = false, lRelease = false;
     bool autoCapture = true; // klikken in het venster vangt de muis (uit in menu's en op de kaart)
+    bool pad = false;        // laatst gebruikt: controller (XInput: Xbox-controller, Steam Deck) i.p.v. muis/toetsenbord
     std::string chars;       // deze frame getypte tekens (Latin-1; '\b' = backspace), voor tekstvelden
 };
 

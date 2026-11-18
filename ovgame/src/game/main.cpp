@@ -19,6 +19,7 @@
 //   --trafficlog BESTAND 20 uur treinverkeer simuleren en controleren (beveiliging, wachttijden)
 //   --server URL     wereld van een OV Game server streamen en daar multiplayer spelen (de launcher geeft dit mee)
 //   --connect        (met --server) meteen verbinden en spelen;  --password WACHTWOORD
+//   --quality Q S    kwaliteit (0 laag..3 ultra) en resolutie-index (0 = 50%..3 = 100%) voor deze keer
 #include <algorithm>
 #include <map>
 #include <cmath>
@@ -38,6 +39,7 @@
 #include "character.h"
 #include "citybus.h"
 #include "people.h"
+#include <mmsystem.h>
 #include "collision.h"
 #include "mapview.h"
 #include "menu.h"
@@ -118,6 +120,21 @@ static const Spawn SPAWNS[] = {
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
+
+// grafische kwaliteit (Opties): renderresolutie en fps-limiet per keuze, en het raden van een startwaarde
+static const int SCALE_PCT[4] = {50, 67, 75, 100};
+static const int FPS_LIMIT[4] = {30, 40, 60, 0};
+static int guessQuality(std::string gpu) {
+    for (char& c : gpu) c = (char)tolower((unsigned char)c);
+    auto has = [&](const char* k) { return gpu.find(k) != std::string::npos; };
+    if (has("llvmpipe") || has("softpipe") || has("swiftshader") || has("gdi generic") || has("microsoft basic")) return 0;
+    // Steam Deck (AMD Custom GPU 0405 / Van Gogh), Intel en AMD ingebouwde graphics
+    if (has("custom gpu") || has("vangogh") || has("van gogh") || has("intel") || has("vega 8") || has("vega 6") || has("vega 3") ||
+        has("radeon(tm) graphics") || has("radeon graphics") || has("mali") || has("adreno"))
+        return 1;
+    return 2;
+}
+
 int main(int argc, char** argv) {
     float startX = 0, startZ = 0, startYaw = 0, startPitch = 0, startHeight = -1, simTime = 0;
     bool customPos = false, yawSet = false, direct = false, shotMenu = false, shotNewGame = false, shotMap = false, shotAerial = false, shotHover = false;
@@ -172,12 +189,16 @@ int main(int argc, char** argv) {
     int setWindowMode = 0, setRealism = 1;
     std::string setServer;
     bool setVsync = true;
+    int setQuality = -1, setScale = -1, setFps = 3;  // -1 = nog niet gekozen: bij de eerste start raden aan de hand van de videokaart
     if (FILE* f = fopen(settingsPath.c_str(), "r")) {
         char line[256];
         while (fgets(line, sizeof line, f)) {
             int v;
             if (sscanf(line, "venster = %d", &v) == 1) setWindowMode = std::max(0, std::min(2, v));
             else if (sscanf(line, "vsync = %d", &v) == 1) setVsync = v != 0;
+            else if (sscanf(line, "kwaliteit = %d", &v) == 1) setQuality = std::max(0, std::min(3, v));
+            else if (sscanf(line, "resolutie = %d", &v) == 1) setScale = v <= 50 ? 0 : v <= 67 ? 1 : v <= 75 ? 2 : 3;
+            else if (sscanf(line, "fpslimiet = %d", &v) == 1) setFps = v <= 0 ? 3 : v <= 30 ? 0 : v <= 40 ? 1 : v <= 60 ? 2 : 3;
             else if (sscanf(line, "treinrealisme = %d", &v) == 1) setRealism = std::max(0, std::min(2, v));
             else if (strncmp(line, "server = ", 9) == 0) {
                 setServer = line + 9;
@@ -189,9 +210,11 @@ int main(int argc, char** argv) {
     auto saveSettings = [&]() {
         if (FILE* f = fopen(settingsPath.c_str(), "w")) {
             fprintf(f, "# OV Game instellingen\n# venster: 0 = venster, 1 = volledig scherm (venster), 2 = volledig scherm\nvenster = %d\nvsync = %d\n"
+                       "# kwaliteit: 0 = laag, 1 = middel, 2 = hoog, 3 = ultra; resolutie van de 3D-wereld in procenten (50/67/75/100)\n"
+                       "kwaliteit = %d\nresolutie = %d\n# fpslimiet: 30, 40, 60 of 0 (geen)\nfpslimiet = %d\n"
                        "# treinrealisme: 0 = simpel, 1 = middel, 2 = zo echt mogelijk\ntreinrealisme = %d\n"
                        "# laatst gebruikte multiplayer-server\nserver = %s\n",
-                    setWindowMode, setVsync ? 1 : 0, setRealism, setServer.c_str());
+                    setWindowMode, setVsync ? 1 : 0, std::max(0, setQuality), SCALE_PCT[std::max(0, setScale)], FPS_LIMIT[setFps], setRealism, setServer.c_str());
             fclose(f);
         }
     };
@@ -231,8 +254,19 @@ int main(int argc, char** argv) {
     for (int i = 1; i + 1 < argc; i++)  // test: venstermodus forceren (ook bij --shot), wordt niet opgeslagen
         if (strcmp(argv[i], "--windowmode") == 0) Platform::setWindowMode(atoi(argv[i + 1]));
     Platform::setVSync(setVsync);
+    timeBeginPeriod(1);  // Sleep(1) = 1 ms (fps-limiet)
     Renderer renderer;
     renderer.init();
+    // eerste start: kwaliteit raden aan de hand van de videokaart (Steam Deck, ingebouwde graphics, software-OpenGL)
+    std::string gpuName = (const char*)glGetString(GL_RENDERER);
+    if (setQuality < 0 || setScale < 0) {
+        int gq = guessQuality(gpuName);
+        if (setQuality < 0) setQuality = gq;
+        if (setScale < 0) setScale = gq == 0 ? 1 : 3;
+        if (!shotPath) saveSettings();
+    }
+    for (int i = 1; i + 2 < argc; i++)  // test: --quality Q S (kwaliteit 0..3, resolutie-index 0..3), wordt niet opgeslagen
+        if (strcmp(argv[i], "--quality") == 0) { setQuality = std::max(0, std::min(3, atoi(argv[i + 1]))); setScale = std::max(0, std::min(3, atoi(argv[i + 2]))); }
     TextRenderer text;
     text.init();
     auto loadingScreen = [&](const std::string& s) {
@@ -251,6 +285,20 @@ int main(int argc, char** argv) {
     loadingScreen("Eindhoven wordt geladen...");
 
     World world;
+    // grafische kwaliteit toepassen (bij de start en na een wijziging in Opties)
+    auto applyQuality = [&]() {
+        static const int SAMPLES[4] = {0, 2, 4, 8};
+        static const float MAXDD[4] = {700, 1100, 1500, 1500};
+        static const float DETAIL[4] = {0.45f, 0.6f, 0.7f, 0.85f};
+        static const float NEAR_[4] = {70, 110, 150, 220};
+        renderer.setQuality(SAMPLES[setQuality], SCALE_PCT[setScale] / 100.0f);
+        world.maxDrawDistance = MAXDD[setQuality];
+        world.detailFactor = DETAIL[setQuality];
+        world.nearDistance = NEAR_[setQuality];
+        world.drawDistance = std::min(world.drawDistance, world.maxDrawDistance);
+        world.fogDistance = 1300.0f * clampf(world.drawDistance / 1500.0f, 0.35f, 1.0f);
+    };
+    applyQuality();
     std::string err;
     std::string dataDir = findDataDir();
     // wereldbestanden: van de server (streaming) of lokaal
@@ -601,6 +649,10 @@ int main(int argc, char** argv) {
     if (shotNewGame) menu.screen = Menu::NEW_GAME;
     menu.windowMode = setWindowMode;
     menu.vsync = setVsync;
+    menu.quality = setQuality;
+    menu.scaleIdx = setScale;
+    menu.fpsIdx = setFps;
+    menu.gpuName = gpuName;
     menu.realism = setRealism;
     menu.chars = chars;
     menu.activeChar = activeChar;
@@ -1161,9 +1213,11 @@ int main(int argc, char** argv) {
             adaptT += dt;
             if (!shotPath && state == PLAYING && adaptT > 1.0 && fps > 0) {
                 adaptT = 0;
-                if (fps < 30 && world.drawDistance > 500.0f) world.drawDistance = std::max(500.0f, world.drawDistance * 0.85f);
-                else if (fps > 50 && world.drawDistance < 1500.0f) world.drawDistance = std::min(1500.0f, world.drawDistance * 1.08f);
-                world.fogDistance = 1300.0f * clampf(world.drawDistance / 1500.0f, 0.6f, 1.0f);
+                const float minDD = std::min(500.0f, world.maxDrawDistance * 0.6f);
+                if (fps < 30 && world.drawDistance > minDD) world.drawDistance = std::max(minDD, world.drawDistance * 0.85f);
+                else if (fps > 50 && world.drawDistance < world.maxDrawDistance) world.drawDistance = std::min(world.maxDrawDistance, world.drawDistance * 1.08f);
+                if (world.drawDistance > world.maxDrawDistance) world.drawDistance = world.maxDrawDistance;
+                world.fogDistance = 1300.0f * clampf(world.drawDistance / 1500.0f, 0.35f, 1.0f);
             }
         }
         int w = Platform::width(), h = Platform::height();
@@ -1619,7 +1673,7 @@ int main(int argc, char** argv) {
                 for (const PersonDraw& p : persons) {
                     Vec3 to = p.pos - eye;
                     if (dot(to, fwd) < -2.0f && length(to) > 4.0f) continue;  // achter de camera
-                    if (length(to) > 150.0f && p.look != LOOK_PLAYER) continue;  // verder weg: niet tekenen (framerate)
+                    if (length(to) > world.nearDistance && p.look != LOOK_PLAYER) continue;  // verder weg: niet tekenen (framerate)
                     const CharModel& m = p.model ? *p.model : people.model(p.look);
                     CharPose pose;
                     AnimState an = p.anim;
@@ -1664,6 +1718,10 @@ int main(int argc, char** argv) {
             else if (act == Menu::SETTINGS) {
                 setWindowMode = menu.windowMode;
                 setVsync = menu.vsync;
+                setQuality = menu.quality;
+                setScale = menu.scaleIdx;
+                setFps = menu.fpsIdx;
+                applyQuality();
                 setRealism = menu.realism;
                 Train::defaultRealism = setRealism;
                 Platform::setWindowMode(setWindowMode);
@@ -2050,12 +2108,21 @@ int main(int argc, char** argv) {
             } else if (player.vehicle) {
                 help = "WASD lopen   E kiezen (richtkruis)   B stopknop (bus)   O kaartje laten zien   F5 camera   M kaart   Esc menu";
             }
+            if (in.pad) {  // controller in gebruik: knoppen in plaats van toetsen
+                help = "L-stick lopen   R-stick kijken   A springen (2x vliegen)   X kiezen   LT snel/omlaag   Y spelers   View kaart   Menu menu";
+                if (player.driving && inTrain)
+                    help = "L-stick op/neer rijremschakelaar   B deuren   A bevestigen   LB snelrem   kruis omhoog cabine   kruis omlaag stroomafnemer   X opstaan";
+                else if (player.driving)
+                    help = "L-stick omhoog gas   omlaag rem   links/rechts sturen   B deuren   kruis rechts navigatielijn   X opstaan";
+                else if (player.vehicle)
+                    help = "L-stick lopen   X kiezen   LB stopknop (bus)   kruis links kaartje laten zien   R-klik camera   View kaart";
+            }
             float hw = text.measure(help, 16 * ui);
             text.rect((w - hw) / 2 - 10 * ui, h - 34 * ui, hw + 20 * ui, 26 * ui, {0, 0, 0, 0.45f});
             text.text((w - hw) / 2, h - 32 * ui, help, 16 * ui, {1, 1, 1, 0.9f});
 
             if (!in.captured && !shotPath) {
-                std::string s = "Klik in het venster om te spelen";
+                std::string s = in.pad ? "Beweeg de rechterstick om te spelen" : "Klik in het venster om te spelen";
                 float sw = text.measure(s, 30 * ui);
                 text.rect((w - sw) / 2 - 20 * ui, h / 2.0f - 30 * ui, sw + 40 * ui, 60 * ui, {0, 0, 0, 0.55f});
                 text.text((w - sw) / 2, h / 2.0f - 20 * ui, s, 30 * ui, WHITE);
@@ -2150,6 +2217,17 @@ int main(int argc, char** argv) {
             break;
         }
         Platform::swap();
+        // fps-limiet: de rest van de frametijd slapen (grof met Sleep, het laatste stukje wachten)
+        if (FPS_LIMIT[setFps] > 0 && !shotPath) {
+            static double nextFrame = 0;
+            const double period = 1.0 / FPS_LIMIT[setFps];
+            double t = Platform::time();
+            if (nextFrame < t - period) nextFrame = t;  // achterstand niet inhalen
+            nextFrame += period;
+            while ((t = Platform::time()) < nextFrame) {
+                if (nextFrame - t > 0.002) Sleep(1);
+            }
+        }
     }
     if (audioOn) Audio::shutdown();
     return 0;
