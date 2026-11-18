@@ -14,6 +14,7 @@
 //   --shot BESTAND   maak na --frames frames een screenshot (PNG) en sluit af (wacht tot alles geladen is)
 //   --frames N
 //   --menu           (met --shot) het hoofdmenu fotograferen;  --newgame: het scherm 'Nieuw spel'
+//   --nohud          geen HUD en minimap (artwork)
 //   --map            (met --shot) de kaart open;  --aerial: luchtfoto als ondergrond
 //   --dumprail BESTAND   routes en tijden van de dienstregeling wegschrijven
 //   --trafficlog BESTAND 20 uur treinverkeer simuleren en controleren (beveiliging, wachttijden)
@@ -145,6 +146,7 @@ static int guessQuality(std::string gpu) {
 
 int main(int argc, char** argv) {
     float startX = 0, startZ = 0, startYaw = 0, startPitch = 0, startHeight = -1, simTime = 0;
+    bool noHud = false;  // --nohud: geen HUD/minimap (screenshots voor artwork)
     bool customPos = false, yawSet = false, direct = false, shotMenu = false, shotNewGame = false, shotMap = false, shotAerial = false, shotHover = false;
     int spawn = 1, rideTrain = 0, rideBus = 0, startMinutes = -1;
     float mapScale = 0, forceY = -1e9f;
@@ -178,6 +180,7 @@ int main(int argc, char** argv) {
         else if (strcmp(argv[i], "--connect") == 0) autoConnect = true;
         else if (strcmp(argv[i], "--nostations") == 0) noStations = true;
         else if (strcmp(argv[i], "--menu") == 0) shotMenu = true;
+        else if (strcmp(argv[i], "--nohud") == 0) noHud = true;
         else if (strcmp(argv[i], "--newgame") == 0) shotMenu = shotNewGame = true;
         else if (strcmp(argv[i], "--map") == 0) shotMap = true;
         else if (strcmp(argv[i], "--aerial") == 0) shotAerial = true;
@@ -1845,7 +1848,7 @@ int main(int argc, char** argv) {
                 map.close();
                 noticeT = 3.0f;
             }
-        } else {
+        } else if (!noHud) {
             // ---------- minimap ----------
             map.drawMini(text, mctx, w, h);
 

@@ -2,7 +2,8 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
+	"archive/zip"
+	"embed"
 	"encoding/json"
 	"html/template"
 	"log"
@@ -15,6 +16,14 @@ import (
 
 //go:embed web/index.html
 var indexHTML string
+
+// Steam-artwork (tools/make_steam_art.py) en de pagina die het laat zien
+//
+//go:embed web/steam.html
+var steamHTML []byte
+
+//go:embed web/steam/*.png
+var steamArt embed.FS
 
 var indexTmpl = template.Must(template.New("index").Parse(indexHTML))
 
@@ -147,4 +156,43 @@ func (u *webUI) installer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="OVGameSetup.exe"`)
 	w.Write(b)
 	w.Write(tail)
+}
+
+// /steam: pagina met de artwork; /steam/<naam>.png de plaatjes; /steam/ovgame-steam-art.zip alles in een zip
+func (u *webUI) steam(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/steam")
+	name = strings.TrimPrefix(name, "/")
+	switch {
+	case name == "":
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(steamHTML)
+	case name == "ovgame-steam-art.zip":
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="ovgame-steam-art.zip"`)
+		zw := zip.NewWriter(w)
+		entries, _ := steamArt.ReadDir("web/steam")
+		for _, e := range entries {
+			data, err := steamArt.ReadFile("web/steam/" + e.Name())
+			if err != nil {
+				continue
+			}
+			f, err := zw.CreateHeader(&zip.FileHeader{Name: "ovgame-" + e.Name(), Method: zip.Store, Modified: time.Now()})
+			if err == nil {
+				f.Write(data)
+			}
+		}
+		zw.Close()
+	case strings.HasSuffix(name, ".png") && !strings.Contains(name, "/"):
+		data, err := steamArt.ReadFile("web/steam/" + name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Write(data)
+	default:
+		http.NotFound(w, r)
+	}
 }

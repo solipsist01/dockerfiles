@@ -93,6 +93,8 @@ func main() {
 	web := &webUI{cfg: cfg, hub: hub, files: files, clk: clk}
 	mux.HandleFunc("/", web.index)
 	mux.HandleFunc("/api/status", web.status)
+	mux.HandleFunc("/steam", web.steam)
+	mux.HandleFunc("/steam/", web.steam)
 	mux.HandleFunc("/download/OVLauncher.exe", web.launcher)
 	mux.HandleFunc("/download/OVGameSetup.exe", web.installer)
 	mux.HandleFunc("/api/client", files.clientManifest)

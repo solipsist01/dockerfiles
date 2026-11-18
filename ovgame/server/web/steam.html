@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OV Game – Steam-artwork</title>
+<style>
+:root {
+  --bg: #f4f1ea; --card: #ffffff; --ink: #1d232b; --muted: #5d6773; --line: #e2ddd2;
+  --ns: #ffc917; --ns-ink: #1d232b; --blue: #003082;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #11151b; --card: #1a2029; --ink: #e8ebef; --muted: #98a2ae; --line: #2a323d; --blue: #8fb1ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--ns); color: var(--ns-ink); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+header .wrap { display: flex; align-items: center; gap: 14px; padding-top: 22px; padding-bottom: 22px; }
+.logo { width: 46px; height: 46px; border-radius: 10px; background: #003082; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.5px; flex: none; }
+h1 { font-size: 26px; margin: 0; line-height: 1.15; }
+header p { margin: 2px 0 0; opacity: .8; font-size: 15px; }
+header a { color: inherit; }
+main { padding: 26px 0 40px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 18px; }
+.card h2 { font-size: 17px; margin: 0 0 12px; }
+.card a { color: var(--blue); }
+.muted { color: var(--muted); font-size: 14px; }
+.download { display: inline-flex; align-items: center; gap: 10px; background: #003082; color: #fff !important; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-weight: 650; font-size: 17px; }
+@media (prefers-color-scheme: dark) { .download { background: #2457c5; } }
+.download:hover { filter: brightness(1.1); }
+.art { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 700px) { .art { grid-template-columns: 1fr; } }
+.tile { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.tile img { display: block; width: 100%; height: auto; }
+.tile.checker { background: repeating-conic-gradient(#8884 0% 25%, transparent 0% 50%) 50% / 20px 20px; }
+.tile .cap { padding: 10px 12px; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tile .cap b { font-weight: 650; }
+.side { display: grid; gap: 18px; }
+.small { display: grid; grid-template-columns: 1fr 160px; gap: 18px; }
+@media (max-width: 700px) { .small { grid-template-columns: 1fr 1fr; } }
+ol { padding-left: 20px; margin: 10px 0 0; }
+ol li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="logo">OV</div>
+  <div><h1>Steam-artwork</h1><p>Voor OV Game als niet-Steam-game in je bibliotheek &middot; <a href="/">terug naar de server</a></p></div>
+</div></header>
+<main class="wrap">
+  <section class="card">
+    <h2>Alles in één keer</h2>
+    <a class="download" href="/steam/ovgame-steam-art.zip" download>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      Download alle artwork (zip)
+    </a>
+    <p class="muted">Gemaakt van een screenshot uit de game zelf. Klik op een plaatje om het los te downloaden.</p>
+  </section>
+
+  <section class="card">
+    <h2>Poster en banner</h2>
+    <div class="art">
+      <a class="tile" href="/steam/poster.png" download="ovgame-poster.png">
+        <img src="/steam/poster.png" alt="Poster: een VIRM-dubbeldekker langs het perron in Utrecht Centraal met het logo OV Game" width="600" height="900">
+        <div class="cap"><b>Poster</b><span class="muted">600 × 900</span></div>
+      </a>
+      <div class="side">
+        <a class="tile" href="/steam/banner.png" download="ovgame-banner.png">
+          <img src="/steam/banner.png" alt="Banner: perron in Utrecht Centraal met een VIRM en het logo OV Game" width="920" height="430">
+          <div class="cap"><b>Banner</b><span class="muted">920 × 430</span></div>
+        </a>
+        <a class="tile" href="/steam/hero.png" download="ovgame-hero.png">
+          <img src="/steam/hero.png" alt="Achtergrond: breed beeld van het perron met een VIRM" width="1920" height="620">
+          <div class="cap"><b>Achtergrond (hero)</b><span class="muted">1920 × 620</span></div>
+        </a>
+        <div class="small">
+          <a class="tile checker" href="/steam/logo.png" download="ovgame-logo.png">
+            <img src="/steam/logo.png" alt="Logo OV Game, transparant" width="1280" height="400">
+            <div class="cap"><b>Logo</b><span class="muted">transparant</span></div>
+          </a>
+          <a class="tile checker" href="/steam/icon.png" download="ovgame-icon.png">
+            <img src="/steam/icon.png" alt="Icoon OV" width="256" height="256">
+            <div class="cap"><b>Icoon</b><span class="muted">256</span></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Instellen in Steam</h2>
+    <p class="muted">Op de Steam Deck doe je dit in de <i>Desktopmodus</i>; daarna zie je het ook in de Gamemodus.</p>
+    <ol>
+      <li><b>Poster:</b> ga naar je bibliotheek, klik met rechts op de tegel van OV Game → <i>Beheren</i> → <i>Aangepaste illustratie instellen</i> en kies <code>poster.png</code>.</li>
+      <li><b>Banner:</b> Steam gebruikt de brede tegel o.a. bij <i>Recente games</i> en in Big Picture. Klik daar met rechts op de brede tegel van OV Game → <i>Beheren</i> → <i>Aangepaste illustratie instellen</i> en kies <code>banner.png</code>.</li>
+      <li><b>Achtergrond:</b> open de pagina van OV Game, klik met rechts op de lege achtergrond bovenaan → <i>Aangepaste achtergrond instellen</i> en kies <code>hero.png</code>.</li>
+      <li><b>Logo:</b> klik daarna met rechts op dezelfde achtergrond → <i>Aangepast logo instellen</i> en kies <code>logo.png</code>.</li>
+      <li><b>Icoon:</b> klik met rechts op OV Game → <i>Eigenschappen</i> en klik op het vakje met het icoon naast de naam; kies <code>icon.png</code>.</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

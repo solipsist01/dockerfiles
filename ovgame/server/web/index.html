@@ -46,6 +46,8 @@ ul.players li:last-child { border-bottom: 0; }
 code { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 14px; word-break: break-all; }
 footer { font-size: 13px; color: var(--muted); padding: 0 0 30px; }
 .row { margin-top: 18px; }
+.card a.art-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; text-decoration: none; color: var(--ink); font-weight: 600; font-size: 15px; }
+.card a.art-btn:hover { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -69,6 +71,9 @@ footer { font-size: 13px; color: var(--muted); padding: 0 0 30px; }
         <li>Kies in het hoofdmenu <b>Multiplayer</b> om samen te spelen.{{if .Password}} Deze server heeft een wachtwoord.{{end}}</li>
       </ol>
       {{if .Launcher}}<p class="row muted">Liever zonder installatie? <a href="/download/OVLauncher.exe">Alleen de launcher</a> (installeert in <code>%LOCALAPPDATA%\OVGame</code>).</p>{{end}}
+      <p class="row"><a class="art-btn" href="/steam">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+        Steam-artwork (poster en banner)</a></p>
       {{if .Launcher}}<p class="row muted"><b>Steam Deck / Linux:</b> download <a href="/download/OVLauncher.exe">de launcher</a>, voeg hem in Steam toe als <i>niet-Steam-game</i> en zet bij <i>Eigenschappen → Compatibiliteit</i> Proton aan. Controller werkt meteen; kies in Opties eventueel kwaliteit <i>Laag</i> of een fps-limiet voor langere accuduur.</p>{{end}}
       <p class="row muted">Serveradres: <code>{{.URL}}</code></p>
     </section>
