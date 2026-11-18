@@ -118,6 +118,20 @@ static const Spawn SPAWNS[] = {
     {"Utrecht Vaartsche Rijn - Perron", 0, 0, 1, 0, 4},
     {"Utrecht Centraal - Stationshal", 0, 0, 0, 0, 5},
     {"Utrecht Centraal - Perron 18/19", 0, 0, 1, 0, 5},
+    {"Utrecht Overvecht - Perron", 0, 0, 1, 0, 4},
+    {"Bilthoven - Perron", 0, 0, 1, 0, 4},
+    {"Den Dolder - Perron", 0, 0, 1, 0, 4},
+    {"Amersfoort Centraal - Perron", 0, 0, 1, 0, 4},
+    {"Amersfoort Schothorst - Perron", 0, 0, 1, 0, 4},
+    {"Amersfoort Vathorst - Perron", 0, 0, 1, 0, 4},
+    {"Nijkerk - Perron", 0, 0, 1, 0, 4},
+    {"Putten - Perron", 0, 0, 1, 0, 4},
+    {"Ermelo - Perron", 0, 0, 1, 0, 4},
+    {"Harderwijk - Perron", 0, 0, 1, 0, 4},
+    {"Nunspeet - Perron", 0, 0, 1, 0, 4},
+    {"'t Harde - Perron", 0, 0, 1, 0, 4},
+    {"Wezep - Perron", 0, 0, 1, 0, 4},
+    {"Zwolle - Perron", 0, 0, 1, 0, 4},
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
@@ -527,7 +541,8 @@ int main(int argc, char** argv) {
         const struct { const char* name; int spawn; } places[] = {
             {"Eindhoven Centraal", 3}, {"Busstation Centraal", 9}, {"Eindhoven Strijp-S", 6}, {"Best", 7},
             {"Boxtel", 10}, {"Vught", 11}, {"'s-Hertogenbosch", 12}, {"Zaltbommel", 13}, {"Geldermalsen", 14}, {"Culemborg", 15},
-            {"Houten Castellum", 16}, {"Houten", 17}, {"Utrecht Lunetten", 18}, {"Utrecht Vaartsche Rijn", 19}, {"Utrecht Centraal", 20}};
+            {"Houten Castellum", 16}, {"Houten", 17}, {"Utrecht Lunetten", 18}, {"Utrecht Vaartsche Rijn", 19}, {"Utrecht Centraal", 20},
+            {"Utrecht Overvecht", 22}, {"Bilthoven", 23}, {"Den Dolder", 24}, {"Amersfoort Centraal", 25}, {"Amersfoort Schothorst", 26}, {"Amersfoort Vathorst", 27}, {"Nijkerk", 28}, {"Putten", 29}, {"Ermelo", 30}, {"Harderwijk", 31}, {"Nunspeet", 32}, {"'t Harde", 33}, {"Wezep", 34}, {"Zwolle", 35}};
         for (auto& pl : places) {
             Player tmp;
             computeSpawn(pl.spawn, tmp);

@@ -57,14 +57,19 @@ public:
     // waar het pad begint/eindigt: Eindhoven Centraal (oost), Tilburg-aftakking, kopmaken in 's-Hertogenbosch,
     // voorbij Utrecht Centraal richting Amsterdam (UTN) of Woerden/Gouda (UTW), Tiel-aftakking bij Geldermalsen.
     // (NORTH = vroeger: de mist in ten noorden van 's-Hertogenbosch; niet meer gebruikt)
-    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL };
+    // Lijn Utrecht - Zwolle: keren in Utrecht Centraal (UTC) of Zwolle (ZWOLLE), voorbij Zwolle richting Meppel (ZWN),
+    // voorbij Amersfoort richting Apeldoorn (AMFE).
+    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE };
+    static bool isTerm(End e) { return e == DENBOSCH || e == UTC || e == ZWOLLE; }   // keren op een perron (kopmaken)
+    static bool zwEnd(End e) { return e == UTC || e == ZWOLLE || e == ZWN || e == AMFE; }  // hoort bij de lijn naar Zwolle
     struct StopDef { const char* station; bool stop; double arr, dep; const char* track = nullptr; };  // track: echt spoor (bijv. "4b"), anders rechts rijden
     struct Def {
         const char* number; const char* dest; int stock;  // 0 = FLIRT, 1 = VIRM
         int csTrack; End origin, exit;
         std::vector<StopDef> stops;
-        int linkFrom = -1;     // origin DENBOSCH: index van de serie waarvan de trein hier kopmaakt
+        int linkFrom = -1;     // origin keert (isTerm): index van de serie waarvan de trein hier kopmaakt (mag ook later in de lijst)
         int linkBase = 0;      // halfuur-verschil (minuten) met die rit
+        int hourly = 0;        // 0 = elk halfuur; 1 = alleen de halfuren vanaf :30, 2 = alleen die vanaf :00 (IC 500/600 om en om)
     };
 
 private:
@@ -80,6 +85,7 @@ private:
         double entryRel = 0;
         float entrySpeed = 20;
         Vec3 terminal;                  // spoorpunt van de laatste halte (kopmaken)
+        int linkDef = -1;               // def-index van linkFrom (wordt na het opbouwen van alle series omgezet)
         std::string info;
     };
     struct Run {

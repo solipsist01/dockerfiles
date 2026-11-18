@@ -331,12 +331,32 @@ bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>&
     int cur = nearest(pts[0].x, pts[0].z);
     if (cur < 0) return false;
     all.push_back(cur);
+    // begin van elke geaccepteerde etappe naar een optioneel tussenpunt: als het daarna niet verder kan (bijv. een
+    // doodlopend spoor bij een station in aanbouw), dat tussenpunt alsnog laten vallen en het opnieuw proberen
+    std::vector<size_t> optLeg;
     for (size_t k = 1; k < pts.size(); k++) {
         int goal = nearest(pts[k].x, pts[k].z);
         if (goal < 0) { if (required[k]) return false; continue; }
         if (goal == all.back()) continue;
         std::vector<int> leg;
         bool ok = search(all.back(), dx, dz, goal, leg);
+        if (!ok && !optLeg.empty()) {
+            // terug naar vóór het laatste optionele tussenpunt (verplicht doel: zo ver als nodig; optioneel: één stap)
+            std::vector<int> saveAll = all;
+            std::vector<size_t> saveOpt = optLeg;
+            float sdx = dx, sdz = dz;
+            while (!ok && !optLeg.empty()) {
+                all.resize(optLeg.back());
+                optLeg.pop_back();
+                if (all.size() >= 2) {
+                    Vec3 d = graph_[all.back()].p - graph_[all[all.size() - 2]].p;
+                    dx = d.x; dz = d.z;
+                }
+                ok = search(all.back(), dx, dz, goal, leg);
+                if (!required[k]) break;
+            }
+            if (!ok) { all = saveAll; optLeg = saveOpt; dx = sdx; dz = sdz; }
+        }
         if (ok) {
             float len = 0;
             for (size_t i = 1; i < leg.size(); i++) len += std::hypot(graph_[leg[i]].p.x - graph_[leg[i - 1]].p.x, graph_[leg[i]].p.z - graph_[leg[i - 1]].p.z);
@@ -344,6 +364,8 @@ bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>&
             if (!required[k] && len > straight * 1.25f + 40.0f) ok = false;  // omweg: dit tussenpunt overslaan
         }
         if (!ok) { if (required[k]) return false; continue; }
+        if (!required[k]) optLeg.push_back(all.size());
+        else optLeg.clear();
         all.insert(all.end(), leg.begin() + 1, leg.end());
         if (all.size() >= 2) {
             Vec3 d = graph_[all.back()].p - graph_[all[all.size() - 2]].p;

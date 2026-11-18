@@ -28,7 +28,7 @@ constexpr double ORIGIN_Y = 383770.0;
 // Het onderstaande gebied is alleen een omhullende voor de converter; de game gebruikt de tegelindex.
 constexpr int TILE = 500;
 constexpr int AREA_X0 = 130500, AREA_Y0 = 366500;  // zuidgrens: Bergeijk (buslijn 18); westgrens: Utrecht Leidsche Rijn
-constexpr int AREA_X1 = 176500, AREA_Y1 = 461500;  // oostgrens: Helmond (buslijn 24); noordgrens: Utrecht Zuilen
+constexpr int AREA_X1 = 211000, AREA_Y1 = 506000;  // oostgrens: voorbij Zwolle (lijn naar Meppel); noordgrens: Zwolle
 
 constexpr int PHOTO_CELL = TILE;
 constexpr int BUILDING_CHUNK = 250;  // gebouwen gegroepeerd per 250 m (4 chunks per tegel)
@@ -65,6 +65,26 @@ constexpr double UT_WEST_PTS[][2] = {{136001, 455738}, {135750, 456193}, {135360
 // Aftakking Geldermalsen -> Tiel (Sprinters Tiel - Utrecht)
 constexpr double TIEL_PTS[][2] = {{147049, 432692}, {147155, 432198}, {147462, 431786}, {147920, 431577}, {148462, 431526},
                                   {149006, 431477}, {149440, 431439}};
+// Traject Utrecht Centraal -> Amersfoort Centraal -> Zwolle (89 km, OSM-spoor, elke km een punt): Utrecht Overvecht,
+// Bilthoven, Den Dolder, Amersfoort Centraal, Amersfoort Schothorst, Amersfoort Vathorst, Nijkerk, Putten, Ermelo,
+// Harderwijk, Nunspeet, 't Harde, Wezep, Zwolle
+constexpr double ZWOLLE_PTS[][2] = {
+    {135985, 455729}, {135584, 456632}, {136048, 457479}, {136908, 457972}, {137849, 458311}, {138785, 458661}, {139716, 459021},
+    {140629, 459428}, {141548, 459823}, {142462, 460227}, {143384, 460616}, {144302, 461013}, {145215, 461420}, {146137, 461805},
+    {147103, 462006}, {148100, 461937}, {149098, 461868}, {150096, 461799}, {151087, 461915}, {152060, 462127}, {152924, 462631},
+    {153881, 462785}, {154573, 463157}, {155180, 463952}, {155770, 464758}, {156457, 465483}, {157175, 466179}, {157894, 466875},
+    {158254, 467244}, {158980, 467932}, {159735, 468585}, {160599, 469086}, {161470, 469575}, {162147, 470309}, {162802, 471064},
+    {163553, 471713}, {164413, 472224}, {165272, 472735}, {166112, 473276}, {166791, 474008}, {167436, 474772}, {167953, 475375},
+    {168599, 476138}, {169216, 476925}, {169723, 477786}, {170196, 478667}, {170609, 479574}, {170603, 480565}, {170426, 481549},
+    {170248, 482533}, {170732, 483279}, {171258, 483434}, {172221, 483703}, {173209, 483852}, {174208, 483892}, {175207, 483933},
+    {176205, 483984}, {177160, 484266}, {178052, 484719}, {178942, 485174}, {179809, 485672}, {180632, 486240}, {181443, 486822},
+    {182373, 487187}, {183319, 487511}, {184264, 487836}, {185196, 488197}, {186044, 488724}, {186830, 489342}, {187616, 489961},
+    {188401, 490580}, {189187, 491199}, {189972, 491817}, {190664, 492366}, {191432, 493006}, {192268, 493553}, {193118, 494080},
+    {193968, 494607}, {194819, 495133}, {195673, 495653}, {196526, 496174}, {197182, 496916}, {197662, 497793}, {198274, 498575},
+    {198990, 499274}, {199714, 499962}, {200623, 500371}, {201483, 500857}, {201849, 501780}, {202485, 502335}, {202738, 502201}};
+// Voorbij Zwolle richting Meppel (IC's naar Groningen en Leeuwarden) en voorbij Amersfoort richting Apeldoorn (IC 1700)
+constexpr double ZW_NORTH_PTS[][2] = {{202738, 502201}, {203168, 501946}, {203595, 501686}, {204031, 501444}, {204526, 501408}, {205013, 501502}, {205416, 501796}, {205820, 502091}, {206199, 502413}, {206579, 502737}, {206971, 503048}, {207362, 503359}, {207753, 503671}};
+constexpr double AMF_EAST_PTS[][2] = {{154083, 462810}, {154496, 463051}, {154800, 463448}, {155103, 463846}, {155411, 464239}, {155726, 464627}, {156151, 464881}, {156646, 464905}, {157131, 464783}, {157615, 464657}, {158099, 464531}};
 constexpr double BEST_CX = 155125, BEST_CY = 391198;
 // Buslijnen (18, 8, 9, 24, 156, 401, 402): detail binnen 400 m van de routes (tools\bus_route.ps1)
 #include "busroutes.inc"
@@ -75,7 +95,11 @@ constexpr StationArea STATION_AREAS[] = {
     {"Best", 155125, 391198, 900}, {"Boxtel", 150275, 399505, 750}, {"Vught", 148461, 406792, 750}, {"'s-Hertogenbosch", 148535, 411308, 1000},
     {"Zaltbommel", 146460, 424360, 750}, {"Geldermalsen", 147032, 432676, 800}, {"Culemborg", 143970, 439856, 750},
     {"Houten Castellum", 140740, 447632, 700}, {"Houten", 139967, 449542, 750}, {"Utrecht Lunetten", 138273, 453152, 700},
-    {"Utrecht Vaartsche Rijn", 136811, 454531, 700}, {"Utrecht Centraal", 135989, 455717, 1500}};
+    {"Utrecht Vaartsche Rijn", 136811, 454531, 700}, {"Utrecht Centraal", 135989, 455717, 1500},
+    {"Utrecht Overvecht", 137050, 458040, 700}, {"Bilthoven", 142547, 460261, 750}, {"Den Dolder", 145065, 461346, 700},
+    {"Amersfoort Centraal", 154095, 462805, 1000}, {"Amersfoort Schothorst", 156150, 465174, 700}, {"Amersfoort Vathorst", 158160, 467120, 700},
+    {"Nijkerk", 162259, 470453, 750}, {"Putten", 167871, 475262, 700}, {"Ermelo", 170502, 479268, 700}, {"Harderwijk", 170891, 483349, 800},
+    {"Nunspeet", 182070, 487090, 750}, {"'t Harde", 189409, 491383, 700}, {"Wezep", 196814, 496373, 700}, {"Zwolle", 202756, 502218, 1100}};
 
 inline double distToSquare(double px, double py, int x0, int y0) {
     double dx = std::max({(double)x0 - px, 0.0, px - (x0 + TILE)});
@@ -98,7 +122,9 @@ inline bool isDetailTile(int x0, int y0) {
     };
 #define OV_N(a) (int)(sizeof(a) / sizeof(a[0]))
     if (nearLine(UTRECHT_PTS, OV_N(UTRECHT_PTS), 600) || nearLine(UT_NORTH_PTS, OV_N(UT_NORTH_PTS), 600) ||
-        nearLine(UT_WEST_PTS, OV_N(UT_WEST_PTS), 600) || nearLine(TIEL_PTS, OV_N(TIEL_PTS), 600))
+        nearLine(UT_WEST_PTS, OV_N(UT_WEST_PTS), 600) || nearLine(TIEL_PTS, OV_N(TIEL_PTS), 600) ||
+        nearLine(ZWOLLE_PTS, OV_N(ZWOLLE_PTS), 600) || nearLine(ZW_NORTH_PTS, OV_N(ZW_NORTH_PTS), 600) ||
+        nearLine(AMF_EAST_PTS, OV_N(AMF_EAST_PTS), 600))
         return true;
 #undef OV_N
     return nearLine(ROUTE_PTS, sizeof(ROUTE_PTS) / sizeof(ROUTE_PTS[0]), 600) || nearLine(BRANCH_PTS, sizeof(BRANCH_PTS) / sizeof(BRANCH_PTS[0]), 600) ||
