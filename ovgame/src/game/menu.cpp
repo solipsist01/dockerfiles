@@ -87,6 +87,34 @@ void Menu::timePicker(TextRenderer& text, Input& in, float tx, float ty, bool& e
     if (minutes != before) dutyDirty = true;
 }
 
+// lijst met startpunten (scrollbaar): van y tot yMax, rijen van hoogte sh
+void Menu::startList(TextRenderer& text, Input& in, float x, float y, float bw, float yMax, float sh, float fs) {
+    const float gap = 4 * ui_;
+    int visible = std::max(1, (int)((yMax - y + gap) / (sh + gap)));
+    int n = (int)starts.size();
+    bool over = in.mouseX > x && in.mouseX < x + bw && in.mouseY > y && in.mouseY < yMax;
+    if (over && in.wheel != 0) startScroll -= (int)in.wheel;
+    startScroll = std::max(0, std::min(startScroll, std::max(0, n - visible)));
+    // gekozen startpunt in beeld houden (bijv. na terugkomen in het menu)
+    if (startChoice < startScroll) startScroll = startChoice;
+    if (startChoice >= startScroll + visible && n > visible && !over) startScroll = startChoice - visible + 1;
+    bool bar = n > visible;
+    float w = bar ? bw - 14 * ui_ : bw;
+    for (int i = startScroll; i < n && i < startScroll + visible; i++) {
+        if (button(text, in, x, y, w, sh, starts[i], true, i == startChoice, fs)) startChoice = i;
+        y += sh + gap;
+    }
+    if (bar) {
+        // schuifbalk
+        float y0 = yMax - visible * (sh + gap) + gap, hgt = visible * (sh + gap) - gap;
+        float top = y - visible * (sh + gap);
+        text.rect(x + bw - 8 * ui_, top, 8 * ui_, hgt, {1, 1, 1, 0.10f});
+        float th = hgt * visible / n, ty = top + (hgt - th) * startScroll / std::max(1, n - visible);
+        text.rect(x + bw - 8 * ui_, ty, 8 * ui_, th, {1.0f, 0.80f, 0.10f, 0.85f});
+        (void)y0;
+    }
+}
+
 // tekstveld: klik = typen; Enter of klik ernaast = klaar
 bool Menu::textField(TextRenderer& text, Input& in, float x, float y, float w, float h, std::string& value, int id, bool mask, size_t maxLen) {
     bool over = in.mouseX > x && in.mouseX < x + w && in.mouseY > y && in.mouseY < y + h;
@@ -197,11 +225,7 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
             y += 56 * ui;
             text.text(x, y, "Waar begin je?", 18 * ui, GREY);
             y += 28 * ui;
-            float sh = 27 * ui;
-            for (size_t i = 0; i < starts.size() && y < h - 200 * ui; i++) {
-                if (button(text, in, x, y, bw, sh, starts[i], true, (int)i == startChoice, 16 * ui)) startChoice = (int)i;
-                y += sh + 3 * ui;
-            }
+            startList(text, in, x, y, bw, h - 140 * ui, 27 * ui, 16 * ui);
             float by = h - 84 * ui;
             if (!mpStatus.empty()) text.text(x, by - 40 * ui, mpStatus, 17 * ui, {1.0f, 0.55f, 0.45f, 1});
             if (button(text, in, x, by, bw * 0.58f, bh, "Verbinden") || (enter && !mpUrl.empty())) { mpField = 0; act = CONNECT; }
@@ -220,11 +244,7 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
         y += 36 * ui;
         text.text(x, y, "Waar begin je?", 22 * ui, GREY);
         y += 36 * ui;
-        float sh = 31 * ui;
-        for (size_t i = 0; i < starts.size(); i++) {
-            if (button(text, in, x, y, bw, sh, starts[i], true, (int)i == startChoice, 18 * ui)) startChoice = (int)i;
-            y += sh + 4 * ui;
-        }
+        startList(text, in, x, y, bw, h - 100 * ui, 31 * ui, 18 * ui);
         float tx = pw + 80 * ui, ty = 224 * ui;
         text.rect(tx - 24 * ui, ty - 20 * ui, 520 * ui + 48 * ui, 400 * ui, {0.03f, 0.05f, 0.09f, 0.82f});
         text.text(tx, ty, "Hoe laat is het?", 22 * ui, GREY);

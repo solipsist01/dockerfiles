@@ -1152,6 +1152,18 @@ int main(int argc, char** argv) {
         last = now;
         fpsTimer += dt; fpsFrames++;
         if (fpsTimer >= 0.5) { fps = (int)(fpsFrames / fpsTimer + 0.5); fpsTimer = 0; fpsFrames = 0; }
+        // zichtafstand meeschalen met de framerate (drukke steden zoals Utrecht): onder 30 fps minder ver tekenen
+        // (minimaal 700 m), boven 50 fps weer verder (tot 1500 m); de mist schuift mee. Niet bij testopnames.
+        {
+            static double adaptT = 0;
+            adaptT += dt;
+            if (!shotPath && state == PLAYING && adaptT > 1.0 && fps > 0) {
+                adaptT = 0;
+                if (fps < 30 && world.drawDistance > 700.0f) world.drawDistance = std::max(700.0f, world.drawDistance * 0.85f);
+                else if (fps > 50 && world.drawDistance < 1500.0f) world.drawDistance = std::min(1500.0f, world.drawDistance * 1.08f);
+                world.fogDistance = 1300.0f * clampf(world.drawDistance / 1500.0f, 0.6f, 1.0f);
+            }
+        }
         int w = Platform::width(), h = Platform::height();
         Input& in = Platform::input();
         float ui = h / 900.0f;
@@ -1200,7 +1212,7 @@ int main(int argc, char** argv) {
                 if (in.pressed['N']) navLine = !navLine;
                 if (in.pressed[VK_RETURN] && (buses.duty.finished || trainDuty.finished)) { buses.duty.active = false; trainDuty.active = false; buses.duty.finished = trainDuty.finished = false; }
                 if (!player.driving)
-                    for (int k = 1; k <= NSPAWN; k++)
+                    for (int k = 1; k <= std::min(9, NSPAWN); k++)  // alleen de cijfertoetsen 1-9 (niet doorlopen naar letters)
                         if (in.pressed['0' + k]) { doSpawn(k); world.preload(player.eye()); last = Platform::time(); }
             }
         }
@@ -1466,6 +1478,17 @@ int main(int argc, char** argv) {
 
         bool fullMap = state == PLAYING && map.isOpen();
         if (!fullMap) {
+            // trein in beeld? (omhullende van alle bakken)
+            auto trainVisible = [&](const Train* t) {
+                Vec3 mn(1e9f, 1e9f, 1e9f), mx(-1e9f, -1e9f, -1e9f);
+                for (int c = 0; c < t->carCount(); c++) {
+                    CarPose p = t->carPose(c);
+                    float r = t->carLen(c) * 0.5f + 2.0f;
+                    mn = Vec3(std::min(mn.x, p.x - r), std::min(mn.y, p.y - 1.5f), std::min(mn.z, p.z - r));
+                    mx = Vec3(std::max(mx.x, p.x + r), std::max(mx.y, p.y + 6.0f), std::max(mx.z, p.z + r));
+                }
+                return world.visible(mn, mx);
+            };
             renderer.beginScene(world.skyColor);
             world.beginDraw(vp, eye);
             world.drawStatic();
@@ -1475,7 +1498,7 @@ int main(int argc, char** argv) {
             buses.drawOpaque(world, eye, trainOk ? traffic.clock() : fallbackClock);
             for (Train* t : traffic.trains()) {
                 CarPose c = t->carPose(t->carCount() / 2);
-                if (std::hypot(c.x - eye.x, c.z - eye.z) < 2600) t->drawOpaque(world);
+                if (std::hypot(c.x - eye.x, c.z - eye.z) < std::min(2600.0f, world.drawDistance + 600.0f) && trainVisible(t)) t->drawOpaque(world);
             }
             // navigatielijn op de weg (bus in dienst)
             if (inBus && inBus->duty() && navLine && player.driving) {
@@ -1609,7 +1632,7 @@ int main(int argc, char** argv) {
             buses.drawGlass(world, eye);
             for (Train* t : traffic.trains()) {
                 CarPose c = t->carPose(t->carCount() / 2);
-                if (std::hypot(c.x - eye.x, c.z - eye.z) < 1500) t->drawGlass(world);
+                if (std::hypot(c.x - eye.x, c.z - eye.z) < 1500 && trainVisible(t)) t->drawGlass(world);
             }
             world.endTransparent();
             glBindVertexArray(0);
@@ -1839,8 +1862,8 @@ int main(int argc, char** argv) {
                         for (auto& d : deps) lines.push_back({"   " + d, INFO});
                     }
                 }
-                lines.push_back({fmt("%s   |   %d fps   |   %d tegels   |   %d treinen", player.fly ? "Vliegen" : "Lopen", fps, world.loadedTiles(),
-                                     (int)traffic.trains().size()),
+                lines.push_back({fmt("%s   |   %d fps   |   zicht %d m   |   %d tegels   |   %d treinen", player.fly ? "Vliegen" : "Lopen", fps,
+                                     (int)world.drawDistance, world.loadedTiles(), (int)traffic.trains().size()),
                                  INFO});
                 if (net.connected()) {
                     double drift = std::remainder(net.serverClock(now) - (trainOk ? traffic.clock() : fallbackClock), 86400.0);

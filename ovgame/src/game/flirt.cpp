@@ -264,7 +264,8 @@ void seat(MeshBuilder& op, float x, float floor, float z, float dir, bool first,
         op.box({x, y, z + back}, {w, 0.21f, 0.09f}, k == 2 ? fab * 1.18f : fab, MAT_RUBBER);
         op.box({x, y, z + back - dir * 0.065f}, {w + 0.02f, 0.22f, 0.04f}, SHELL, MAT_PAINT);
     }
-    op.box({x, floor + 1.26f, z - dir * 0.32f}, {w - 0.06f, 0.14f, 0.10f}, fab * 1.25f, MAT_RUBBER);  // hoofdsteun
+    // hoofdsteun: niet tot aan de achterkant (daar zit bij stoelen rug aan rug de schaal van de andere stoel: z-fighting)
+    op.box({x, floor + 1.26f, z - dir * 0.30f}, {w - 0.06f, 0.14f, 0.08f}, fab * 1.25f, MAT_RUBBER);
     float gx = x + (aisleRight ? 1.0f : -1.0f) * (w / 2 - 0.04f);
     op.box({gx, floor + 1.36f, z - dir * 0.34f}, {0.03f, 0.05f, 0.10f}, ALU, MAT_METAL);              // handgreep
     if (first)

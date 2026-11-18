@@ -322,7 +322,8 @@ void seat(MeshBuilder& op, float x, float floor, float z, float dir, Vec3 fab, b
         op.box({x, y, z + back}, {w, 0.22f, 0.10f}, k == 2 ? fab2 : fab, MAT_RUBBER);
         op.box({x, y, z + back - dir * 0.07f}, {w + 0.02f, 0.23f, 0.04f}, SHELL, MAT_PAINT);  // schaal
     }
-    op.box({x, floor + 1.30f, z - dir * 0.33f}, {w - 0.06f, 0.16f, 0.11f}, fab2, MAT_RUBBER);  // hoofdsteun
+    // hoofdsteun: niet tot aan de achterkant (stoelen rug aan rug: anders z-fighting met de andere stoel)
+    op.box({x, floor + 1.30f, z - dir * 0.31f}, {w - 0.06f, 0.16f, 0.08f}, fab2, MAT_RUBBER);
     // handgreep aan de gangkant bovenop
     float gx = x + (aisleRight ? 1.0f : -1.0f) * (w / 2 - 0.03f);
     op.tube({gx, floor + 1.30f, z - dir * 0.36f}, {gx, floor + 1.42f, z - dir * 0.36f}, 0.018f, 5, ALU, MAT_METAL);

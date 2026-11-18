@@ -1,6 +1,8 @@
 #pragma once
 // De wereld: globale gegevens (spoor, perrons, wegen, haltes) en tegels van 500 m die rond de camera worden
 // geladen en weer opgeruimd (streaming). Geheugen en videogeheugen blijven zo begrensd, hoe groot de wereld ook is.
+#include <algorithm>
+#include <cmath>
 #include <functional>
 #include <list>
 #include <string>
@@ -92,6 +94,14 @@ public:
     Vec3 sunColor{1.0f, 0.96f, 0.88f};     // kleur x sterkte van het zonlicht
     float ambient = 1.0f;                   // omgevingslicht (1 = middag)
     float fogDistance = 1300.0f;   // mist: ~60% op deze afstand, vrijwel dicht op 2x
+    // Tekenafstand voor gebouwen en details (m). De game verlaagt hem als de framerate zakt (drukke steden zoals
+    // Utrecht) en verhoogt hem weer als er ruimte is; laden gebeurt nog steeds tot DETAIL_RADIUS.
+    float drawDistance = 1500.0f;
+    bool visible(Vec3 mn, Vec3 mx) const { return frustum_.boxVisible(mn, mx); }  // in beeld (na beginDraw)
+    static float boxDistance(Vec3 p, Vec3 mn, Vec3 mx) {
+        float dx = std::max({mn.x - p.x, 0.0f, p.x - mx.x}), dz = std::max({mn.z - p.z, 0.0f, p.z - mx.z});
+        return std::sqrt(dx * dx + dz * dz);
+    }
     int drawnChunks = 0;
 
     // Laadafstanden (m, tot de rand van een tegel)

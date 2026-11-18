@@ -25,6 +25,7 @@ public:
     Screen screen = MAIN;
     std::vector<std::string> starts;  // namen van de startpunten (index 0 = startpunt 1)
     int startChoice = 0;
+    int startScroll = 0;              // eerste zichtbare regel in de lijst met startpunten
     int minutes = 12 * 60;            // gekozen tijd (minuten na middernacht)
     bool editing = false;             // tijd wordt met de toetsen ingetypt
     std::string typed;                // ingetypte cijfers (max. 4: uumm)
@@ -64,6 +65,7 @@ public:
 private:
     bool button(TextRenderer& text, Input& in, float x, float y, float bw, float bh, const std::string& label, bool enabled = true,
                 bool selected = false, float size = 0);
+    void startList(TextRenderer& text, Input& in, float x, float y, float bw, float yMax, float sh, float fs);
     bool textField(TextRenderer& text, Input& in, float x, float y, float w, float h, std::string& value, int id, bool mask, size_t maxLen);
     void timePicker(TextRenderer& text, Input& in, float tx, float ty, bool& enterUsed, bool& escUsed, bool compact);
     float ui_ = 1;

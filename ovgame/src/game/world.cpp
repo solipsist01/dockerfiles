@@ -930,11 +930,13 @@ void World::drawStatic() {
     for (const Tile& t : tiles_) {
         if (t.state != 2 || !t.detail || !frustum_.boxVisible(t.bmin, t.bmax)) continue;
         float d = tileDistance(t, cam_);
+        if (d > drawDistance) continue;
         for (const Mesh& m : t.buildings)
-            if (frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }
-        if (d < 1100.0f)
+            if (boxDistance(cam_, m.bmin, m.bmax) < drawDistance && frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }
+        const float detailDist = std::min(1100.0f, drawDistance * 0.7f);
+        if (d < detailDist)
             for (const Mesh& m : t.details)
-                if (frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }
+                if (boxDistance(cam_, m.bmin, m.bmax) < detailDist && frustum_.boxVisible(m.bmin, m.bmax)) { drawMesh(m); drawnChunks++; }
     }
     glBindVertexArray(0);
 }

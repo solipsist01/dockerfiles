@@ -4,6 +4,8 @@
 //  - AHN: hoogte van het spoor (perrons = spoor + 0,8 m)
 // Alles wordt opgebouwd in het lokale stationsassenstelsel (u langs de sporen, v naar het noorden).
 #include "station.h"
+#include <map>
+#include <unordered_map>
 #include <algorithm>
 #include <array>
 #include "../third_party/earcut.hpp"
@@ -329,6 +331,10 @@ void buildStrijpS(SB& s, const World& world, float P) {
 
 ShopStyle style(Vec3 bg, Vec3 fg) { return {bg, fg, Vec3(0.55f, 0.53f, 0.50f), bg * 0.85f}; }
 
+// Kleine hoogteverschuiving per OSM-perron (0, 1,5 of 3 cm): aangrenzende perronvlakken overlappen in OSM soms een
+// stukje; op precies dezelfde hoogte geeft dat op afstand z-fighting (knipperen).
+float platOffset(const World& w, const OsmPlatform& p) { return (float)((&p - w.platforms.data()) % 3) * 0.015f; }
+
 bool inPassage(float u, float v, float margin) {
     return u > PASSAGE_U0 - margin && u < PASSAGE_U1 + margin && v > PASSAGE_V0 - margin && v < PASSAGE_V1 + margin;
 }
@@ -336,7 +342,7 @@ bool inPassage(float u, float v, float margin) {
 // Inrichting van een OSM-perron (Strijp-S, Boxtel, Vught, 's-Hertogenbosch): perronrand met witte geleidelijn,
 // banken met afvalbakken, lantaarns en (bij grotere stations) een overkapping met kolommen rond het stationsmidden.
 void platformDetails(SB& s, const World& world, const OsmPlatform& p, const std::string& station, Vec3 ax, float cx, float cz) {
-    const float y = p.height;
+    const float y = p.height + platOffset(world, p);
     const auto& P = p.pts;
     Vec3 rx(-ax.z, 0, ax.x);
     float hd = std::atan2(ax.x, ax.z);
@@ -357,8 +363,9 @@ void platformDetails(SB& s, const World& world, const OsmPlatform& p, const std:
             }
         if (best > 2.0f) continue;
         float ehd = std::atan2(u.x, u.z);
-        s.op.orientedBox(m - n * 0.15f + Vec3(0, y + 0.004f, 0), {0.30f, 0.01f, len}, ehd, Vec3(0.86f, 0.85f, 0.80f), EX_PLAIN);
-        s.op.orientedBox(m - n * 0.95f + Vec3(0, y + 0.006f, 0), {0.60f, 0.012f, len}, ehd, Vec3(0.88f, 0.88f, 0.86f), EX_PLAIN);
+        // iets boven het perron (een paar mm gaf op afstand z-fighting); de onderkant zit onder het perronvlak
+        s.op.orientedBox(m - n * 0.15f + Vec3(0, y + 0.012f, 0), {0.30f, 0.04f, len}, ehd, Vec3(0.86f, 0.85f, 0.80f), EX_PLAIN);
+        s.op.orientedBox(m - n * 0.95f + Vec3(0, y + 0.014f, 0), {0.60f, 0.04f, len}, ehd, Vec3(0.88f, 0.88f, 0.86f), EX_PLAIN);
     }
     // stationsmidden (overkapping)
     Vec3 stc(cx, 0, cz);
@@ -940,11 +947,12 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
         for (const MapPoint& mp : world.points)
             if (mp.kind == POINT_STATION && mp.name == "Best" && std::hypot(mp.x - p.pts[0].first, mp.z - p.pts[0].second) < 350)
                 topCol = Vec3(0.55f, 0.30f, 0.24f);  // rode klinkers (Best)
-        for (auto& q : flatPts) s.op.vert(Vec3(q.first, p.height, q.second), Vec3(0, 1, 0), topCol, EX_PLAIN);
+        const float py = p.height + platOffset(world, p);
+        for (auto& q : flatPts) s.op.vert(Vec3(q.first, py, q.second), Vec3(0, 1, 0), topCol, EX_PLAIN);
         for (uint32_t k : idx) s.op.i.push_back(base + k);
         for (size_t k = 0; k < p.pts.size(); k++) {
             auto a = p.pts[k], b2 = p.pts[(k + 1) % p.pts.size()];
-            Vec3 A(a.first, p.height, a.second), B(b2.first, p.height, b2.second);
+            Vec3 A(a.first, py, a.second), B(b2.first, py, b2.second);
             Vec3 d = B - A;
             Vec3 n = normalize(Vec3(-d.z, 0, d.x));
             {
@@ -969,7 +977,7 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
                 if (!overStair) s.op.quad(pa - Vec3(0, 1.4f, 0), pb - Vec3(0, 1.4f, 0), pb, pa, n, CONCRETE, EX_PLAIN);
             }
         }
-        col.addPolyFloor(p.pts, p.height);
+        col.addPolyFloor(p.pts, py);
         // naam van het dichtstbijzijnde station + spoornummer
         float cx = 0, cz = 0;
         for (auto& q : p.pts) { cx += q.first; cz += q.second; }
@@ -1010,9 +1018,27 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
     }
 
     // ================= naar GPU =================
+    // in vakken van 400 m opknippen (per driehoek, op het zwaartepunt), zodat alleen wat in beeld en dichtbij is
+    // getekend wordt (alle stations langs de lijn zitten anders in een paar enorme meshes)
     auto split = [](MeshBuilder& mb, std::vector<Mesh>& out) {
-        // grote meshes in stukken van ~300k vertices (index-bereik blijft klein)
-        out.push_back(mb.upload());
+        const float CELL = 400.0f;
+        std::map<std::pair<int, int>, MeshBuilder> cells;
+        std::map<std::pair<int, int>, std::unordered_map<uint32_t, uint32_t>> remap;
+        for (size_t t = 0; t + 2 < mb.i.size(); t += 3) {
+            const Vertex& a = mb.v[mb.i[t]];
+            const Vertex& b2 = mb.v[mb.i[t + 1]];
+            const Vertex& c = mb.v[mb.i[t + 2]];
+            auto key = std::make_pair((int)std::floor((a.px + b2.px + c.px) / 3 / CELL), (int)std::floor((a.pz + b2.pz + c.pz) / 3 / CELL));
+            MeshBuilder& dst = cells[key];
+            auto& rm = remap[key];
+            for (int k = 0; k < 3; k++) {
+                uint32_t src = mb.i[t + k];
+                auto it = rm.find(src);
+                if (it == rm.end()) { it = rm.emplace(src, (uint32_t)dst.v.size()).first; dst.v.push_back(mb.v[src]); }
+                dst.i.push_back(it->second);
+            }
+        }
+        for (auto& kv : cells) out.push_back(kv.second.upload());
     };
     buildStrijpS(ss, world, pss);
     buildBestStation(world, col, atlas, s.op, s.gl, elevators, bestCenter, bestPlatformY, bestHallY);
@@ -1067,11 +1093,15 @@ void Stations::update(float dt, Vec3 player, Collision& col) {
 void Stations::drawOpaque(World& world) const {
     world.setMode(MODE_OBJECT);
     world.setModel(Mat4::identity());
-    for (const Mesh& m : opaque_) drawMesh(m);
+    Vec3 cam = world.camPos();
+    for (const Mesh& m : opaque_)
+        if (World::boxDistance(cam, m.bmin, m.bmax) < 2500.0f && world.visible(m.bmin, m.bmax)) drawMesh(m);
 }
 
 void Stations::drawGlass(World& world) const {
-    for (const Mesh& m : glass_) drawMesh(m);
+    Vec3 cam = world.camPos();
+    for (const Mesh& m : glass_)
+        if (World::boxDistance(cam, m.bmin, m.bmax) < 1500.0f && world.visible(m.bmin, m.bmax)) drawMesh(m);
     for (const StationDoor& d : doors_) {
         float shift = d.open * 1.5f;
         world.setModel(Mat4::translation(-d.ax * shift, 0, -d.az * shift));

@@ -252,14 +252,9 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
         b.floor(r, HF, FLOOR_LIGHT);
         b.ceiling(r, HF - SLAB, CEIL_UNDER);
     }
-    // donkere banen in de vloer (dwars, elke 6 m) - net boven de vloer
-    for (float u = -36; u < UT_HALL_U1; u += 6.0f)
-        for (const R& r : parts)
-            if (u > r.u0 && u + 0.6f < r.u1) b.op.quad(UB::P(u, r.v0, HF + 0.004f), UB::P(u, r.v1, HF + 0.004f), UB::P(u + 0.6f, r.v1, HF + 0.004f),
-                                                       UB::P(u + 0.6f, r.v0, HF + 0.004f), Vec3(0, 1, 0), FLOOR_BAND, EX_PLAIN);
     // randen van de gaten en de hal (betonband)
     auto slabEdge = [&](float u0, float u1, float v0, float v1) {
-        b.box(u0, u1, v0, v1, HF - SLAB, HF - 0.01f, EDGE);
+        b.box(u0, u1, v0, v1, HF - SLAB, HF - 0.05f, EDGE);  // niet tot de vloer: geen z-fighting op afstand
     };
     for (const R& h : holes) {
         if (h.u0 < UT_HALL_U0 - 0.5f) continue;
@@ -273,7 +268,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
         for (float u = UT_HALL_U0 + 2; u < UT_HALL_U1 - 2; u += 7.0f) {
             bool over = false;
             for (const R& h : holes) if (inR(h, u + 1.5f, v)) over = true;
-            if (!over) b.box(u, u + 3.0f, v - 0.12f, v + 0.12f, HF - SLAB - 0.05f, HF - SLAB, LIGHT, EX_LIGHT);
+            if (!over) b.box(u, u + 3.0f, v - 0.12f, v + 0.12f, HF - SLAB - 0.08f, HF - SLAB - 0.03f, LIGHT, EX_LIGHT);
         }
 
     // ---- zuilen onder de hal (op de perrons) ----
@@ -307,7 +302,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
         for (float ue : {uLo, uHi}) {
             float u0 = std::min(ue, ue + (ue == uLo ? dir : -dir) * 1.2f), u1 = std::max(ue, ue + (ue == uLo ? dir : -dir) * 1.2f);
             float y = ue == uLo ? yLo : yHi;
-            b.box(u0, u1, vc - 0.55f, vc + 0.55f, y - 0.02f, y + 0.01f, STEEL);
+            b.box(u0, u1, vc - 0.55f, vc + 0.55f, y - 0.03f, y + 0.03f, STEEL);
         }
         // zijkanten (glazen balustrade met zwarte leuning) en onderkant (vakwerk)
         for (float s : {-0.62f, 0.62f}) {
@@ -347,8 +342,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
             float t0 = (float)k / n, t1 = (float)(k + 1) / n;
             float ua = um0 + (um1 - um0) * t0, ub = um0 + (um1 - um0) * t1;
             float ytop = std::max(y0 + (y1 - y0) * t0, y0 + (y1 - y0) * t1);
-            b.box(ua, ub, vc - w / 2, vc + w / 2, ytop - 0.17f, ytop, STAIR_STONE);
-            b.box(ua, ub, vc - w / 2, vc + w / 2, ytop - 0.005f, ytop + 0.003f, k % 2 ? STAIR_STONE : STAIR_STONE * 0.92f);
+            b.box(ua, ub, vc - w / 2, vc + w / 2, ytop - 0.17f, ytop, k % 2 ? STAIR_STONE : STAIR_STONE * 0.92f);
         }
         b.slope(um0, um1, vc - w / 2, vc + w / 2, y0, y1, 0);
         // leuningen + glazen zijwanden
@@ -445,7 +439,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
             for (float cu : {-1.12f, 1.12f})
                 for (float cv : {-1.12f, 1.12f}) b.box(u + cu - 0.05f, u + cu + 0.05f, v + cv - 0.05f, v + cv + 0.05f, yl, HF + 2.9f, DARK_STEEL);
             b.box(u - 1.15f, u + 1.15f, v - 1.15f, v + 1.15f, HF + 2.8f, HF + 3.0f, DARK_STEEL);
-            b.box(u - 0.9f, u + 0.9f, v - 0.9f, v + 0.9f, yl + 0.02f, yl + 0.05f, STEEL);  // cabine (onderaan)
+            b.box(u - 0.9f, u + 0.9f, v - 0.9f, v + 0.9f, yl - 0.02f, yl + 0.05f, STEEL);  // cabine (onderaan)
             b.sign("Lift", NSBLUE, WHITE, UB::P(u + 1.17f, v, HF + 2.4f), b.V, 0.3f);
             Elevator e;
             e.bottom = UB::P(u + 1.9f, v, yl);
@@ -487,7 +481,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
         b.glassBox(std::min(fu, fu + (north ? 0.08f : -0.08f)), std::max(fu, fu + (north ? 0.08f : -0.08f)), vm + 1.2f, s.v1 - 0.15f, HF, HF + H - 0.5f);
         // binnen: vloer, toonbank, schappen, verlichting
         float ui0 = s.u0 + 0.2f, ui1 = s.u1 - 0.2f;
-        b.box(ui0, ui1, s.v0 + 0.2f, s.v1 - 0.2f, HF + 0.001f, HF + 0.006f, Vec3(0.55f, 0.50f, 0.45f));
+        b.box(ui0, ui1, s.v0 + 0.2f, s.v1 - 0.2f, HF - 0.02f, HF + 0.03f, Vec3(0.55f, 0.50f, 0.45f));
         float bk = north ? s.u1 - 1.6f : s.u0 + 1.6f;
         for (float v = s.v0 + 1.2f; v < s.v1 - 1.2f; v += 2.4f)
             b.box(std::min(bk, bk + (north ? 0.7f : -0.7f)), std::max(bk, bk + (north ? 0.7f : -0.7f)), v - 0.9f, v + 0.9f, HF, HF + 2.0f, s.bg * 0.6f + Vec3(0.3f, 0.3f, 0.3f), EX_PLAIN, true);
@@ -514,7 +508,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
         b.box(31.5f, 31.6f, mz.v0, mz.v1, MZ - 0.6f, MZ, Vec3(0.90f, 0.90f, 0.88f));
         b.glassBox(31.5f, 31.56f, mz.v0, mz.v1, MZ, MZ + 1.1f, true);
         b.box(31.45f, 31.6f, mz.v0, mz.v1, MZ + 1.1f, MZ + 1.16f, STEEL);
-        for (float v = mz.v0 + 3; v < mz.v1; v += 9) b.box(31.6f, 37.5f, v, v + 0.1f, MZ - 0.6f, MZ - 0.55f, LIGHT, EX_LIGHT);
+        for (float v = mz.v0 + 3; v < mz.v1; v += 9) b.box(31.6f, 37.5f, v, v + 0.1f, MZ - 0.67f, MZ - 0.63f, LIGHT, EX_LIGHT);
         // Bistrot: tafels en stoelen
         for (float v = 62; v < 95; v += 3.2f)
             for (float u : {34.0f, 38.5f, 43.0f}) {
@@ -706,7 +700,7 @@ void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, 
             b.solidBox(u - 0.17f, u + 0.17f, vc - 0.17f, vc + 0.17f, PY, CY);
         }
         for (float u = umin + 2; u < umax - 3; u += 6.0f)
-            b.box(u, u + 3.5f, vc - 0.15f, vc + 0.15f, CY - 0.05f, CY - 0.01f, LIGHT, EX_LIGHT);
+            b.box(u, u + 3.5f, vc - 0.15f, vc + 0.15f, CY - 0.08f, CY - 0.03f, LIGHT, EX_LIGHT);
     }
 
     hallSpawn = UB::P(-15.0f, 0.0f, HF);
