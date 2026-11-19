@@ -27,8 +27,8 @@ constexpr double ORIGIN_Y = 383770.0;
 //   - grove tegels: alleen hoogte (AHN DSM, 10 m) en luchtfoto 256 px, als achtergrond in de mist
 // Het onderstaande gebied is alleen een omhullende voor de converter; de game gebruikt de tegelindex.
 constexpr int TILE = 500;
-constexpr int AREA_X0 = 130500, AREA_Y0 = 366500;  // zuidgrens: Bergeijk (buslijn 18); westgrens: Utrecht Leidsche Rijn
-constexpr int AREA_X1 = 211000, AREA_Y1 = 506000;  // oostgrens: voorbij Zwolle (lijn naar Meppel); noordgrens: Zwolle
+constexpr int AREA_X0 = 102000, AREA_Y0 = 366500;  // zuidgrens: Bergeijk (buslijn 18); westgrens: Castricum
+constexpr int AREA_X1 = 211000, AREA_Y1 = 523000;  // oostgrens: voorbij Zwolle (lijn naar Meppel); noordgrens: voorbij Alkmaar
 
 constexpr int PHOTO_CELL = TILE;
 constexpr int BUILDING_CHUNK = 250;  // gebouwen gegroepeerd per 250 m (4 chunks per tegel)
@@ -93,6 +93,40 @@ constexpr double HELMOND_PTS[][2] = {{161443, 383730}, {161948, 383874}, {162934
 constexpr double HELMOND_STUB_PTS[][2] = {{176777, 386902}, {177263, 386783}, {177747, 386661}, {178231, 386532}, {178714, 386404},
                                           {179197, 386275}, {179680, 386147}, {180163, 386018}, {180647, 385890}};
 constexpr int HELMOND_STUB_N = 9;
+// Traject Utrecht Centraal - Amsterdam Amstel - Amsterdam Centraal - Zaandam - Uitgeest - Alkmaar (101 km langs het OSM-spoor,
+// elke km een punt) met alle tussenstations, en uitlopers (de mist in): Utrecht Vaartsche Rijn -> Bunnik, Breukelen -> Woerden,
+// Amsterdam Sloterdijk -> Haarlem, Zaandam -> Purmerend, Uitgeest -> Beverwijk, Alkmaar -> Heerhugowaard, Duivendrecht -> Amsterdam Zuid
+constexpr double ALKMAAR_PTS[][2] = {
+    {135985, 455729}, {135842, 456008}, {135153, 456699}, {134448, 457407}, {133720, 458093}, {132992, 458779}, {132273, 459473},
+    {131547, 460161}, {130827, 460855}, {130104, 461546}, {129376, 462232}, {128616, 462881}, {128056, 463699}, {127888, 464519},
+    {127889, 464382}, {127928, 465378}, {128109, 466362}, {128279, 467347}, {128450, 468332}, {128625, 469317}, {128796, 470302},
+    {128966, 471288}, {129103, 472277}, {128925, 473254}, {128458, 474138}, {127976, 475014}, {127523, 475905}, {127051, 476786},
+    {126589, 477673}, {126109, 478551}, {125629, 479428}, {125146, 480303}, {124670, 481183}, {124695, 482065}, {125121, 482314},
+    {124303, 481831}, {125165, 482335}, {124656, 482036}, {124441, 481580}, {123919, 482433}, {123436, 483308}, {123070, 484233},
+    {122833, 485174}, {123680, 485675}, {123961, 486579}, {123770, 487422}, {122832, 487753}, {121897, 487990}, {121039, 488501},
+    {120199, 489025}, {119406, 489574}, {118510, 489864}, {117661, 489507}, {117698, 488517}, {117572, 488045}, {117537, 488999},
+    {116595, 489200}, {115676, 489552}, {115236, 490422}, {115259, 491179}, {115489, 492148}, {115890, 493064}, {116132, 494022},
+    {115890, 494988}, {115564, 495933}, {115475, 496726}, {115488, 496337}, {115464, 497336}, {115440, 498335}, {115412, 499335},
+    {114928, 500176}, {114498, 500391}, {113556, 500727}, {112575, 500917}, {111643, 501224}, {110896, 501888}, {110149, 502553},
+    {109402, 503218}, {108654, 503882}, {108293, 504189}, {107551, 504859}, {106804, 505524}, {106057, 506188}, {105821, 506398},
+    {106568, 505733}, {107315, 505069}, {108056, 504409}, {107312, 505077}, {106565, 505741}, {105818, 506407}, {105507, 507313},
+    {105946, 508206}, {106441, 509075}, {106936, 509944}, {107431, 510813}, {107925, 511682}, {108426, 512548}, {108915, 513420},
+    {109410, 514289}, {109904, 515158}, {110399, 516027}, {110956, 516844}, {111236, 516925}};
+constexpr double UTO_PTS[][2] = {{136810, 454526}, {137243, 454276}, {137669, 454016}, {138014, 453655}, {138445, 453404}, {138896, 453189},
+                                 {139347, 452974}, {139813, 452796}, {140306, 452714}, {140805, 452725}, {141305, 452752}, {141804, 452779}};
+constexpr double BKW_PTS[][2] = {{127862, 464810}, {127894, 464311}, {127865, 463816}, {127713, 463339}, {127554, 462865}, {127394, 462391},
+                                 {127235, 461917}, {127076, 461443}, {126917, 460970}, {126757, 460496}, {126598, 460022}};
+constexpr double HLM_PTS[][2] = {{117374, 489144}, {116874, 489146}, {116374, 489149}, {115875, 489123}, {115407, 488953}, {114944, 488768},
+                                 {114450, 488701}, {113950, 488699}, {113450, 488698}, {112950, 488695}, {112450, 488692}, {111950, 488698}};
+constexpr double HRN_PTS[][2] = {{116011, 494652}, {115840, 495122}, {115670, 495592}, {115584, 496076}, {115876, 496466}, {116304, 496706},
+                                 {116804, 496700}, {117296, 496785}, {117785, 496889}, {118274, 496994}, {118763, 497099}};
+constexpr double BVW_PTS[][2] = {{108536, 503959}, {108892, 503610}, {108963, 503125}, {108728, 502691}, {108418, 502299}, {108108, 501907},
+                                 {107798, 501515}, {107487, 501123}, {107177, 500731}};
+constexpr double DVZ_PTS[][2] = {{124691, 481096}, {124314, 481421}, {123852, 481607}, {123374, 481753}, {122934, 481987}, {122518, 482265},
+                                 {122105, 482548}, {121713, 482857}, {121324, 483172}};  // Duivendrecht -> Amsterdam Zuid (IC 3500)
+constexpr double AKN_PTS[][2] = {{111236, 516925}, {111695, 516996}, {112180, 517108}, {112596, 517384}, {113002, 517676}, {113408, 517967},
+                                 {113814, 518259}, {114220, 518551}, {114626, 518842}, {115032, 519134}, {115438, 519426}};
+
 constexpr double BEST_CX = 155125, BEST_CY = 391198;
 // Buslijnen (18, 8, 9, 24, 156, 401, 402): detail binnen 400 m van de routes (tools\bus_route.ps1)
 #include "busroutes.inc"
@@ -109,7 +143,14 @@ constexpr StationArea STATION_AREAS[] = {
     {"Nijkerk", 162259, 470453, 750}, {"Putten", 167871, 475262, 700}, {"Ermelo", 170502, 479268, 700}, {"Harderwijk", 170891, 483349, 800},
     {"Nunspeet", 182070, 487090, 750}, {"'t Harde", 189409, 491383, 700}, {"Wezep", 196814, 496373, 700}, {"Zwolle", 202756, 502218, 1100},
     {"Helmond Brandevoort", 170293, 385925, 700}, {"Helmond 't Hout", 171919, 386562, 700}, {"Helmond", 174073, 387433, 900},
-    {"Helmond Brouwhuis", 176770, 386960, 700}};
+    {"Helmond Brouwhuis", 176770, 386960, 700},
+    {"Utrecht Zuilen", 134593, 457263, 700}, {"Maarssen", 130752, 460920, 700}, {"Breukelen", 127870, 464816, 750},
+    {"Abcoude", 127032, 476807, 700}, {"Amsterdam Holendrecht", 125870, 478976, 700}, {"Amsterdam Bijlmer ArenA", 124987, 480567, 750},
+    {"Duivendrecht", 124275, 481832, 800}, {"Amsterdam Amstel", 122998, 484387, 800}, {"Amsterdam Muiderpoort", 123931, 485949, 700},
+    {"Amsterdam Centraal", 121865, 488004, 1300}, {"Amsterdam Sloterdijk", 117620, 489161, 900}, {"Zaandam", 116005, 494650, 850},
+    {"Koog aan de Zaan", 115474, 496833, 700}, {"Zaandijk Zaanse Schans", 115449, 498107, 700}, {"Wormerveer", 114684, 500339, 700},
+    {"Krommenie-Assendelft", 112082, 501003, 700}, {"Uitgeest", 108534, 503971, 800}, {"Castricum", 105610, 506660, 750},
+    {"Heiloo", 108518, 512716, 700}, {"Alkmaar", 111237, 516932, 900}};
 
 inline double distToSquare(double px, double py, int x0, int y0) {
     double dx = std::max({(double)x0 - px, 0.0, px - (x0 + TILE)});
@@ -135,7 +176,9 @@ inline bool isDetailTile(int x0, int y0) {
         nearLine(UT_WEST_PTS, OV_N(UT_WEST_PTS), 600) || nearLine(TIEL_PTS, OV_N(TIEL_PTS), 600) ||
         nearLine(ZWOLLE_PTS, OV_N(ZWOLLE_PTS), 600) || nearLine(ZW_NORTH_PTS, OV_N(ZW_NORTH_PTS), 600) ||
         nearLine(AMF_EAST_PTS, OV_N(AMF_EAST_PTS), 600) || nearLine(HELMOND_PTS, OV_N(HELMOND_PTS), 600) ||
-        nearLine(HELMOND_STUB_PTS, OV_N(HELMOND_STUB_PTS), 600))
+        nearLine(HELMOND_STUB_PTS, OV_N(HELMOND_STUB_PTS), 600) || nearLine(ALKMAAR_PTS, OV_N(ALKMAAR_PTS), 600) ||
+        nearLine(UTO_PTS, OV_N(UTO_PTS), 600) || nearLine(BKW_PTS, OV_N(BKW_PTS), 600) || nearLine(HLM_PTS, OV_N(HLM_PTS), 600) ||
+        nearLine(HRN_PTS, OV_N(HRN_PTS), 600) || nearLine(BVW_PTS, OV_N(BVW_PTS), 600) || nearLine(AKN_PTS, OV_N(AKN_PTS), 600) || nearLine(DVZ_PTS, OV_N(DVZ_PTS), 600))
         return true;
 #undef OV_N
     return nearLine(ROUTE_PTS, sizeof(ROUTE_PTS) / sizeof(ROUTE_PTS[0]), 600) || nearLine(BRANCH_PTS, sizeof(BRANCH_PTS) / sizeof(BRANCH_PTS[0]), 600) ||

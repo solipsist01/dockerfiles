@@ -136,6 +136,26 @@ static const Spawn SPAWNS[] = {
     {"Helmond 't Hout - Perron", 0, 0, 1, 0, 4},
     {"Helmond - Perron", 0, 0, 1, 0, 4},
     {"Helmond Brouwhuis - Perron", 0, 0, 1, 0, 4},
+    {"Utrecht Zuilen - Perron", 0, 0, 1, 0, 4},
+    {"Maarssen - Perron", 0, 0, 1, 0, 4},
+    {"Breukelen - Perron", 0, 0, 1, 0, 4},
+    {"Abcoude - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Holendrecht - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Bijlmer ArenA - Perron", 0, 0, 1, 0, 4},
+    {"Duivendrecht - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Amstel - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Muiderpoort - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Centraal - Perron", 0, 0, 1, 0, 4},
+    {"Amsterdam Sloterdijk - Perron", 0, 0, 1, 0, 4},
+    {"Zaandam - Perron", 0, 0, 1, 0, 4},
+    {"Koog aan de Zaan - Perron", 0, 0, 1, 0, 4},
+    {"Zaandijk Zaanse Schans - Perron", 0, 0, 1, 0, 4},
+    {"Wormerveer - Perron", 0, 0, 1, 0, 4},
+    {"Krommenie-Assendelft - Perron", 0, 0, 1, 0, 4},
+    {"Uitgeest - Perron", 0, 0, 1, 0, 4},
+    {"Castricum - Perron", 0, 0, 1, 0, 4},
+    {"Heiloo - Perron", 0, 0, 1, 0, 4},
+    {"Alkmaar - Perron", 0, 0, 1, 0, 4},
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
@@ -549,7 +569,8 @@ int main(int argc, char** argv) {
             {"Boxtel", 10}, {"Vught", 11}, {"'s-Hertogenbosch", 12}, {"Zaltbommel", 13}, {"Geldermalsen", 14}, {"Culemborg", 15},
             {"Houten Castellum", 16}, {"Houten", 17}, {"Utrecht Lunetten", 18}, {"Utrecht Vaartsche Rijn", 19}, {"Utrecht Centraal", 20},
             {"Utrecht Overvecht", 22}, {"Bilthoven", 23}, {"Den Dolder", 24}, {"Amersfoort Centraal", 25}, {"Amersfoort Schothorst", 26}, {"Amersfoort Vathorst", 27}, {"Nijkerk", 28}, {"Putten", 29}, {"Ermelo", 30}, {"Harderwijk", 31}, {"Nunspeet", 32}, {"'t Harde", 33}, {"Wezep", 34}, {"Zwolle", 35},
-            {"Helmond Brandevoort", 36}, {"Helmond 't Hout", 37}, {"Helmond", 38}, {"Helmond Brouwhuis", 39}};
+            {"Helmond Brandevoort", 36}, {"Helmond 't Hout", 37}, {"Helmond", 38}, {"Helmond Brouwhuis", 39},
+            {"Utrecht Zuilen", 40}, {"Maarssen", 41}, {"Breukelen", 42}, {"Abcoude", 43}, {"Amsterdam Holendrecht", 44}, {"Amsterdam Bijlmer ArenA", 45}, {"Duivendrecht", 46}, {"Amsterdam Amstel", 47}, {"Amsterdam Muiderpoort", 48}, {"Amsterdam Centraal", 49}, {"Amsterdam Sloterdijk", 50}, {"Zaandam", 51}, {"Koog aan de Zaan", 52}, {"Zaandijk Zaanse Schans", 53}, {"Wormerveer", 54}, {"Krommenie-Assendelft", 55}, {"Uitgeest", 56}, {"Castricum", 57}, {"Heiloo", 58}, {"Alkmaar", 59}};
         for (auto& pl : places) {
             Player tmp;
             computeSpawn(pl.spawn, tmp);
@@ -631,6 +652,22 @@ int main(int argc, char** argv) {
                     if (!w) { waits.push_back({a, 0}); w = &waits.back().second; }
                     if (a->waitingForSignal()) *w += 0.5; else *w = 0;
                     if (*w > maxWait) { maxWait = *w; maxInfo = a->label() + " om " + hhmm(traffic.clock()); }
+                    // eerste keer > 60 s te laat (per serie): waar, en wie hem ophoudt
+                    static std::map<std::string, int> firstLate;
+                    for (int thr : {60, 120, 300, 600}) {
+                    std::string key = a->label() + "#" + std::to_string(thr);
+                    if (a->maxDelay() > thr && firstLate[key] < 1 && traffic.clock() > 5 * 3600) {
+                        static std::map<std::pair<int, int>, bool> seen;
+                        if (!seen[{a->service().id, thr}]) {
+                            seen[{a->service().id, thr}] = true;
+                            firstLate[key]++;
+                            std::string all = traffic.trainsInfo(), line;
+                            size_t at = all.find(a->label());
+                            if (at != std::string::npos) line = all.substr(at, all.find('\n', at) - at);
+                            fprintf(lf, "VERTRAAGD >%d s: %s om %s | %s\n", thr, a->label().c_str(), hhmm(traffic.clock()).c_str(), line.c_str());
+                        }
+                    }
+                    }
                     static std::map<int, bool> lateLogged;
                     if (a->maxDelay() > 300 && !lateLogged[a->service().id] && lateLogged.size() < 12) {
                         lateLogged[a->service().id] = true;

@@ -120,7 +120,7 @@ public:
     float front() const { return d_ + halfLen_; }   // kop langs het pad
     float rear() const { return d_ - halfLen_; }
     float pathPos() const { return d_; }
-    bool finished() const { return !svc_->next && d_ + halfLen_ >= svc_->path->length - 1.0f; }
+    bool finished() const { return parked_ || (!svc_->next && d_ + halfLen_ >= svc_->path->length - 1.0f); }
     bool doorsOpen() const { return doorOpen_ > 0.9f; }
     bool stopped() const { return state_ == DWELL; }
     float speed() const { return v_; }
@@ -153,6 +153,7 @@ private:
     int at_ = -1;             // index van de halte waar de trein staat / als laatste stond of passeerde
     int target_ = 0;          // volgende halte waar gestopt wordt
     double clock_ = 0;
+    bool parked_ = false;  // eindpunt zonder vervolgrit: naar het opstelterrein
     float dwellElapsed_ = 0;
     float doorOpen_ = 0;
     bool signalHold_ = false;

@@ -60,8 +60,13 @@ public:
     // Lijn Utrecht - Zwolle: keren in Utrecht Centraal (UTC) of Zwolle (ZWOLLE), voorbij Zwolle richting Meppel (ZWN),
     // voorbij Amersfoort richting Apeldoorn (AMFE).
     // HELMOND: via Helmond voorbij Helmond Brouwhuis de mist in (richting Deurne/Venlo)
-    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE, HELMOND };
-    static bool isTerm(End e) { return e == DENBOSCH || e == UTC || e == ZWOLLE; }   // keren op een perron (kopmaken)
+    // Lijn Utrecht - Amsterdam - Alkmaar: keren in Alkmaar (AKM), Breukelen (BKL), Uitgeest (UITG) of Amsterdam Centraal (ASD);
+    // de mist in voorbij Alkmaar (AKN), richting Bunnik (UTO), Woerden (BKW), Haarlem (HLM), Purmerend (HRN), Beverwijk (BVW)
+    // en Amsterdam Zuid (DVZ).
+    enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE, HELMOND,
+               AKM, AKN, UTO, BKW, BKL, HLM, HRN, BVW, UITG, ASD, DVZ };
+    static bool isTerm(End e) { return e == DENBOSCH || e == UTC || e == ZWOLLE || e == AKM || e == BKL || e == UITG || e == ASD; }  // keren op een perron (kopmaken)
+    static bool akEnd(End e) { return e >= AKM; }  // hoort bij de lijn naar Alkmaar
     static bool zwEnd(End e) { return e == UTC || e == ZWOLLE || e == ZWN || e == AMFE; }  // hoort bij de lijn naar Zwolle
     struct StopDef { const char* station; bool stop; double arr, dep; const char* track = nullptr; };  // track: echt spoor (bijv. "4b"), anders rechts rijden
     struct Def {
@@ -81,6 +86,7 @@ private:
         RollingStock* rs;
         TrackPath path;
         std::vector<Vec3> samples;      // elke 2 m langs het pad (beveiliging)
+        std::vector<std::pair<int, int>> contested;  // monsters [a, b] die een tegenrichting ook gebruikt: alles-of-niets reserveren
         std::vector<StopTime> stops;    // tijden in seconden t.o.v. het begin van het halfuur
         std::vector<SpeedZone> zones;
         double entryRel = 0;
@@ -94,6 +100,8 @@ private:
         const Pattern* pat;
         int i0 = 0, i1 = 0;   // gereserveerde monsters [i0, i1]
         Vec3 bmin, bmax;
+        double waitSince = -1;            // wacht voor een gedeeld stuk (eerlijke volgorde)
+        int waitA = 0, waitB = -1;        // dat stuk (monsters)
     };
     std::vector<std::unique_ptr<RollingStock>> stock_;
     std::vector<std::unique_ptr<Pattern>> patterns_;

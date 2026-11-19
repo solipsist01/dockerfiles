@@ -2,6 +2,7 @@
 // Treinmaterieel: vorm, maten, deuren en meshes van een treintype (gedeeld door alle treinen van dat type).
 //  - FLIRT (NS Sprinter, 4-delig)      flirt.cpp
 //  - VIRM  (NS Intercity dubbeldekker)  virm.cpp
+//  - ICNG  (NS Intercity Nieuwe Generatie, 5-delig)  icng.cpp
 // Lokale assen per rijtuig zoals in vehicle.h: +z = voorkant, y = 0 op spoorhoogte. Rijtuig 0 rijdt voorop
 // (cabine aan +z), het laatste rijtuig heeft de cabine aan -z (wordt gedraaid getekend).
 #include <array>
@@ -75,3 +76,4 @@ public:
 
 RollingStock* makeFlirt();
 RollingStock* makeVirm();
+RollingStock* makeIcng();

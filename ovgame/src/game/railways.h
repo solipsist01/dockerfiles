@@ -38,6 +38,6 @@ private:
     struct Vtx { Vec3 p; std::vector<int> nb; bool main = true; };
     std::vector<Vtx> graph_;
     bool search(int start, float dx, float dz, int goal, std::vector<int>& nodes) const;
-    int nearest(float x, float z) const;
+    int nearest(float x, float z, float y = 0.0f) const;
     void buildCatenary(const World& world);
 };

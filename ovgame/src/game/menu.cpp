@@ -170,7 +170,7 @@ Menu::Action Menu::draw(TextRenderer& text, Input& in, int w, int h) {
     float x = 56 * ui, y = 50 * ui;
     text.text(x, y, "OV Game", 60 * ui, YEL);
     y += 76 * ui;
-    text.text(x, y, "Eindhoven  -  's-Hertogenbosch  -  Utrecht  -  Zwolle", 21 * ui, GREY);
+    text.text(x, y, "Eindhoven  -  Utrecht  -  Amsterdam  -  Alkmaar  /  Zwolle", 21 * ui, GREY);
     y += 64 * ui;
     float bw = pw - 2 * x, bh = 50 * ui;
 

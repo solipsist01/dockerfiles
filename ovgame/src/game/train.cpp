@@ -160,6 +160,12 @@ void Train::dwellStep(float dt, double clock, float authority, const Collision& 
         }
         return;
     }
+    // eindpunt zonder vervolgrit (bijv. Sprinter die in Breukelen keert via een opstelspoor): na een paar minuten
+    // rijdt de trein naar het opstelterrein (verdwijnt), zodat hij het perronspoor niet blokkeert
+    if (lastStop && !svc_->next && svc_->path->length - svc_->stops[at_].d < 600.0f) {
+        if (dwellElapsed_ > 240.0f) parked_ = true;
+        return;
+    }
     signalHold_ = timer <= 0 && authority < front() + 25.0f;
     if (timer <= 0 && doorOpen_ <= 0 && !signalHold_) {
         maxDelay_ = std::max(maxDelay_, (float)(clock - svc_->stops[at_].dep));

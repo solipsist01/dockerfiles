@@ -1,5 +1,6 @@
 #include "railways.h"
 #include <algorithm>
+#include <cstdio>
 #include <map>
 #include <queue>
 #include "../engine/meshbuilder.h"
@@ -131,6 +132,47 @@ void Railways::build(const World& world) {
         }
     }
     if (!mb.v.empty()) meshes_.push_back(mb.upload());
+    // kaartfoutjes herstellen: een spoor dat doodloopt vlak vóór een ander spoor (binnen 3 m, in het verlengde)
+    // hoort daar in werkelijkheid met een wissel op aan te sluiten (bijv. ten noorden van Amsterdam Muiderpoort)
+    {
+        std::map<std::pair<int, int>, std::vector<int>> cell;
+        auto key = [](const Vec3& p) { return std::make_pair((int)std::floor(p.x / 4), (int)std::floor(p.z / 4)); };
+        for (int k = 0; k < (int)graph_.size(); k++) cell[key(graph_[k].p)].push_back(k);
+        int joined = 0;
+        for (int k = 0; k < (int)graph_.size(); k++) {
+            if (graph_[k].nb.size() != 1) continue;
+            const Vec3 p = graph_[k].p, q = graph_[graph_[k].nb[0]].p;
+            Vec3 d = p - q;
+            float dl = std::hypot(d.x, d.z);
+            if (dl < 0.5f) continue;
+            float fx = d.x / dl, fz = d.z / dl;
+            int best = -1;
+            float bd = 3.0f;
+            auto c0 = key(p);
+            for (int gx = -1; gx <= 1; gx++)
+                for (int gz = -1; gz <= 1; gz++) {
+                    auto it = cell.find({c0.first + gx, c0.second + gz});
+                    if (it == cell.end()) continue;
+                    for (int m : it->second) {
+                        if (m == k || m == graph_[k].nb[0] || graph_[m].nb.size() < 2) continue;
+                        Vec3 e = graph_[m].p - p;
+                        float el = std::hypot(e.x, e.z);
+                        if (el < 0.3f || el > bd || std::fabs(e.y) > 1.5f) continue;
+                        if ((e.x * fx + e.z * fz) / el < 0.85f) continue;  // in het verlengde (vooruit, max ~30 graden opzij)
+                        // en het andere spoor loopt dezelfde kant op
+                        bool aligned = false;
+                        for (int n : graph_[m].nb) {
+                            Vec3 t = graph_[n].p - graph_[m].p;
+                            float tl = std::hypot(t.x, t.z);
+                            if (tl > 0.1f && std::fabs((t.x * fx + t.z * fz) / tl) > 0.94f) aligned = true;
+                        }
+                        if (aligned) { bd = el; best = m; }
+                    }
+                }
+            if (best >= 0) { graph_[k].nb.push_back(best); graph_[best].nb.push_back(k); joined++; }
+        }
+        if (joined) printf("Spoor: %d doodlopende sporen aangesloten op een spoor vlak ernaast\n", joined);
+    }
     buildCatenary(world);
 }
 
@@ -254,12 +296,14 @@ void Railways::draw(World& world) const {
     for (const Mesh& m : meshes_) drawMesh(m);
 }
 
-int Railways::nearest(float x, float z) const {
+int Railways::nearest(float x, float z, float y) const {
+    // y != 0: hoogte telt mee (knooppunten met sporen boven elkaar: Amsterdam Sloterdijk, Duivendrecht)
     int best = -1;
     float bd = 1e18f;
     for (int k = 0; k < (int)graph_.size(); k++) {
         const Vec3& p = graph_[k].p;
         float d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
+        if (y != 0.0f) d += 9.0f * (p.y - y) * (p.y - y);
         if (d < bd) { bd = d; best = k; }
     }
     return best;
@@ -328,14 +372,14 @@ bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>&
                           float extend) const {
     if (pts.size() < 2) return false;
     std::vector<int> all;
-    int cur = nearest(pts[0].x, pts[0].z);
+    int cur = nearest(pts[0].x, pts[0].z, pts[0].y);
     if (cur < 0) return false;
     all.push_back(cur);
     // begin van elke geaccepteerde etappe naar een optioneel tussenpunt: als het daarna niet verder kan (bijv. een
     // doodlopend spoor bij een station in aanbouw), dat tussenpunt alsnog laten vallen en het opnieuw proberen
     std::vector<size_t> optLeg;
     for (size_t k = 1; k < pts.size(); k++) {
-        int goal = nearest(pts[k].x, pts[k].z);
+        int goal = nearest(pts[k].x, pts[k].z, pts[k].y);
         if (goal < 0) { if (required[k]) return false; continue; }
         if (goal == all.back()) continue;
         std::vector<int> leg;
@@ -405,11 +449,11 @@ bool Railways::findRoute(float x0, float z0, float dx, float dz, float x1, float
 bool Railways::routeVia(const std::vector<Vec3>& pts, float dx, float dz, TrackPath& out, float extend) const {
     if (pts.size() < 2) return false;
     std::vector<int> all;
-    int cur = nearest(pts[0].x, pts[0].z);
+    int cur = nearest(pts[0].x, pts[0].z, pts[0].y);
     if (cur < 0) return false;
     all.push_back(cur);
     for (size_t k = 1; k < pts.size(); k++) {
-        int goal = nearest(pts[k].x, pts[k].z);
+        int goal = nearest(pts[k].x, pts[k].z, pts[k].y);
         if (goal < 0) return false;
         if (goal == all.back()) continue;
         std::vector<int> leg;
