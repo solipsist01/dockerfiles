@@ -1,0 +1,82 @@
+{
+    "_comment": "Infinite Rails dedicated server. Needs the image from Dockerfiles/pterodactyl-infiniterails (ghcr.io/solipsist01/pterodactyl-infiniterails). Import via admin panel -> Nests -> Import Egg.",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-11-22T15:31:30.344487+00:00",
+    "name": "Infinite Rails",
+    "author": "admin@example.com",
+    "description": "Infinite Rails dedicated server (Steam tool app 5484540, anonymous SteamCMD download, Linux build). Updates itself on every start (Auto Update). Port comes from the primary allocation (UDP). World, whitelist, permissions and all other settings are in InfiniteRails_Data/config.txt - edit it in the File Manager, see InfiniteRails_Data/README.txt.",
+    "features": null,
+    "docker_images": {
+        "Infinite Rails (custom image)": "ghcr.io/solipsist01/pterodactyl-infiniterails:latest"
+    },
+    "file_denylist": [],
+    "startup": "./InfiniteRails.x86_64 -batchmode -nographics -logFile -",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": \"Started as pure-server\"}",
+        "logs": "{}",
+        "stop": "/exit"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n## Pterodactyl install script for Infinite Rails (runs in the install container as root,\n## server files mounted at /mnt/server). Safe to re-run (Reinstall keeps world + config:\n## SteamCMD only replaces the game files, InfiniteRails_Data/config.txt, Worlds/ etc. stay).\nset -e\ncd /mnt/server\n\necho \"== SteamCMD ==\"\nmkdir -p steamcmd\nif [ ! -x steamcmd/steamcmd.sh ]; then\n    curl -fsSL https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz | tar -xz -C steamcmd\nfi\n\nexport HOME=/mnt/server\nBRANCH_ARGS=\"\"\n[ -n \"${STEAM_BRANCH}\" ] && [ \"${STEAM_BRANCH}\" != \"public\" ] && BRANCH_ARGS=\"-beta ${STEAM_BRANCH}\"\n\necho \"== Infinite Rails Dedicated Server (app 5484540) ==\"\n# app_info_update first: without it a fresh SteamCMD answers \"Missing configuration\"\n# shellcheck disable=SC2086\n./steamcmd/steamcmd.sh +@sSteamCmdForcePlatformType linux +force_install_dir /mnt/server \\\n    +login anonymous +app_info_update 1 +app_update 5484540 ${BRANCH_ARGS} validate +quit\n\n# Steam client libs where Steamworks looks for them\nmkdir -p .steam/sdk64\ncp -f steamcmd/linux64/steamclient.so .steam/sdk64/ 2>/dev/null || true\n\n[ -x InfiniteRails.x86_64 ] || { echo \"!! InfiniteRails.x86_64 missing after install\"; ls -la; exit 1; }\nchmod +x InfiniteRails.x86_64\necho \"== Install done ==\"\n",
+            "container": "ghcr.io/ptero-eggs/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Auto Update",
+            "description": "1 = update the server with SteamCMD on every start, 0 = never (update with Reinstall).",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Steam Branch",
+            "description": "Leave empty for the current version. Or an older branch such as v0.7.7 if the server must match players on an older game version.",
+            "env_variable": "STEAM_BRANCH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:32",
+            "field_type": "text"
+        },
+        {
+            "name": "Login Required",
+            "description": "1 = players must /register and /login with a password (recommended for a public server: without it anybody can use anybody's name). 0 = off. Empty = leave config.txt as is.",
+            "env_variable": "LOGIN_REQUIRED",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Creative Mode",
+            "description": "1 = creative (free building, no money), 0 = normal. Empty = leave config.txt as is.",
+            "env_variable": "CREATIVE_MODE",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Message of the Day",
+            "description": "Sent to every player who joins. Empty = leave config.txt as is.",
+            "env_variable": "MOTD",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:256",
+            "field_type": "text"
+        }
+    ]
+}
