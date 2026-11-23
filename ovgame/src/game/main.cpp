@@ -1,3 +1,4 @@
+#include <chrono>
 // OV Game - Eindhoven
 // Hoofdprogramma: opstarten, hoofdmenu, game-loop, interactie, kaart en HUD.
 //
@@ -385,10 +386,14 @@ int main(int argc, char** argv) {
     Collision collision;
     SignAtlas atlas;
     atlas.begin();
+    auto tStart = std::chrono::steady_clock::now();
+    auto since = [&]() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - tStart).count(); };
     Stations stations;
     stations.build(world, collision, atlas);
+    printf("[tijd] stations %.1f s\n", since());
     Railways railways;
     railways.build(world);
+    printf("[tijd] spoor %.1f s\n", since());
     BusStation busStation;
     busStation.build(world);
     BusFleet buses;
@@ -427,8 +432,13 @@ int main(int argc, char** argv) {
             return 0;
         }
     loadingScreen("Dienstregeling wordt opgebouwd...");
+    for (int i = 1; i < argc; i++)
+        if (!strcmp(argv[i], "--dumprail") || !strcmp(argv[i], "--trafficlog")) Traffic::verbose = true;
     Traffic traffic;
+    printf("[tijd] voor dienstregeling %.1f s\n", since());
     bool trainOk = traffic.setup(world, railways, stations, atlas, err);
+    printf("[tijd] dienstregeling klaar %.1f s\n", since());
+    fflush(stdout);
     if (!trainOk && !shotPath) Platform::showError(err.c_str());
     world.setSignTexture(atlas.finish());
     MapView map;

@@ -1,3 +1,6 @@
+#include <atomic>
+#include <chrono>
+#include <thread>
 #include "traffic.h"
 #include <algorithm>
 #include <cstdio>
@@ -344,7 +347,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
             base0pts.push_back(midPt(df.exit)); base0req.push_back(variant == 2);
             if (variant < 2) { base0pts.push_back(endPt(df.exit)); base0req.push_back(true); }
         }
-        if (linked) { base0pts.insert(base0pts.begin(), patterns_[df.linkFrom]->terminal); base0req.insert(base0req.begin(), true); }
+        if (linked) { base0pts.insert(base0pts.begin(), p.linkTerminal); base0req.insert(base0req.begin(), true); }
         if (base0pts.size() < 2) break;
         base0req[0] = true;
         base0req.back() = true;
@@ -406,7 +409,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
             std::reverse(base0pts.begin(), base0pts.end());
             std::reverse(base0req.begin(), base0req.end());
         }
-        if (linked) { base0pts.insert(base0pts.begin(), patterns_[df.linkFrom]->terminal); base0req.insert(base0req.begin(), true); }
+        if (linked) { base0pts.insert(base0pts.begin(), p.linkTerminal); base0req.insert(base0req.begin(), true); }
         base0req[0] = true;
         base0req.back() = true;
         Vec3 d0 = base0pts[1] - base0pts[0];
@@ -526,7 +529,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
         Vec3 c;
         if (!stationPt(s.station, c)) { err = std::string("Station niet gevonden: ") + s.station; return false; }
         Anchor a{s.station, c, 0, s.stop || s.track != nullptr};
-        if (linked && a.name == termName(df.origin)) a.p = patterns_[df.linkFrom]->terminal;
+        if (linked && a.name == termName(df.origin)) a.p = p.linkTerminal;
         else if (s.track && trackAt(c, s.track, a.p)) a.count = -1;
         else {
             float d = base0.closest(c.x, c.z);
@@ -709,13 +712,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
     for (int attempt = 0; attempt < 30; attempt++) {
         std::vector<bool> rq(fixed.size(), true);
         TrackPath t;
-        if (rail.routeSmart(fixed, rq, dir.x, dir.z, t, 0)) break;
-        size_t bad = 0;
-        for (size_t n = 2; n <= fixed.size(); n++) {
-            std::vector<Vec3> pre(fixed.begin(), fixed.begin() + n);
-            std::vector<bool> r2(n, true);
-            if (!rail.routeSmart(pre, r2, dir.x, dir.z, t, 0)) { bad = n - 1; break; }
-        }
+        size_t bad = rail.firstUnreachable(fixed, dir.x, dir.z);  // eerste onbereikbare vaste punt (0 = route lukt)
         if (bad == 0) break;
         bool fixedIt = false;
         Anchor* hit = nullptr;
@@ -878,7 +875,7 @@ bool Traffic::buildPattern(Pattern& p, const World& world, const Railways& rail,
              p.rs->typeName.c_str(), df.csTrack, main.length);
     p.info = buf + diag + "\n";
     // diagnose: per 500 m welk spoor (0 = meest rechts in de rijrichting, binnen 14 m) - '.' = enkel spoor
-    {
+    if (verbose) {
         std::string lane = "   rijstrook per 500 m: ";
         for (float d = 0; d < main.length; d += 500) {
             Vec3 q = main.pos(d), dd = dirAt(main, d);
@@ -969,6 +966,7 @@ void Traffic::timetable(Pattern& p, std::string& log) {
 }
 
 bool Traffic::setup(const World& world, const Railways& rail, const Stations& st, SignAtlas& atlas, std::string& err) {
+    auto tSetup = std::chrono::steady_clock::now();
     stock_.emplace_back(makeFlirt());
     stock_.emplace_back(makeVirm());
     stock_.emplace_back(makeIcng());  // 2
@@ -1158,17 +1156,22 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     std::string log;
     // Een serie zonder route (bijv. een gat in de spoordata) wordt overgeslagen; de rest rijdt gewoon.
     std::vector<int> patOf(defs.size(), -1);  // def-index -> patroon-index
+    // Alle series tegelijk opbouwen over de processorkernen (het routezoeken is per serie onafhankelijk); een rit die kopmaakt
+    // op een eerdere serie (linkFrom eerder in de lijst) wacht tot die klaar is (niveau 1, 2, ...). Daarna in de volgorde
+    // van de lijst achter elkaar zetten: zelfde indexen en uitkomst als één voor één.
+    struct Job { std::unique_ptr<Pattern> p; bool ok = false, skipped = false; std::string perr; int level = 0; };
+    std::vector<Job> jobs(defs.size());
+    int maxLevel = 0;
     for (size_t di = 0; di < defs.size(); di++) {
         const Def& d = defs[di];
         auto p = std::make_unique<Pattern>();
         p->def = d;
         if (d.linkFrom >= 0) {
-            // aansluitende rit al opgebouwd: daar beginnen (zijn eindpunt); anders (verderop in de lijst) beginnen bij het perron
-            // uit de dienstregeling en de koppeling pas na afloop leggen
             p->linkDef = d.linkFrom;
-            p->def.linkFrom = d.linkFrom < (int)di ? patOf[d.linkFrom] : -1;
-            if (d.linkFrom < (int)di && p->def.linkFrom < 0) { warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + " (aansluitende rit ontbreekt)\n"; continue; }
+            if (d.linkFrom < (int)di) jobs[di].level = jobs[d.linkFrom].level + 1;
+            else p->def.linkFrom = -1;  // koppeling naar een latere serie: pas na afloop leggen
         }
+        maxLevel = std::max(maxLevel, jobs[di].level);
         p->number = d.number;
         p->dest = d.dest;
         // "noord" = van Eindhoven af (richting Utrecht); volgorde van de eindpunten langs de lijn
@@ -1182,22 +1185,56 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
         else if (zwEnd(d.origin) || zwEnd(d.exit)) p->north = d.exit == ZWOLLE || d.exit == ZWN || d.exit == AMFE;  // richting Zwolle
         else p->north = d.origin == EAST || d.origin == HELMOND || (d.exit != EAST && d.exit != HELMOND && rankOf(d.origin) < rankOf(d.exit));
         p->rs = stock_[d.stock].get();
-        std::string perr;
-        if (!buildPattern(*p, world, rail, st, perr)) {
-            warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + ": " + perr + "\n";
-            printf("Trein %s naar %s overgeslagen: %s\n", d.number, d.dest, perr.c_str());
+        jobs[di].p = std::move(p);
+    }
+    unsigned nThreads = std::max(1u, std::min(16u, std::thread::hardware_concurrency()));
+    for (int lvl = 0; lvl <= maxLevel; lvl++) {
+        std::vector<size_t> todo;
+        for (size_t di = 0; di < defs.size(); di++) {
+            if (jobs[di].level != lvl) continue;
+            const Def& d = defs[di];
+            if (lvl > 0) {
+                const Job& src = jobs[d.linkFrom];
+                if (!src.ok) { jobs[di].skipped = true; continue; }  // aansluitende rit ontbreekt
+                jobs[di].p->linkTerminal = src.p->terminal;
+            }
+            todo.push_back(di);
+        }
+        std::atomic<size_t> next{0};
+        auto work = [&]() {
+            for (size_t k; (k = next++) < todo.size();) {
+                Job& j = jobs[todo[k]];
+                j.ok = buildPattern(*j.p, world, rail, st, j.perr);
+                if (j.ok) {
+                    std::string tl;
+                    timetable(*j.p, tl);
+                    j.p->info += tl;
+                }
+            }
+        };
+        std::vector<std::thread> pool;
+        for (unsigned t = 1; t < std::min<unsigned>(nThreads, (unsigned)todo.size()); t++) pool.emplace_back(work);
+        work();
+        for (auto& t : pool) t.join();
+    }
+    for (size_t di = 0; di < defs.size(); di++) {
+        const Def& d = defs[di];
+        Job& j = jobs[di];
+        if (j.skipped) { warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + " (aansluitende rit ontbreekt)\n"; continue; }
+        if (!j.ok) {
+            warnings_ += "overgeslagen: " + std::string(d.number) + " naar " + d.dest + ": " + j.perr + "\n";
+            printf("Trein %s naar %s overgeslagen: %s\n", d.number, d.dest, j.perr.c_str());
             continue;
         }
-        std::string tl;
-        timetable(*p, tl);
-        p->info += tl;
+        if (d.linkFrom >= 0 && d.linkFrom < (int)di) j.p->def.linkFrom = patOf[d.linkFrom];
         patOf[di] = (int)patterns_.size();
-        patterns_.push_back(std::move(p));
+        patterns_.push_back(std::move(j.p));
     }
     if (patterns_.empty()) { err = "Geen enkele treinserie kon worden opgebouwd. " + warnings_; return false; }
     // koppelingen naar series die later in de lijst stonden
     for (auto& p : patterns_)
         if (p->linkDef >= 0 && p->def.linkFrom < 0) p->def.linkFrom = patOf[p->linkDef];
+    printf("[tijd] setup: na routes %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - tSetup).count());
     // controle: rijden twee tegengestelde series ergens over hetzelfde spoor? (zou kunnen vastlopen)
     {
         std::map<std::pair<int, int>, std::vector<std::pair<int, int>>> grid;  // cel -> (patroon, monster)
@@ -1253,6 +1290,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
                 }
             }
     }
+    printf("[tijd] setup: na tegenrichting-controle %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - tSetup).count());
     // gedeelde stukken per serie sorteren en samenvoegen
     for (auto& p : patterns_) {
         auto& c = p->contested;
@@ -1276,6 +1314,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     for (auto& p : patterns_) nameIndex(p->dest);
     for (auto& s : stock_) s->build(atlas, names_);
 
+    printf("[tijd] setup: na materieel %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - tSetup).count());
     // ritten: dag 0 en dag 1, halfuren van 05:30 tot 00:30
     int id = 1;
     struct Inst { double entry; int pat; double base; };

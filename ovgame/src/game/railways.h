@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_map>
 #include <vector>
 #include "../engine/renderer.h"
 #include "world.h"
@@ -33,11 +34,22 @@ public:
     bool routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>& required, float dx, float dz, TrackPath& out,
                     float extend = 150.0f) const;
 
+    // Alle punten verplicht: index van het eerste punt dat niet bereikbaar is (0 = alles bereikbaar). Zelfde uitkomst als
+    // routeSmart op steeds langere beginstukken, maar in één doorloop.
+    size_t firstUnreachable(const std::vector<Vec3>& pts, float dx, float dz) const;
+
 private:
     std::vector<Mesh> meshes_;
     struct Vtx { Vec3 p; std::vector<int> nb; bool main = true; };
     std::vector<Vtx> graph_;
-    bool search(int start, float dx, float dz, int goal, std::vector<int>& nodes) const;
+    // ruimtelijk raster over de knopen (cellen van CELL m): zoeken in de buurt zonder alle knopen langs te gaan
+    static constexpr float CELL = 32.0f;
+    std::unordered_map<int64_t, std::vector<int>> cells_;
+    static int64_t cellKey(int cx, int cz) { return ((int64_t)cx << 32) ^ (uint32_t)cz; }
+    void buildIndex();
+    // knopen in de cellen rond (x, z) binnen r meter, oplopend gesorteerd (zelfde volgorde als een volledige doorloop)
+    void nodesNear(float x, float z, float r, std::vector<int>& out) const;
+    bool search(int start, float dx, float dz, int goal, std::vector<int>& nodes, float maxCost = 1e30f, bool* cut = nullptr) const;
     int nearest(float x, float z, float y = 0.0f) const;
     void buildCatenary(const World& world);
 };

@@ -66,7 +66,8 @@ public:
     enum End { EAST, NORTH, TILBURG, DENBOSCH, UTN, UTW, TIEL, UTC, ZWOLLE, ZWN, AMFE, HELMOND,
                AKM, AKN, UTO, BKW, BKL, HLM, HRN, BVW, UITG, ASD, DVZ };
     static bool isTerm(End e) { return e == DENBOSCH || e == UTC || e == ZWOLLE || e == AKM || e == BKL || e == UITG || e == ASD; }  // keren op een perron (kopmaken)
-    static bool akEnd(End e) { return e >= AKM; }  // hoort bij de lijn naar Alkmaar
+    static bool akEnd(End e) { return e >= AKM; }
+    static inline bool verbose = false;  // extra diagnose (rijstroken per 500 m) voor --dumprail/--trafficlog  // hoort bij de lijn naar Alkmaar
     static bool zwEnd(End e) { return e == UTC || e == ZWOLLE || e == ZWN || e == AMFE; }  // hoort bij de lijn naar Zwolle
     struct StopDef { const char* station; bool stop; double arr, dep; const char* track = nullptr; };  // track: echt spoor (bijv. "4b"), anders rechts rijden
     struct Def {
@@ -92,6 +93,7 @@ private:
         double entryRel = 0;
         float entrySpeed = 20;
         Vec3 terminal;                  // spoorpunt van de laatste halte (kopmaken)
+        Vec3 linkTerminal;              // kopmaken: eindpunt van de aansluitende rit (hier begint deze rit)
         int linkDef = -1;               // def-index van linkFrom (wordt na het opbouwen van alle series omgezet)
         std::string info;
     };

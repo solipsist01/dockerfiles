@@ -173,6 +173,7 @@ void Railways::build(const World& world) {
         }
         if (joined) printf("Spoor: %d doodlopende sporen aangesloten op een spoor vlak ernaast\n", joined);
     }
+    buildIndex();
     buildCatenary(world);
 }
 
@@ -296,16 +297,47 @@ void Railways::draw(World& world) const {
     for (const Mesh& m : meshes_) drawMesh(m);
 }
 
+void Railways::buildIndex() {
+    cells_.clear();
+    for (int k = 0; k < (int)graph_.size(); k++)
+        cells_[cellKey((int)std::floor(graph_[k].p.x / CELL), (int)std::floor(graph_[k].p.z / CELL))].push_back(k);
+}
+
+void Railways::nodesNear(float x, float z, float r, std::vector<int>& out) const {
+    out.clear();
+    int x0 = (int)std::floor((x - r) / CELL), x1 = (int)std::floor((x + r) / CELL);
+    int z0 = (int)std::floor((z - r) / CELL), z1 = (int)std::floor((z + r) / CELL);
+    for (int cx = x0; cx <= x1; cx++)
+        for (int cz = z0; cz <= z1; cz++) {
+            auto it = cells_.find(cellKey(cx, cz));
+            if (it != cells_.end()) out.insert(out.end(), it->second.begin(), it->second.end());
+        }
+    std::sort(out.begin(), out.end());
+}
+
 int Railways::nearest(float x, float z, float y) const {
     // y != 0: hoogte telt mee (knooppunten met sporen boven elkaar: Amsterdam Sloterdijk, Duivendrecht)
     int best = -1;
     float bd = 1e18f;
-    for (int k = 0; k < (int)graph_.size(); k++) {
+    auto consider = [&](int k) {
         const Vec3& p = graph_[k].p;
         float d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z);
         if (y != 0.0f) d += 9.0f * (p.y - y) * (p.y - y);
-        if (d < bd) { bd = d; best = k; }
+        if (d < bd || (d == bd && k < best)) { bd = d; best = k; }
+    };
+    // ringen van cellen om het punt; klaar zodra de volgende ring zeker verder weg ligt dan het beste punt
+    int cx0 = (int)std::floor(x / CELL), cz0 = (int)std::floor(z / CELL);
+    for (int r = 0; r <= 250; r++) {
+        for (int cx = cx0 - r; cx <= cx0 + r; cx++)
+            for (int cz = cz0 - r; cz <= cz0 + r; cz++) {
+                if (std::abs(cx - cx0) != r && std::abs(cz - cz0) != r) continue;  // alleen de rand van de ring
+                auto it = cells_.find(cellKey(cx, cz));
+                if (it != cells_.end()) for (int k : it->second) consider(k);
+            }
+        float edge = r * CELL;  // elk punt in een verdere ring ligt minstens zo ver weg
+        if (best >= 0 && edge * edge > bd) return best;
     }
+    for (int k = 0; k < (int)graph_.size(); k++) consider(k);  // ver van elk spoor: alles doorlopen
     return best;
 }
 
@@ -315,7 +347,10 @@ bool Railways::rightmostTrack(Vec3 p, Vec3 dir, float radius, Vec3& out) const {
     float fx = dir.x / dl, fz = dir.z / dl, rx = -fz, rz = fx;  // rechts van de rijrichting
     float best = -1e9f;
     bool found = false;
-    for (const Vtx& v : graph_) {
+    std::vector<int> nearIdx;
+    nodesNear(p.x, p.z, radius + 4.0f, nearIdx);
+    for (int vi : nearIdx) {
+        const Vtx& v = graph_[vi];
         if (!v.main) continue;
         float ax = v.p.x - p.x, az = v.p.z - p.z;
         float along = ax * fx + az * fz, lat = ax * rx + az * rz;
@@ -338,7 +373,10 @@ bool Railways::rankedTrack(Vec3 p, Vec3 dir, float radius, int rank, Vec3& out, 
     float fx = dir.x / dl, fz = dir.z / dl, rx = -fz, rz = fx;  // rechts van de rijrichting
     struct Cand { float lat; Vec3 p; float along; };
     std::vector<Cand> c;
-    for (const Vtx& v : graph_) {
+    std::vector<int> nearIdx;
+    nodesNear(p.x, p.z, radius + 4.0f, nearIdx);
+    for (int vi : nearIdx) {
+        const Vtx& v = graph_[vi];
         if (!v.main) continue;
         float ax = v.p.x - p.x, az = v.p.z - p.z;
         float along = ax * fx + az * fz, lat = ax * rx + az * rz;
@@ -368,6 +406,28 @@ bool Railways::rankedTrack(Vec3 p, Vec3 dir, float radius, int rank, Vec3& out, 
     return true;
 }
 
+size_t Railways::firstUnreachable(const std::vector<Vec3>& pts, float dx, float dz) const {
+    if (pts.size() < 2) return 0;
+    std::vector<int> all;
+    int cur = nearest(pts[0].x, pts[0].z, pts[0].y);
+    if (cur < 0) return 1;
+    all.push_back(cur);
+    for (size_t k = 1; k < pts.size(); k++) {
+        int goal = nearest(pts[k].x, pts[k].z, pts[k].y);
+        if (goal < 0) return k;
+        if (goal == all.back()) continue;
+        std::vector<int> leg;
+        float straight = std::hypot(graph_[goal].p.x - graph_[all.back()].p.x, graph_[goal].p.z - graph_[all.back()].p.z);
+        if (!search(all.back(), dx, dz, goal, leg, straight * 8.0f + 10000.0f)) return k;
+        all.insert(all.end(), leg.begin() + 1, leg.end());
+        if (all.size() >= 2) {
+            Vec3 d = graph_[all.back()].p - graph_[all[all.size() - 2]].p;
+            dx = d.x; dz = d.z;
+        }
+    }
+    return 0;
+}
+
 bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>& required, float dx, float dz, TrackPath& out,
                           float extend) const {
     if (pts.size() < 2) return false;
@@ -383,12 +443,20 @@ bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>&
         if (goal < 0) { if (required[k]) return false; continue; }
         if (goal == all.back()) continue;
         std::vector<int> leg;
-        bool ok = search(all.back(), dx, dz, goal, leg);
-        if (!ok && !optLeg.empty()) {
+        // grens aan de zoektocht: een optioneel punt met een omweg > 1,25x + 40 m wordt toch overgeslagen, dus verder zoeken
+        // heeft geen zin (een mislukte zoektocht liep anders het hele spoornet af)
+        auto bound = [&](int from) {
+            float straight = std::hypot(graph_[goal].p.x - graph_[from].p.x, graph_[goal].p.z - graph_[from].p.z);
+            return required[k] ? straight * 8.0f + 10000.0f : straight * 1.25f + 40.0f + 1.0f;
+        };
+        bool tooLong = false;  // afgebroken op de omweggrens (dan net als vroeger: overslaan, niet terugzoeken)
+        bool ok = search(all.back(), dx, dz, goal, leg, bound(all.back()), &tooLong);
+        if (!ok && !optLeg.empty() && !tooLong) {
             // terug naar vóór het laatste optionele tussenpunt (verplicht doel: zo ver als nodig; optioneel: één stap)
             std::vector<int> saveAll = all;
             std::vector<size_t> saveOpt = optLeg;
             float sdx = dx, sdz = dz;
+            bool longAfter = false;  // na terugzoeken wel bereikbaar maar te grote omweg: zoals vroeger niet terugdraaien
             while (!ok && !optLeg.empty()) {
                 all.resize(optLeg.back());
                 optLeg.pop_back();
@@ -396,10 +464,12 @@ bool Railways::routeSmart(const std::vector<Vec3>& pts, const std::vector<bool>&
                     Vec3 d = graph_[all.back()].p - graph_[all[all.size() - 2]].p;
                     dx = d.x; dz = d.z;
                 }
-                ok = search(all.back(), dx, dz, goal, leg);
+                bool c2 = false;
+                ok = search(all.back(), dx, dz, goal, leg, bound(all.back()), &c2);
+                if (!ok && c2) { longAfter = true; break; }
                 if (!required[k]) break;
             }
-            if (!ok) { all = saveAll; optLeg = saveOpt; dx = sdx; dz = sdz; }
+            if (!ok && !longAfter) { all = saveAll; optLeg = saveOpt; dx = sdx; dz = sdz; }
         }
         if (ok) {
             float len = 0;
@@ -494,11 +564,16 @@ bool Railways::routeVia(const std::vector<Vec3>& pts, float dx, float dz, TrackP
     return out.pts.size() >= 2;
 }
 
-bool Railways::search(int start, float dx, float dz, int goal, std::vector<int>& nodes) const {
+bool Railways::search(int start, float dx, float dz, int goal, std::vector<int>& nodes, float maxCost, bool* cut) const {
+    if (cut) *cut = false;
     // Dijkstra over gerichte stappen (van -> naar); bochten > 35 graden zijn niet toegestaan (geen terugknikken bij wissels)
     struct State { float cost; int from, to; bool operator>(const State& o) const { return cost > o.cost; } };
-    std::map<std::pair<int, int>, float> dist;
-    std::map<std::pair<int, int>, std::pair<int, int>> parent;
+    // gerichte stap (van -> naar) als 64-bit sleutel in hashtabellen (veel sneller dan std::map bij grote zoektochten)
+    struct PairHash { size_t operator()(const std::pair<int, int>& k) const { return std::hash<uint64_t>()(((uint64_t)(uint32_t)k.first << 32) | (uint32_t)k.second); } };
+    std::unordered_map<std::pair<int, int>, float, PairHash> dist;
+    std::unordered_map<std::pair<int, int>, std::pair<int, int>, PairHash> parent;
+    dist.reserve(1 << 16);
+    parent.reserve(1 << 16);
     std::priority_queue<State, std::vector<State>, std::greater<State>> pq;
     float dl = std::hypot(dx, dz);
     for (int n : graph_[start].nb) {
@@ -515,6 +590,7 @@ bool Railways::search(int start, float dx, float dz, int goal, std::vector<int>&
         State s = pq.top();
         pq.pop();
         if (s.cost > dist[{s.from, s.to}] + 1e-3f) continue;
+        if (s.cost > maxCost) { if (cut) *cut = true; break; }  // langer dan toegestaan: niet het hele spoornet doorzoeken
         if (s.to == goal) { found = {s.from, s.to}; break; }
         Vec3 d0 = graph_[s.to].p - graph_[s.from].p;
         float l0 = std::hypot(d0.x, d0.z);
