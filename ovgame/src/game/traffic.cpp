@@ -2,6 +2,7 @@
 #include <chrono>
 #include <thread>
 #include "traffic.h"
+#include "sprinter.h"
 #include <algorithm>
 #include <cstdio>
 #include <map>
@@ -970,10 +971,14 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
     stock_.emplace_back(makeFlirt());
     stock_.emplace_back(makeVirm());
     stock_.emplace_back(makeIcng());  // 2
+    stock_.emplace_back(makeSng());   // 3
+    stock_.emplace_back(makeSlt());   // 4
+    stock_.emplace_back(makeIcm());   // 5
     // Dienstregeling 2026 (OV in Nederland Wiki; 's-Hertogenbosch - Utrecht uit de GTFS van OVapi, november 2026), vertrektijden
     // per station. Minuten na het begin van het halfuur (de rit een halfuur later rijdt 30 minuten later; tijden > 30 lopen
     // door in het volgende halfuur). -1 = uitrekenen uit de rijtijd. Sporen in Den Bosch en Utrecht zoals in de GTFS.
-    // Intercity's met VIRM, behalve de IC 1100 (Eindhoven - Den Haag) en IC 3000 (Nijmegen - Den Helder): ICNG. Sprinters met FLIRT.
+    // Materieel: Intercity's VIRM, IC 1100 en 3000 ICNG; IC 500/600/1700 ICMm; Sprinters in Brabant (6400, 6500) FLIRT, 5600/4800/8800/6900 SNG,
+    // 7300/4000 SLT.
     // Utrecht: de IC 3500 naar Dordrecht (via Woerden/Gouda) vertrekt van spoor 8 - in de spoordata sluiten alleen 8/9/11/12
     // en 20/21 aan op de lijn naar Woerden (in werkelijkheid spoor 7). De 3500 naar Venlo komt van de kant van Amsterdam
     // binnen en vertrekt, zoals in de GTFS, van spoor 18.
@@ -1083,16 +1088,16 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
                                                                    icSouth(91, 94, 122, 124)), ehvSouth), {{CS, true, 144, 147}})), 0, -120},
         {"6400", "Weert", 0, 3, TILBURG, EAST, {{BX, true, -1, 23, "7"}, {BE, true, -1, 29}, {ES, true, -1, 35}, {CS, true, -1, 47}}},
         // ---- Sprinters 's-Hertogenbosch - Utrecht (8800, kopmaken in Den Bosch) en Tiel - Utrecht (6900) ----
-        {"8800", "'s-Hertogenbosch", 0, 0, UTW, DENBOSCH,
+        {"8800", "'s-Hertogenbosch", 3, 0, UTW, DENBOSCH,
          {{UT, true, 6, 10, "21"}, {UV, true, -1, 12, "4"}, {UL, true, -1, 15, "2"}, {HT, true, 18, 19, "2"}, {HC, true, -1, 22, "2"},
           {CL, true, -1, 28, "2"}, {GM, true, 36, 42, "6"}, {ZB, true, -1, 48, "2"}, {DB, true, 57, -1, "4a"}}},
-        {"8800", "Bodegraven", 0, 0, DENBOSCH, UTW,
+        {"8800", "Bodegraven", 3, 0, DENBOSCH, UTW,
          {{DB, true, -1, 3, "4a"}, {ZB, true, -1, 11, "1"}, {GM, true, 18, 24, "3"}, {CL, true, -1, 29, "1"}, {HC, true, 35, 36, "1"},
           {HT, true, -1, 39, "1"}, {UL, true, -1, 43, "1"}, {UV, true, -1, 46, "3"}, {UT, true, 49, 54, "20"}}, 11, -60},
-        {"6900", "Den Haag Centraal", 0, 0, TIEL, UTW,
+        {"6900", "Den Haag Centraal", 3, 0, TIEL, UTW,
          {{GM, true, 34, 44, "1"}, {CL, true, -1, 50, "1"}, {HC, true, -1, 56, "1"}, {HT, true, -1, 59, "1"}, {UL, true, -1, 63, "1"},
           {UV, true, -1, 66, "3"}, {UT, true, 69, 74, "20"}}},
-        {"6900", "Tiel", 0, 0, UTW, TIEL,
+        {"6900", "Tiel", 3, 0, UTW, TIEL,
          {{UT, true, 14, 20, "21"}, {UV, true, -1, 22, "4"}, {UL, true, -1, 25, "2"}, {HT, true, 28, 29, "2"}, {HC, true, -1, 32, "2"},
           {CL, true, -1, 38, "2"}, {GM, true, 46, 54, "4"}}},
         // ---- Utrecht - Amersfoort - Zwolle (GTFS november 2026) ----
@@ -1103,22 +1108,22 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
         // Noordwaarts beginnen ze daarom op het perron in Utrecht (5 minuten voor vertrek klaar; in de spoordata is er vanaf
         // het rechter spoor van de Woerden-lijn geen verbinding naar 8/9). Zuidwaarts komen ze binnen, keren en rijden rechts
         // de Woerden-lijn op.
-        {"500", "Groningen", 1, 0, UTC, ZWN, icZw(-1, 21, "5", 34, 36, 71, 76, "6"), -1, 0, 1},                      // 15
-        {"600", "Leeuwarden", 1, 0, UTC, ZWN, icZw(-1, 21, "5", 34, 36, 71, 78, "7"), -1, 0, 2},                     // 16
-        {"500", "Den Haag Centraal", 1, 0, ZWN, UTC, icZwSouth(14, 19, 54, 56, 69, -1, "9"), -1, 0, 2},             // 17
-        {"500", "Den Haag Centraal", 1, 0, UTC, UTW, {{UT, true, -1, 73, "9"}}, 17, 0, 2},                            // 18
-        {"600", "Den Haag Centraal", 1, 0, ZWN, UTC, icZwSouth(11, 19, 54, 56, 69, -1, "9"), -1, 0, 1},             // 19
-        {"600", "Den Haag Centraal", 1, 0, UTC, UTW, {{UT, true, -1, 73, "9"}}, 19, 0, 1},                            // 20
+        {"500", "Groningen", 5, 0, UTC, ZWN, icZw(-1, 21, "5", 34, 36, 71, 76, "6"), -1, 0, 1},                      // 15
+        {"600", "Leeuwarden", 5, 0, UTC, ZWN, icZw(-1, 21, "5", 34, 36, 71, 78, "7"), -1, 0, 2},                     // 16
+        {"500", "Den Haag Centraal", 5, 0, ZWN, UTC, icZwSouth(14, 19, 54, 56, 69, -1, "9"), -1, 0, 2},             // 17
+        {"500", "Den Haag Centraal", 5, 0, UTC, UTW, {{UT, true, -1, 73, "9"}}, 17, 0, 2},                            // 18
+        {"600", "Den Haag Centraal", 5, 0, ZWN, UTC, icZwSouth(11, 19, 54, 56, 69, -1, "9"), -1, 0, 1},             // 19
+        {"600", "Den Haag Centraal", 5, 0, UTC, UTW, {{UT, true, -1, 73, "9"}}, 19, 0, 1},                            // 20
         // IC 1700 Den Haag - Enschede: tot Amersfoort over deze lijn, dan richting Apeldoorn
-        {"1700", "Enschede", 1, 0, UTC, AMFE, {{UT, true, -1, 7, "5"}, {UO, false, -1, -1, "1"}, {BH, false, -1, -1, "2"}, {DD, false, -1, -1, "2"}, {AMF, true, 20, 22, "2"}}},  // 21
-        {"1700", "Den Haag Centraal", 1, 0, AMFE, UTC, {{AMF, true, 8, 10, "6"}, {DD, false, -1, -1, "1"}, {BH, false, -1, -1, "1"}, {UO, false, -1, -1, "3"}, {UT, true, 23, -1, "9"}}},  // 22
-        {"1700", "Den Haag Centraal", 1, 0, UTC, UTW, {{UT, true, -1, 28, "9"}}, 22, 0},                             // 23
+        {"1700", "Enschede", 5, 0, UTC, AMFE, {{UT, true, -1, 7, "5"}, {UO, false, -1, -1, "1"}, {BH, false, -1, -1, "2"}, {DD, false, -1, -1, "2"}, {AMF, true, 20, 22, "2"}}},  // 21
+        {"1700", "Den Haag Centraal", 5, 0, AMFE, UTC, {{AMF, true, 8, 10, "6"}, {DD, false, -1, -1, "1"}, {BH, false, -1, -1, "1"}, {UO, false, -1, -1, "3"}, {UT, true, 23, -1, "9"}}},  // 22
+        {"1700", "Den Haag Centraal", 5, 0, UTC, UTW, {{UT, true, -1, 28, "9"}}, 22, 0},                             // 23
         // SPR 5600 Utrecht - Zwolle, alle stations; kopmaken in Utrecht (spoor 4) en Zwolle (spoor 1a/1b)
-        {"5600", "Zwolle", 0, 0, UTC, ZWOLLE,
+        {"5600", "Zwolle", 3, 0, UTC, ZWOLLE,
          {{UT, true, -1, 22, "4"}, {UO, true, -1, 25.5, "1"}, {BH, true, -1, 30, "2"}, {DD, true, -1, 33, "2"}, {AMF, true, 40, 42, "2"},
           {AS, true, -1, 46, "3"}, {AV, true, -1, 49, "3"}, {NK, true, -1, 54, "2"}, {PT, true, -1, 59, "1"}, {EM, true, -1, 64, "1"},
           {HD, true, -1, 68, "1"}, {NS, true, -1, 76, "1"}, {TH, true, -1, 82, "2"}, {WZ, true, -1, 89, "1"}, {ZL, true, 96, -1, "1b"}}, 25, -90},  // 24
-        {"5600", "Utrecht Centraal", 0, 0, ZWOLLE, UTC,
+        {"5600", "Utrecht Centraal", 3, 0, ZWOLLE, UTC,
          {{ZL, true, -1, 23, "1a"}, {WZ, true, -1, 30, "2"}, {TH, true, -1, 36, "1"}, {NS, true, -1, 42, "2"}, {HD, true, -1, 50, "2"},
           {EM, true, -1, 54, "2"}, {PT, true, -1, 59, "2"}, {NK, true, -1, 64, "1"}, {AV, true, -1, 69, "1"}, {AS, true, -1, 72, "1"},
           {AMF, true, 76, 79, "6"}, {DD, true, -1, 86, "1"}, {BH, true, -1, 90, "1"}, {UO, true, -1, 95, "3"}, {UT, true, 99, -1, "4"}}, 24, -90},  // 25
@@ -1132,26 +1137,26 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
                                                      {ASS, true, -1, 45.5, "5"}, {ASDC, true, 51, 54, "4b"}, {ASA, true, 61, 62, "4"}, {UT, true, 81, 84, "19"},
                                                      {UV, false, -1, -1}})},  // 27
         // SPR 4000 Uitgeest - Breukelen - (Woerden - Rotterdam): kopmaken in Uitgeest (spoor 1b)
-        {"4000", "Uitgeest", 0, 0, BKW, UITG, akFill({{BKN, true, -1, 11.5, "2"}, {AC, true, -1, 20.5, "2"}, {AHD, true, -1, 23.5, "2"}, {ABA, true, -1, 25.5, "3"},
+        {"4000", "Uitgeest", 4, 0, BKW, UITG, akFill({{BKN, true, -1, 11.5, "2"}, {AC, true, -1, 20.5, "2"}, {AHD, true, -1, 23.5, "2"}, {ABA, true, -1, 25.5, "3"},
                                                       {DVD, true, -1, 28.5, "5"}, {ASA, true, -1, 32.5, "1"}, {ASM, true, -1, 35.5, "8"}, {ASDC, true, 41, 43, "5a"},
                                                       {ASS, true, -1, 48.5, "3"}, {ZD, true, -1, 55.5, "2"}, {KZD, true, -1, 58.5, "1"}, {ZZS, true, -1, 60.5, "1"},
                                                       {WM, true, 63, 64, "2"}, {KMA, true, -1, 67.5, "1"}, {UTG, true, 72, -1, "1b"}})},  // 28
-        {"4000", "Rotterdam Centraal", 0, 0, UITG, BKW, akFill({{UTG, true, -1, 18, "1b"}, {KMA, true, -1, 22.5, "2"}, {WM, true, -1, 26.5, "3"}, {ZZS, true, -1, 29.5, "2"},
+        {"4000", "Rotterdam Centraal", 4, 0, UITG, BKW, akFill({{UTG, true, -1, 18, "1b"}, {KMA, true, -1, 22.5, "2"}, {WM, true, -1, 26.5, "3"}, {ZZS, true, -1, 29.5, "2"},
                                                                 {KZD, true, -1, 32.5, "2"}, {ZD, true, -1, 35.5, "5"}, {ASS, true, -1, 41.5, "6"}, {ASDC, true, 47, 49, "8b"},
                                                                 {ASM, true, -1, 54.5, "9"}, {ASA, true, -1, 58.5, "4"}, {DVD, true, -1, 61.5, "8"}, {ABA, true, -1, 64.5, "6"},
                                                                 {AHD, true, -1, 66.5, "5"}, {AC, true, -1, 70.5, "3"}, {BKN, true, -1, 78.5, "3"}}), 28, -60},  // 29
         // (SPR 7400 Uitgeest - Utrecht - Driebergen rijdt volgens de GTFS overdag niet; met zijn middagtijden haalt de IC 3900
         //  hem tussen Bijlmer ArenA en Duivendrecht in, waar maar twee sporen liggen)
         // SPR 7300 Breukelen - Utrecht - Rhenen (van/naar Bunnik); in Breukelen naar het opstelspoor (aankomst 2, vertrek 3)
-        {"7300", "Breukelen", 0, 0, UTO, BKL, akFill({{UV, true, -1, 12.5, "1"}, {UT, true, 15, 19, "14"}, {UZ, true, -1, 22.5, "2"}, {MS, true, -1, 27.5, "2"},
+        {"7300", "Breukelen", 4, 0, UTO, BKL, akFill({{UV, true, -1, 12.5, "1"}, {UT, true, 15, 19, "14"}, {UZ, true, -1, 22.5, "2"}, {MS, true, -1, 27.5, "2"},
                                                       {BKN, true, 31, -1, "2"}})},  // 30
-        {"7300", "Rhenen", 0, 0, BKL, UTO, akFill({{BKN, true, -1, 28, "3"}, {MS, true, -1, 33.5, "3"}, {UZ, true, -1, 38.5, "3"}, {UT, true, 41, 44, "15"},
+        {"7300", "Rhenen", 4, 0, BKL, UTO, akFill({{BKN, true, -1, 28, "3"}, {MS, true, -1, 33.5, "3"}, {UZ, true, -1, 38.5, "3"}, {UT, true, 41, 44, "15"},
                                                    {UV, true, -1, 46.5, "2"}})},  // 31
         // SPR 4800 Amsterdam Centraal - Haarlem - Uitgeest - Alkmaar - Hoorn: in de spelwereld het stuk vanaf Beverwijk:
         // Uitgeest - Castricum - Heiloo - Alkmaar (het stuk Amsterdam - Sloterdijk - Haarlem: in de spoordata vindt de route
         // vanaf Sloterdijk de Haarlem-lijn niet)
-        {"4800", "Hoorn", 0, 0, BVW, AKN, {{UTG, true, 70, 71, "4b"}, {CAS, true, -1, 75.5, "1"}, {HLO, true, -1, 81.5, "1"}, {AMR, true, 86, 91, "2"}}},  // 32
-        {"4800", "Amsterdam Centraal", 0, 0, AKN, BVW, {{AMR, true, 29, 34, "4"}, {HLO, true, -1, 39.5, "2"}, {CAS, true, -1, 44.5, "2"}, {UTG, true, -1, 49.5, "4b"}}},  // 33
+        {"4800", "Hoorn", 3, 0, BVW, AKN, {{UTG, true, 70, 71, "4b"}, {CAS, true, -1, 75.5, "1"}, {HLO, true, -1, 81.5, "1"}, {AMR, true, 86, 91, "2"}}},  // 32
+        {"4800", "Amsterdam Centraal", 3, 0, AKN, BVW, {{AMR, true, 29, 34, "4"}, {HLO, true, -1, 39.5, "2"}, {CAS, true, -1, 44.5, "2"}, {UTG, true, -1, 49.5, "4b"}}},  // 33
     };
     std::string log;
     // Een serie zonder route (bijv. een gat in de spoordata) wordt overgeslagen; de rest rijdt gewoon.
