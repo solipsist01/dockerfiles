@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include "../engine/audio.h"
+#include "datastore.h"
 
 namespace {
 const float PI_F = 3.14159265f;
@@ -136,33 +137,69 @@ Announcer::~Announcer() {
     delete (CRITICAL_SECTION*)cs_;
 }
 
-int Announcer::load(const std::string& dir) {
-    WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA((dir + "\\*.wav").c_str(), &fd);
-    if (h == INVALID_HANDLE_VALUE) return 0;
-    int n = 0;
-    do {
-        std::string name = fd.cFileName;
-        std::vector<float> s;
-        if (readWav(dir + "\\" + name, s)) {
-            loudspeaker(s);
-            clips_[name.substr(0, name.size() - 4)] = std::move(s);
-            n++;
-        }
-    } while (FindNextFileA(h, &fd));
-    FindClose(h);
-    return n;
+bool Announcer::has(const std::string& clip) const { return DataStore::known(dir_ + "/" + clip + ".wav"); }
+
+// Ingesproken fragment: stilte aan begin en eind weg (Piper zet er stilte omheen), dan het luidsprekerfilter
+static void trimSilence(std::vector<float>& s) {
+    size_t a = 0, b = s.size();
+    while (a < b && std::fabs(s[a]) < 0.01f) a++;
+    while (b > a && std::fabs(s[b - 1]) < 0.01f) b--;
+    size_t pad = Audio::SAMPLE_RATE / 50;  // 20 ms laten staan
+    a = a > pad ? a - pad : 0;
+    b = std::min(s.size(), b + pad);
+    s = std::vector<float>(s.begin() + a, s.begin() + b);
+}
+
+const std::vector<float>* Announcer::clip(const std::string& rel) {
+    auto it = clips_.find(rel);
+    if (it != clips_.end()) return &it->second;
+    std::string path = DataStore::peek(rel + ".wav");  // niet-blokkerend: "" = nog niet binnen (wordt opgehaald)
+    if (path.empty()) return nullptr;
+    std::vector<float> s;
+    if (!readWav(path, s)) return nullptr;
+    bool fragment = rel.compare(0, 9, "audio/bus") != 0;  // treinomroep: losse fragmenten achter elkaar
+    if (fragment) trimSilence(s);
+    loudspeaker(s);
+    if (fragment) s.resize(s.size() - Audio::SAMPLE_RATE / 3 + Audio::SAMPLE_RATE / 12);  // korte pauze tussen fragmenten
+    return &(clips_[rel] = std::move(s));
 }
 
 void Announcer::say(const std::string& clip, bool gong) {
-    auto it = clips_.find(clip);
-    if (it == clips_.end()) return;
-    EnterCriticalSection((CRITICAL_SECTION*)cs_);
-    if (queue_.size() < 6) {
-        if (gong) queue_.push_back({&gong_, 0, 0.3f});
-        queue_.push_back({&it->second, 0, 0});
+    if (!has(clip)) return;
+    sayParts({dir_ + "/" + clip}, gong);
+}
+
+void Announcer::sayParts(const std::vector<std::string>& parts, bool gong, float maxWait) {
+    if (parts.empty() || pending_.size() > 6) return;
+    pending_.push_back({parts, gong, maxWait});
+    for (const std::string& p : parts) clip(p);  // downloads alvast starten
+}
+
+void Announcer::update(float dt) {
+    // berichten in volgorde: het eerste moet compleet zijn voordat de volgende mogen
+    while (!pending_.empty()) {
+        Pending& p = pending_.front();
+        std::vector<const std::vector<float>*> got;
+        for (const std::string& part : p.parts) {
+            const std::vector<float>* c = clip(part);
+            if (!c && !DataStore::known(part + ".wav")) continue;  // bestaat niet: overslaan
+            got.push_back(c);
+        }
+        bool ready = true;
+        for (auto* c : got) if (!c) ready = false;
+        if (!ready) {
+            p.wait -= dt;
+            if (p.wait < 0) pending_.pop_front();  // te laat binnen: verouderd, vervalt
+            return;
+        }
+        EnterCriticalSection((CRITICAL_SECTION*)cs_);
+        if (queue_.size() < 24 && !got.empty()) {
+            if (p.gong) queue_.push_back({&gong_, 0, 0.3f});
+            for (auto* c : got) queue_.push_back({c, 0, 0});
+        }
+        LeaveCriticalSection((CRITICAL_SECTION*)cs_);
+        pending_.pop_front();
     }
-    LeaveCriticalSection((CRITICAL_SECTION*)cs_);
 }
 
 void Announcer::ding() {
@@ -172,6 +209,7 @@ void Announcer::ding() {
 }
 
 void Announcer::stop() {
+    pending_.clear();
     EnterCriticalSection((CRITICAL_SECTION*)cs_);
     queue_.clear();
     LeaveCriticalSection((CRITICAL_SECTION*)cs_);

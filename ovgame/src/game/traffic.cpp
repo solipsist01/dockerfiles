@@ -1547,7 +1547,15 @@ std::vector<Departure> Traffic::departures(const std::string& station, int n, do
             } else if (t.dep < clock_) {
                 continue;
             }
-            out.push_back({t.dep, s.product(), s.number, s.dest, t.track, tr});
+            Departure d{t.dep, s.product(), s.number, s.dest, t.track, tr};
+            d.arr = t.arr;
+            d.delay = tr ? std::max(0.0f, tr->maxDelay()) : 0.0f;
+            for (int q = k + 1; q < (int)s.stops.size() && d.via.size() < 4; q++)
+                if (s.stops[q].stop && s.stops[q].station != s.dest && q != (int)s.stops.size() - 1) d.via.push_back(s.stops[q].station);
+            if (s.rs) { d.stock = s.rs->typeName; d.cars = s.rs->cars; }
+            d.serviceId = s.id;
+            d.startsHere = k == 0 && (s.startAtStop || s.hasPred);
+            out.push_back(d);
         }
     }
     std::sort(out.begin(), out.end(), [](const Departure& a, const Departure& b) { return a.time < b.time; });

@@ -18,6 +18,14 @@ struct Params {
     float glassY;     // onderkant voorruit
     float sideWin0, sideWin1;  // zijraam (hoogte onder/boven): geen wandpanelen ervoor
     Vec3 wall, desk, floor, seat;
+    // vorm van de neus: binnenkant van de voorruit/kap op hoogte y = noseBase + noseAt(y) (nullptr: recht front op frontZ).
+    // Wanden en zonneklep eindigen op elke hoogte daarbinnen, anders steken ze door een terugwijkende voorruit naar buiten.
+    float (*noseAt)(float y) = nullptr;
+    float (*noseHalfAt)(float y) = nullptr;  // halve breedte van het vlakke front op hoogte y (de neus loopt smal toe)
+    float noseBase = 0;
+    // zijwanden lopen tot het begin van de neus; daar voorbij vormt de neus zelf de wand
+    float wallEnd() const { return noseAt ? std::min(frontZ - 0.3f, noseBase - 0.03f) : frontZ - 0.3f; }
+    float frontLimit(float y) const { return noseAt ? std::min(frontZ, noseBase + noseAt(y) - 0.12f) : frontZ; }
 };
 
 // vlak paneel op het schuine bovenblad van de lessenaar: u = links/rechts (x), v = 0 (machinist) .. 1 (voorruit)
@@ -71,14 +79,25 @@ inline void build(MeshBuilder& op, MeshBuilder& gl, const Params& p) {
     // zijwanden onder en boven het zijraam, plafond met lichtstrook
     for (int s = -1; s <= 1; s += 2) {
         float x = s * (W - 0.02f);
-        op.box({x, (c.floorY + p.sideWin0) / 2, (z0 + zF - 0.3f) / 2}, {0.04f, p.sideWin0 - c.floorY, zF - 0.3f - z0}, p.wall, MAT_PAINT);
-        op.box({x, (p.sideWin1 + p.ceilY) / 2, (z0 + zF - 0.3f) / 2}, {0.04f, p.ceilY - p.sideWin1, zF - 0.3f - z0}, p.wall, MAT_PAINT);
-        op.box({x - s * 0.05f, p.sideWin0 + 0.02f, (z0 + zF - 0.3f) / 2}, {0.10f, 0.03f, zF - 0.3f - z0}, DARK, MAT_PAINT);  // vensterbank
+        const float zw = p.wallEnd();
+        op.box({x, (c.floorY + p.sideWin0) / 2, (z0 + zw) / 2}, {0.04f, p.sideWin0 - c.floorY, zw - z0}, p.wall, MAT_PAINT);
+        // boven het zijraam: in stroken, elk tot waar de neus op die hoogte nog ruimte laat
+        for (int k = 0; k < 4; k++) {
+            float ya = p.sideWin1 + (p.ceilY - p.sideWin1) * k / 4, yb2 = p.sideWin1 + (p.ceilY - p.sideWin1) * (k + 1) / 4;
+            float zb = std::min(zw, p.frontLimit(yb2));
+            if (zb > z0 + 0.05f) op.box({x, (ya + yb2) / 2, (z0 + zb) / 2}, {0.04f, yb2 - ya, zb - z0}, p.wall, MAT_PAINT);
+        }
+        op.box({x - s * 0.05f, p.sideWin0 + 0.02f, (z0 + zw) / 2}, {0.10f, 0.03f, zw - z0}, DARK, MAT_PAINT);  // vensterbank
     }
-    op.box({0, p.ceilY + 0.02f, (z0 + c.deskZ) / 2}, {2 * W, 0.04f, c.deskZ - z0 + 0.4f}, p.wall * 1.05f, MAT_PAINT);
+    {
+        float zc = std::min(c.deskZ + 0.2f, p.frontLimit(p.ceilY + 0.04f));  // plafond: niet voorbij de kap
+        if (p.noseAt) zc = std::min(zc, p.noseBase - 0.03f);                 // in de neus vormt de kap zelf het plafond
+        op.box({0, p.ceilY + 0.02f, (z0 + zc) / 2}, {2 * W, 0.04f, zc - z0}, p.wall * 1.05f, MAT_PAINT);
+    }
     op.box({0, p.ceilY - 0.005f, (z0 + c.deskZ) / 2}, {0.5f, 0.02f, 0.9f}, Vec3(1.3f, 1.27f, 1.18f), MAT_LIGHT);
     // ---- lessenaar ----
     float dw = std::min(W, 1.12f);
+    if (p.noseHalfAt) dw = std::min(dw, p.noseHalfAt(p.deskTopY) - 0.18f);  // lessenaar past in de smaller wordende neus
     op.box({0, (c.floorY + p.deskTopY) / 2 - 0.02f, (c.deskZ + zF) / 2}, {2 * dw, p.deskTopY - c.floorY, zF - c.deskZ}, p.desk, MAT_PAINT);
     deskQuad(op, p, 0, 0.5f, 2 * dw, 1.0f, 0.004f, p.desk * 0.8f, MAT_PAINT);
     // voorrand met handsteun
@@ -107,7 +126,7 @@ inline void build(MeshBuilder& op, MeshBuilder& gl, const Params& p) {
     op.tube({c.seatX - 0.45f, p.deskTopY, c.deskZ + 0.12f}, {c.seatX - 0.45f, p.deskTopY + 0.05f, c.deskZ + 0.12f}, 0.035f, 10, Vec3(0.85f, 0.08f, 0.06f), MAT_PAINT);
     op.box({c.seatX - 0.18f, p.deskTopY + 0.02f, c.deskZ + 0.12f}, {0.07f, 0.03f, 0.05f}, Vec3(0.9f, 0.9f, 0.9f), MAT_PAINT);
     // zonnescherm (rolgordijn) en spiegelbeeld-ruitje
-    op.box({0, p.ceilY - 0.06f, zF - 0.05f}, {2 * dw - 0.2f, 0.08f, 0.06f}, DARK, MAT_PAINT);
+    op.box({0, p.ceilY - 0.06f, std::min(zF, p.frontLimit(p.ceilY - 0.02f)) - 0.05f}, {2 * dw - 0.2f, 0.08f, 0.06f}, DARK, MAT_PAINT);
     (void)gl;
     // ---- bestuurdersstoel ----
     Vec3 sc(c.seatX, c.seatTop, c.seatZ);

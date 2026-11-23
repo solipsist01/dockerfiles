@@ -6,6 +6,7 @@
 #include <sstream>
 #include "../engine/meshbuilder.h"
 #include "announcer.h"
+#include "datastore.h"
 
 using namespace WorldFormat;
 
@@ -1035,8 +1036,7 @@ void BusFleet::writeAnnouncementList(const std::string& dataDir) const {
     if (!f) return;
     int n = 0;
     for (auto& kv : need) {
-        FILE* w = fopen((dataDir + "/audio/bus/" + kv.first + ".wav").c_str(), "rb");
-        if (w) { fclose(w); continue; }
+        if (DataStore::known("audio/bus/" + kv.first + ".wav")) continue;  // al ingesproken (op de server of lokaal)
         fprintf(f, "%s=%s\n", kv.first.c_str(), kv.second.c_str());
         n++;
     }

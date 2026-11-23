@@ -5,6 +5,7 @@
 // Alles wordt opgebouwd in het lokale stationsassenstelsel (u langs de sporen, v naar het noorden).
 #include "station.h"
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <algorithm>
 #include <array>
@@ -914,6 +915,7 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
         pss = n ? sum / n : 25.0f;
     }
     std::vector<SSStair> ssStairs = strijpsStairs(pss);
+    std::set<std::string> overviewDone;  // stations die al een vertrekstaat hebben
     for (const OsmPlatform& p : world.platforms) {
         using P2 = std::array<float, 2>;
         std::vector<std::vector<P2>> poly(1);
@@ -1008,6 +1010,42 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
             trackNo = atoi(nm);
         }
         if (trackNo > 0) {
+            // elektronisch perronbord (PIDS) op twee palen, dwars boven het perron; naam "3/4": voorkant 3, achterkant 4
+            {
+                int second = 0;
+                const char* nm = p.name.c_str();
+                while (*nm && (*nm < '0' || *nm > '9')) nm++;
+                while (*nm >= '0' && *nm <= '9') nm++;
+                while (*nm && (*nm < '0' || *nm > '9')) nm++;
+                if (*nm) second = atoi(nm);
+                auto addBoard = [&](float t, float w, float h, float yc, bool overview, int a, int b) {
+                    BoardSpot bs;
+                    bs.station = st;
+                    bs.trackA = a;
+                    bs.trackB = b;
+                    bs.normal = ax;
+                    bs.across = Vec3(-ax.z, 0, ax.x);
+                    bs.c = Vec3(cx + ax.x * t, p.height + yc, cz + ax.z * t);
+                    bs.w = w;
+                    bs.h = h;
+                    bs.overview = overview;
+                    boards.push_back(bs);
+                    float hd = std::atan2(ax.x, ax.z);
+                    const Vec3 HOUSING(0.12f, 0.12f, 0.13f);
+                    s.op.orientedBox(bs.c, {w + 0.12f, h + 0.12f, 0.12f}, hd, HOUSING, EX_PLAIN);
+                    s.op.orientedBox(bs.c + Vec3(0, h / 2 + 0.09f, 0), {w + 0.16f, 0.05f, 0.16f}, hd, HOUSING * 1.3f, EX_PLAIN);  // kapje
+                    for (int e = -1; e <= 1; e += 2) {
+                        Vec3 foot = bs.c + bs.across * (e * (w / 2 - 0.15f));
+                        foot.y = p.height;
+                        s.op.tube(foot, Vec3(foot.x, bs.c.y - h / 2, foot.z), 0.045f, 8, STEEL_GREY, EX_PLAIN);
+                    }
+                };
+                addBoard(-12.0f, 1.8f, 0.56f, 2.75f, false, trackNo, second);
+                if (!overviewDone.count(st)) {  // een vertrekstaat per station, op het eerste perron met een spoornummer
+                    overviewDone.insert(st);
+                    addBoard(6.0f, 2.3f, 1.15f, 2.55f, true, 0, 0);
+                }
+            }
             tracks.push_back({st, trackNo, cx, cz});
             Vec3 base(cx + ax.x * 15, p.height, cz + ax.z * 15);
             SignRect sr = atlas.add(std::to_string(trackNo), W, NS_BLUE, 96, true, 0.5f);

@@ -95,6 +95,7 @@ typedef ptrdiff_t GLintptr;
     X(void, glDeleteRenderbuffers, (GLsizei n, const GLuint* r)) \
     X(void, glRenderbufferStorageMultisample, (GLenum t, GLsizei samples, GLenum fmt, GLsizei w, GLsizei h)) \
     X(void, glFramebufferRenderbuffer, (GLenum t, GLenum att, GLenum rbt, GLuint rb)) \
+    X(void, glFramebufferTexture2D, (GLenum t, GLenum att, GLenum textarget, GLuint tex, GLint level)) \
     X(GLenum, glCheckFramebufferStatus, (GLenum t)) \
     X(void, glBlitFramebuffer, (GLint sx0, GLint sy0, GLint sx1, GLint sy1, GLint dx0, GLint dy0, GLint dx1, GLint dy1, GLbitfield mask, GLenum filter))
 

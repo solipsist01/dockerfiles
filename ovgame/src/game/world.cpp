@@ -32,6 +32,7 @@ uniform sampler2DArray uGround;    // materiaalkaarten (slots)
 uniform sampler2DArray uCoarse;    // luchtfoto's grove tegels (slots)
 uniform sampler2D uLookup;         // per tegel: fotoslot+1, grondslot+1, grofslot+1
 uniform sampler2D uSigns;          // tekstatlas voor borden
+uniform sampler2D uBoards;         // dynamische bordenatlas (vertrekborden, binnenschermen)
 uniform vec2 uGridOrigin;          // game-oorsprong t.o.v. de zuidwesthoek van het tegelraster (m)
 uniform vec3 uSun, uCam, uFog, uSky, uSunCol;
 uniform float uAmb;                // omgevingslicht (1 = middag, lager bij schemering)
@@ -142,6 +143,12 @@ void main() {
         col = base * (id == 0 ? vec3(0.80 * uAmb) + sunCol * (0.30 * diff) : (ambient * 0.9 + sunCol * diff * 0.55));
     } else if (uMode == 1) {
         vec3 base = vC;
+        if (vE > 6500.0 && vE < 7500.0) {
+            // LCD-bord: licht zelf op (overdag iets minder fel dan het helderste wit, 's nachts goed leesbaar)
+            vec3 t = texture(uBoards, vC.xy).rgb;
+            oColor = vec4(mix(t * 1.05, uFog, fog * 0.85), 1.0);
+            return;
+        }
         if (vE > 4500.0 && vE < 9000.0) {
             vec3 t = texture(uSigns, vC.xy).rgb;
             oColor = vec4(mix(t * 0.95, uFog, fog), 1.0);
@@ -616,6 +623,7 @@ bool World::load(const std::string& dataDir, std::string& error) {
     uCoarse_ = glGetUniformLocation(prog_, "uCoarse");
     uLookup_ = glGetUniformLocation(prog_, "uLookup");
     uSigns_ = glGetUniformLocation(prog_, "uSigns");
+    uBoards_ = glGetUniformLocation(prog_, "uBoards");
     uGridOrigin_ = glGetUniformLocation(prog_, "uGridOrigin");
     uSun_ = glGetUniformLocation(prog_, "uSun");
     uCam_ = glGetUniformLocation(prog_, "uCam");
@@ -893,6 +901,9 @@ void World::beginDraw(const Mat4& viewProj, Vec3 cam) {
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, signTex_);
     glUniform1i(uSigns_, 2);
+    glActiveTexture(GL_TEXTURE5);
+    glBindTexture(GL_TEXTURE_2D, boardTex_ ? boardTex_ : signTex_);
+    glUniform1i(uBoards_, 5);
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D_ARRAY, coarseTex_);
     glUniform1i(uCoarse_, 3);

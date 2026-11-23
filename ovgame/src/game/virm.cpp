@@ -384,7 +384,7 @@ float noseHalfW(float y) {  // halve breedte van het vlakke front
 void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
     std::vector<float> NY;
     for (float y = 0.55f; y < 4.67f; y += 0.07f) NY.push_back(y);
-    for (float y : {0.95f, 1.94f, 2.06f, 3.36f, 4.28f}) NY.push_back(y);
+    for (float y : {0.78f, 0.95f, 1.32f, 1.94f, 2.06f, 3.36f, 4.28f}) NY.push_back(y);
     NY.push_back(4.67f);
     std::sort(NY.begin(), NY.end());
     NY.erase(std::unique(NY.begin(), NY.end(), [](float a, float b) { return std::fabs(a - b) < 0.01f; }), NY.end());
@@ -431,6 +431,7 @@ void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
     // kleur per vlakje (vlak gekleurd, scherpe grenzen)
     auto colorAt = [&](float y, int rg, float t, float ax, float& mat) {
         mat = MAT_PAINT;
+        if (rg == 2 && y > 0.78f && y < 1.32f && ax < 0.36f) return BLACK * 0.5f;  // koppelingsnis (in de neus, niet erbuiten)
         if (y < 0.95f) return SKIRT;
         if (y > 4.28f) return BLACK * 2.0f;
         if (y < 1.95f) return YELLOW;
@@ -479,9 +480,11 @@ void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
     }
     float zf = z0 + noseZ(1.2f);
     // koppelingsnis met Scharfenberg-koppeling, baanschuiver
-    mb.box({0, 1.05f, zf - 0.20f}, {0.95f, 0.70f, 0.42f}, BLACK, MAT_PAINT);
-    mb.box({0, 1.02f, zf + 0.02f}, {0.36f, 0.26f, 0.30f}, STEEL, MAT_METAL);
-    mb.tube({0, 1.02f, zf - 0.30f}, {0, 1.02f, zf - 0.05f}, 0.08f, 10, STEEL * 0.8f, MAT_METAL);
+    // Scharfenberg-kop: stang uit de nis, kop met trechter en contactblok; steekt maar ~15 cm voor de neus uit
+    mb.tube({0, 1.02f, zf - 0.30f}, {0, 1.02f, zf + 0.02f}, 0.07f, 12, STEEL * 0.7f, MAT_METAL);
+    mb.box({0, 1.02f, zf + 0.07f}, {0.28f, 0.22f, 0.10f}, STEEL, MAT_METAL);
+    mb.box({0.06f, 1.05f, zf + 0.125f}, {0.08f, 0.08f, 0.01f}, BLACK, MAT_METAL);   // trechter
+    mb.box({-0.07f, 1.02f, zf + 0.125f}, {0.07f, 0.14f, 0.01f}, Vec3(0.75f, 0.55f, 0.20f), MAT_METAL);  // elektrische contacten
     mb.box({0, 0.62f, z0 + noseZ(0.6f) - 0.05f}, {1.9f, 0.18f, 0.12f}, SKIRT * 0.8f, MAT_PAINT);
     // lampen: koplampen buiten, sluitseinen binnen, toplicht onder de voorruit (uitgeschakeld = donker glas)
     for (int s = -1; s <= 1; s += 2) {
@@ -551,6 +554,7 @@ VirmStock::VirmStock() {
     doorW = DOOR_W;
     height = H;
     nose = NOSE;
+    screenY = BAL_CEIL - 0.28f;
     vmax = 44.4f;  // 160 km/u (materieel); op dit traject begrensd door de baanvaksnelheid
     acc = 0.6f;    // aanzetversnelling (Wikipedia: 0,6 m/s2)
     dec = 0.8f;    // bedrijfsremming (max. 1,2 m/s2)
@@ -859,6 +863,9 @@ void VirmStock::buildCar(int i, SignAtlas& atlas) {
         cp.halfW = 1.30f;
         cp.ceilY = 3.28f;
         cp.frontZ = zEnd + noseZ(2.06f) - 0.12f;
+        cp.noseAt = noseZ;
+        cp.noseHalfAt = noseHalfW;
+        cp.noseBase = zEnd;
         cp.deskTopY = 2.03f;
         cp.glassY = 2.06f;
         cp.sideWin0 = 2.10f;

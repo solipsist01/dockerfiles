@@ -68,6 +68,7 @@ public:
     std::vector<SeatInfo> seats;  // zitplaatsen (lokale rijtuigcoordinaten)
     bool gangwayDoors = false;    // tussendeuren in de kopwanden (VIRM); anders open doorloop (FLIRT)
     CabInfo cab{};                // cabine van de eindrijtuigen (canoniek)
+    float screenY = 2.80f;        // hoogte van de binnenschermen boven de deuren (midden), op doorZ
     // Meshes bouwen; names = alle teksten voor front- en binnendisplays (index = StockDraw::dest/next)
     virtual void build(SignAtlas& atlas, const std::vector<std::string>& names) = 0;
     virtual void drawOpaque(World& w, const StockDraw& s) const = 0;

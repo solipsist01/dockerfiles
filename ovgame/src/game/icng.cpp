@@ -317,7 +317,7 @@ float noseHalfW(float y) {
 void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
     std::vector<float> NY;
     for (float y = 0.42f; y < 4.20f; y += 0.07f) NY.push_back(y);
-    for (float y : {0.55f, 0.70f, 0.98f, 1.08f, 1.30f, 1.80f, 3.40f}) NY.push_back(y);
+    for (float y : {0.55f, 0.58f, 0.70f, 0.98f, 1.02f, 1.08f, 1.30f, 1.80f, 3.40f}) NY.push_back(y);
     NY.push_back(4.20f);
     std::sort(NY.begin(), NY.end());
     NY.erase(std::unique(NY.begin(), NY.end(), [](float a, float b) { return std::fabs(a - b) < 0.01f; }), NY.end());
@@ -359,6 +359,7 @@ void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
             if (y > 1.08f && y < 3.40f) return BANDC;                      // raamband loopt door tot de voorruit
             return YELLOW;
         }
+        if (rg == 2 && y > 0.58f && y < 1.02f && ax < 0.30f) return BLACK;  // koppelingsnis
         if (y < 0.55f) return SKIRT;
         if (y < 1.30f) return YELLOW;                                      // gele neus met lichten
         if (y < 3.40f && ax < noseHalfW(y) - 0.06f && y > 1.80f) { mat = MAT_GLASS; return Vec3(0.03f, 0.035f, 0.04f); }  // voorruit
@@ -397,8 +398,11 @@ void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
         mb.i.insert(mb.i.end(), {i0, i1, i2});
     }
     float zf = z0 + noseZ(0.9f);
-    mb.box({0, 0.82f, zf - 0.10f}, {0.70f, 0.45f, 0.30f}, BLACK, MAT_PAINT);        // koppelingsnis
-    mb.box({0, 0.80f, zf + 0.08f}, {0.34f, 0.24f, 0.30f}, STEEL, MAT_METAL);         // Scharfenberg-koppeling
+    // Scharfenberg-kop uit de (geschilderde) nis: stang, kop met trechter en contactblok
+    mb.tube({0, 0.80f, zf - 0.30f}, {0, 0.80f, zf + 0.02f}, 0.06f, 12, STEEL * 0.7f, MAT_METAL);
+    mb.box({0, 0.80f, zf + 0.06f}, {0.26f, 0.20f, 0.09f}, STEEL, MAT_METAL);
+    mb.box({0.05f, 0.83f, zf + 0.11f}, {0.07f, 0.07f, 0.01f}, BLACK, MAT_METAL);
+    mb.box({-0.06f, 0.80f, zf + 0.11f}, {0.06f, 0.12f, 0.01f}, Vec3(0.75f, 0.55f, 0.20f), MAT_METAL);
     mb.box({0, 0.50f, z0 + noseZ(0.5f) - 0.03f}, {1.9f, 0.16f, 0.10f}, SKIRT * 0.8f, MAT_PAINT);  // baanschuiver
     for (int s = -1; s <= 1; s += 2) {
         float y = 1.12f, z = z0 + noseZ(y);
@@ -444,6 +448,7 @@ IcngStock::IcngStock() {
     doorW = DOOR_W;
     height = H;
     nose = NOSE;
+    screenY = CEIL - 0.26f;
     vmax = 55.6f;  // 200 km/u (materieel); op dit traject begrensd door de baanvaksnelheid
     acc = 1.0f;
     dec = 0.9f;
@@ -598,6 +603,9 @@ void IcngStock::buildCar(int i, SignAtlas& atlas) {
         cp.halfW = 1.22f;
         cp.ceilY = 2.95f;
         cp.frontZ = zEnd + noseZ(1.95f) - 0.10f;
+        cp.noseAt = noseZ;
+        cp.noseHalfAt = noseHalfW;
+        cp.noseBase = zEnd;
         cp.deskTopY = 1.92f;
         cp.glassY = 1.95f;
         cp.sideWin0 = 1.95f;

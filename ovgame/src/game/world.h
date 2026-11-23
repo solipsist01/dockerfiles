@@ -43,6 +43,7 @@ constexpr float EX_PLAIN = -2000.0f;
 constexpr float EX_GLASS = -5000.0f;
 constexpr float EX_LIGHT = -6000.0f;
 constexpr float EX_SIGN = 5000.0f;     // kleur = (u, v, 0) in de tekstatlas
+constexpr float EX_BOARD = 7000.0f;    // kleur = (u, v, 0) in de bordenatlas (dynamisch: vertrekborden, binnenschermen), zelf-oplichtend
 constexpr float EX_TRACKBED = 10000.0f; // + afstand langs het spoor
 
 // Shader-modi
@@ -86,6 +87,7 @@ public:
     std::vector<WorldFeature> features;
     std::vector<BusRoute> busRoutes;
     void setSignTexture(GLuint t) { signTex_ = t; }
+    void setBoardTexture(GLuint t) { boardTex_ = t; }
     // een andere tekstatlas binden op de bordeneenheid (0 = de gedeelde atlas); alleen tussen beginDraw en het einde van de scene
     void bindSignTexture(GLuint t) const {
         glActiveTexture(GL_TEXTURE2);
@@ -144,7 +146,8 @@ private:
     // GPU-slots
     static constexpr int PHOTO_SLOTS = 56, GROUND_SLOTS = 24, COARSE_SLOTS = 176;
     std::vector<int> freePhoto_, freeGround_, freeCoarse_;
-    GLuint photoTex_ = 0, groundTex_ = 0, coarseTex_ = 0, lookupTex_ = 0, signTex_ = 0;
+    GLuint photoTex_ = 0, groundTex_ = 0, coarseTex_ = 0, lookupTex_ = 0, signTex_ = 0, boardTex_ = 0;
+    GLint uBoards_ = -1;
     std::vector<float> lookup_;  // per rastercel: fotoslot+1, grondslot+1, grofslot+1, 0
     bool lookupDirty_ = true;
     int photoLevels_ = 0;

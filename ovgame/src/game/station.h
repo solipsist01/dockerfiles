@@ -28,6 +28,16 @@ struct PlatformInfo {
     float x, z;           // een punt op de perronrand bij dit spoor
 };
 
+// Plek van een elektronisch NS-bord (zie boards.h). Bord in het verticale vlak: breedte langs 'across', voor- en achterkant
+// kijken langs +normal / -normal. Perronbord: voorkant toont trackA, achterkant trackB (0 = zelfde als trackA).
+struct BoardSpot {
+    std::string station;
+    int trackA = 0, trackB = 0;
+    Vec3 c, normal, across;
+    float w = 1.8f, h = 0.56f;
+    bool overview = false;  // vertrekstaat in plaats van perronbord
+};
+
 class Stations {
 public:
     void build(const World& world, Collision& col, SignAtlas& atlas);
@@ -38,6 +48,7 @@ public:
     float platformY = 21.1f;          // perronhoogte Eindhoven Centraal
     std::vector<Elevator> elevators;
     std::vector<PlatformInfo> tracks;  // spoorposities voor treinen
+    std::vector<BoardSpot> boards;     // elektronische borden (vertrekinformatie)
     // Is de positie in/bij Eindhoven Centraal? (voor de HUD)
     bool nearCentraal(Vec3 p) const;
     // omtrek van de eilandperrons van Eindhoven Centraal (game x, z) voor de kaart

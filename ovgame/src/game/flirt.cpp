@@ -396,8 +396,11 @@ void buildNose(MeshBuilder& mb, MeshBuilder& gl, float z0) {
         mb.i.insert(mb.i.end(), {i0, i1, i2});
     }
     float zf = z0 + noseZ(0.9f);
-    mb.box({0, 0.82f, zf - 0.10f}, {0.80f, 0.55f, 0.30f}, BLACK, MAT_PAINT);        // koppelingsnis
-    mb.box({0, 0.80f, zf + 0.08f}, {0.34f, 0.24f, 0.30f}, STEEL, MAT_METAL);         // Scharfenberg-koppeling
+    // Scharfenberg-kop uit de (geschilderde) nis: stang, kop met trechter en contactblok
+    mb.tube({0, 0.80f, zf - 0.30f}, {0, 0.80f, zf + 0.02f}, 0.06f, 12, STEEL * 0.7f, MAT_METAL);
+    mb.box({0, 0.80f, zf + 0.06f}, {0.26f, 0.20f, 0.09f}, STEEL, MAT_METAL);
+    mb.box({0.05f, 0.83f, zf + 0.11f}, {0.07f, 0.07f, 0.01f}, BLACK, MAT_METAL);
+    mb.box({-0.06f, 0.80f, zf + 0.11f}, {0.06f, 0.12f, 0.01f}, Vec3(0.75f, 0.55f, 0.20f), MAT_METAL);
     mb.box({0, 0.50f, z0 + noseZ(0.5f) - 0.03f}, {1.9f, 0.16f, 0.10f}, SKIRT * 0.8f, MAT_PAINT);  // baanschuiver
     for (int s = -1; s <= 1; s += 2) {
         float y = 1.18f, z = z0 + noseZ(y);
@@ -443,6 +446,7 @@ FlirtStock::FlirtStock() {
     doorW = DOOR_W;
     height = H;
     nose = NOSE;
+    screenY = CEIL - 0.26f;
     vmax = 44.4f;  // 160 km/u (materieel); op dit traject begrensd door de baanvaksnelheid
     acc = 1.2f;    // aanzetversnelling FLIRT (Stadler: 1,2 m/s2)
     dec = 0.9f;
@@ -596,6 +600,9 @@ void FlirtStock::buildCar(int i, SignAtlas& atlas) {
         cp.halfW = 1.22f;
         cp.ceilY = 2.95f;
         cp.frontZ = zEnd + noseZ(1.95f) - 0.10f;
+        cp.noseAt = noseZ;
+        cp.noseHalfAt = noseHalfW;
+        cp.noseBase = zEnd;
         cp.deskTopY = 1.92f;
         cp.glassY = 1.95f;
         cp.sideWin0 = 1.95f;

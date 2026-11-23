@@ -527,7 +527,7 @@ void Train::drawOpaque(World& world) const {
         next = svc_->stopIdx[target_];
     }
     if (next < 0) next = svc_->destIdx;
-    StockDraw sd{this, doorOpen_, doorSide_, svc_->destIdx, next, flipped_ ? 1 : 0, gang_.empty() ? nullptr : gang_.data()};
+    StockDraw sd{this, doorOpen_, doorSide_, svc_->destIdx, richScreens ? -1 : next, flipped_ ? 1 : 0, gang_.empty() ? nullptr : gang_.data()};
     sd.cabDoor[0] = cabDoor_[0];
     sd.cabDoor[1] = cabDoor_[1];
     sd.lever = manual_ ? (notch_ > 0 ? notch_ / 4.0f : notch_ / 7.0f) : 0.0f;

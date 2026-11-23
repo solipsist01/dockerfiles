@@ -38,6 +38,8 @@
 #include "../engine/text.h"
 #include "busstation.h"
 #include "announcer.h"
+#include "boards.h"
+#include "omroep.h"
 #include "character.h"
 #include "citybus.h"
 #include "people.h"
@@ -190,6 +192,8 @@ int main(int argc, char** argv) {
     int spawn = 1, rideTrain = 0, rideBus = 0, startMinutes = -1;
     float mapScale = 0, forceY = -1e9f;
     float tv[6] = {-1, 0, 0, 10, 0, 2};  // --tv trein rijtuig lz afstand hoek hoogte (testcamera)
+    std::string tvType;
+    Train* tvTrain = nullptr;            // testcamera: deze trein krijgt de binnenschermen (alsof de speler erin zit)
     const char* shotPath = nullptr;
     const char* rideDest = nullptr;
     std::string serverArg, passwordArg;
@@ -227,6 +231,7 @@ int main(int argc, char** argv) {
         else if (arg("--mapscale")) mapScale = (float)atof(argv[++i]);
         else if (arg("--y")) forceY = (float)atof(argv[++i]);
         else if (strcmp(argv[i], "--tv") == 0 && i + 6 < argc) { for (int k = 0; k < 6; k++) tv[k] = (float)atof(argv[++i]); direct = true; }
+        else if (arg("--tvtype")) { tvType = argv[++i]; direct = true; }
     }
     if (shotPath && !shotMenu) direct = true;
 
@@ -402,15 +407,21 @@ int main(int argc, char** argv) {
         GetLocalTime(&st);
         buses.build(world, atlas, dataDir, st.wDayOfWeek);  // dienstregeling van vandaag (ma-vr / za / zo)
     }
-    Announcer announcer;
-    {
-        int n = announcer.load(dataDir + "\\audio\\bus");
-        if (n == 0) printf("Geen omroepbestanden in %s\\audio\\bus\n", dataDir.c_str());
-    }
+    Omroep omroep;                // treinomroep: station en trein (fragmenten uit audio/trein)
+    Announcer announcer;          // bus: fragmenten uit audio/bus, op aanvraag van de server (DataStore)
+    announcer.setDir("audio/bus");
     buses.setAnnouncer(&announcer);
     for (int i = 1; i < argc; i++)  // test: omroep (met gong en filter) naar een WAV-bestand: --dumpclip naam bestand
         if (strcmp(argv[i], "--dumpclip") == 0 && i + 2 < argc) {
-            announcer.say(argv[i + 1]);
+            // fragment (of "deel1|deel2|..." als treinomroep, paden relatief aan data\\) ophalen en afspelen
+            std::string a = argv[i + 1];
+            if (a.find('/') == std::string::npos) announcer.say(a);
+            else {
+                std::vector<std::string> parts;
+                for (size_t q = 0, e; q <= a.size(); q = e + 1) { e = a.find('|', q); if (e == std::string::npos) e = a.size(); parts.push_back(a.substr(q, e - q)); }
+                announcer.sayParts(parts);
+            }
+            for (int w = 0; w < 600 && !announcer.busy(); w++) { announcer.update(0.0f); Sleep(20); }
             std::vector<float> buf;
             std::vector<float> blk(2 * 1024);
             while (announcer.busy() && buf.size() < 44100 * 2 * 30) {
@@ -441,6 +452,9 @@ int main(int argc, char** argv) {
     fflush(stdout);
     if (!trainOk && !shotPath) Platform::showError(err.c_str());
     world.setSignTexture(atlas.finish());
+    Boards boards;  // elektronische NS-borden en binnenschermen (dynamische textuur)
+    if (!boards.init()) printf("Borden: framebuffer niet compleet\n");
+    world.setBoardTexture(boards.texture());
     MapView map;
     map.init(dataDir, world);
     map.addPlatforms(stations.centraalPlatforms());
@@ -479,6 +493,7 @@ int main(int argc, char** argv) {
     bool audioOn = !shotPath && Audio::init([&](float* o, int n) {
         for (int k = 0; k < SOUND_SLOTS; k++) trainSound[k].mix(o, n);
         announcer.mix(o, n);
+        omroep.mix(o, n);
     });
 
     Player player;
@@ -953,6 +968,7 @@ int main(int argc, char** argv) {
         }
         fallbackClock += wdt;
         buses.update(wdt, trainOk ? traffic.clock() : fallbackClock, player.pos, player.vehicle, player.seat >= 0);
+        announcer.update(wdt);
         if (trainOk)
             tpeople.update(dt, traffic.trains(), traffic.clock(), player.pos, player.vehicle, player.car, player.lx, player.lz, collision, people.poolSize());
         buses.addCollision(collision, player.pos);
@@ -1158,9 +1174,23 @@ int main(int argc, char** argv) {
                 }
                 if (wf) fclose(wf);
             }
+        if (!tvType.empty()) {
+            // eerst een stilstaande trein van dit type (bij een perron), anders de eerste die rijdt
+            int pick = -1;
+            for (int pass = 0; pass < 2 && pick < 0; pass++)
+                for (size_t k = 0; k < traffic.trains().size(); k++) {
+                    const Train* t = traffic.trains()[k];
+                    if (t->stock().typeName != tvType || (pass == 0 && !t->stopped())) continue;
+                    pick = (int)k;
+                    break;
+                }
+            if (pick >= 0) tv[0] = (float)pick;
+            if (tv[0] < 0) printf("Geen trein van type %s gevonden\n", tvType.c_str());
+        }
         if (tv[0] >= 0 && (int)tv[0] < (int)traffic.trains().size()) {
             // testcamera: kijk op punt (rijtuig, lz) van trein tv[0], vanaf afstand/hoek/hoogte
             Train* t = traffic.trains()[(int)tv[0]];
+            tvTrain = t;
             int car = std::min((int)tv[1], t->carCount() - 1);
             Vec3 target = t->carToWorld(car, 0, 2.0f, tv[2]);
             CarPose cp = t->carPose(car);
@@ -1641,11 +1671,18 @@ int main(int argc, char** argv) {
                 }
                 return world.visible(mn, mx);
             };
+            // borden: vóór de scene in hun textuur tekenen (eigen framebuffer)
+            Train* screenTrain = inTrain ? inTrain : tvTrain;
+            if (trainOk) omroep.update(dt, traffic, world, inTrain, player.pos, traffic.clock());
+            boards.update(stations.boards, traffic, eye, trainOk ? traffic.clock() : fallbackClock, text, screenTrain, dt);
             renderer.beginScene(world.skyColor);
             world.beginDraw(vp, eye);
             world.drawStatic();
             railways.draw(world);
             if (!noStations) stations.drawOpaque(world);
+            if (!noStations) boards.draw(world);
+            for (Train* t : traffic.trains()) t->richScreens = t == screenTrain;
+            if (screenTrain) boards.drawRide(world, *screenTrain);
             busStation.draw(world);
             buses.drawOpaque(world, eye, trainOk ? traffic.clock() : fallbackClock);
             for (Train* t : traffic.trains()) {
@@ -2310,6 +2347,8 @@ int main(int argc, char** argv) {
 
         if (!shotPath || world.streamingIdle()) frame++;
         if (shotPath && frame >= shotFrames) {
+            for (int i = 1; i + 1 < argc; i++)
+                if (!strcmp(argv[i], "--dumpboards")) boards.dump(argv[i + 1]);
             renderer.saveScreenshot(shotPath);
             break;
         }

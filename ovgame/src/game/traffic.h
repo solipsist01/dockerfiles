@@ -28,6 +28,14 @@ struct Departure {
     std::string dest;
     int track;
     const Train* train;   // de trein als hij al rijdt (anders nullptr)
+    // voor borden en omroep
+    double arr = 0;                 // geplande aankomst hier
+    float delay = 0;                // verwachte vertraging (s), uit wat de trein tot nu toe aan vertraging heeft
+    std::vector<std::string> via;   // volgende haltes waar hij stopt (zonder de eindbestemming), hooguit 4
+    std::string stock;              // materieel (VIRMm, FLIRT, ICNG, ...)
+    int cars = 0;                   // aantal bakken
+    int serviceId = 0;
+    bool startsHere = false;        // begint hier (kopmaken / opstelspoor)
 };
 
 class Traffic {

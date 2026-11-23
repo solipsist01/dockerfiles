@@ -5,9 +5,9 @@ package main
 // Client (wat de launcher naar de speler kopieert, /api/client: per regel "crc32 grootte pad"):
 //   OVGame.exe, OVLauncher.exe     uit CLIENT_BIN (in de image gebouwd)
 //   data/world/world.bin, map.bin  uit GAME_DATA (de data-map van de game, read-only gemount)
-//   data/bus/*.txt, data/audio/**
+//   data/bus/*.txt
 // Stream (tijdens het spelen, /api/world: per regel "crc32 grootte z pad"; z = 1: zlib-gecomprimeerd geleverd):
-//   world/tiles/*.bin, raw/luchtfoto/*.jpg, raw/luchtfoto_lo/*.jpg  uit GAME_DATA
+//   world/tiles/*.bin, raw/luchtfoto/*.jpg, raw/luchtfoto_lo/*.jpg, audio/**/*.wav  uit GAME_DATA
 // cache/ (in DATA): gecomprimeerde tegels + index, zodat een herstart niet alles opnieuw hoeft te doen.
 
 import (
@@ -155,7 +155,6 @@ func (s *FileStore) clientSources() []source {
 		{"data/bus/", filepath.Join(gd, "bus"), func(r string) bool {
 			return strings.HasSuffix(r, ".txt") && !strings.Contains(r, "/") && r != "omroep_nieuw.txt"
 		}},
-		{"data/audio/", filepath.Join(gd, "audio"), nil},
 	}
 }
 
@@ -165,6 +164,8 @@ func (s *FileStore) streamSources() []source {
 		{"world/tiles/", filepath.Join(gd, "world", "tiles"), ext(".bin")},
 		{"raw/luchtfoto/", filepath.Join(gd, "raw", "luchtfoto"), ext(".jpg")},
 		{"raw/luchtfoto_lo/", filepath.Join(gd, "raw", "luchtfoto_lo"), ext(".jpg")},
+		// omroep (bus, trein, station): niet vooraf, de game haalt een fragment pas op als het omgeroepen wordt
+		{"audio/", filepath.Join(gd, "audio"), ext(".wav")},
 	}
 }
 

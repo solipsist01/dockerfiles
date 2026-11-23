@@ -54,6 +54,7 @@ struct TrainSoundState {
 
 class Train : public Vehicle {
 public:
+    bool richScreens = false;  // speler zit erin: de binnenschermen tekent de game (Boards), niet de vaste "Volgende station"
     void start(const Service* s, const Collision& col);
     // Een stap: authority = maximale positie van de kop langs het pad (beveiliging); clock = huidige tijd.
     void update(float dt, double clock, float authority, const Collision& col);
