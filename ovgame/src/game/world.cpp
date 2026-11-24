@@ -1,4 +1,5 @@
 ﻿#include "world.h"
+#include "zwolle.h"
 #include "datastore.h"
 #include <algorithm>
 #include <cstdio>
@@ -191,6 +192,28 @@ void main() {
             float band = step(0.5, fract(floor(q.y) / 6.0 + 0.01)) * 0.08;
             base = mix(vC, vC * vec3(0.78, 0.66, 0.55), chk * 0.6) * (0.95 + band);
             base = mix(base, vec3(0.45), joints(q, vec2(0.03)) * 0.5);
+        } else if (vE < -8700.0 && vE > -8900.0) {
+            oColor = vec4(mix(vC * (0.80 + 0.15 * uAmb), uFog, fog), 1.0);  // binnen (tunnel): egaal kunstlicht
+            return;
+        } else if (vE < -7900.0 && vE > -8100.0) {
+            // mozaiek (tunnel Zwolle): tegeltjes van 2,5 cm, matglanzend, licht wisselend per tegel; vC = kleur van de laag
+            vec2 t = normalize(vec2(-n.z, n.x) + vec2(1e-5));
+            vec2 q = vec2(dot(vW.xz, t), vW.y) / 0.025;
+            float fw = max(fwidth(q.x), fwidth(q.y));
+            float var = (hash12(floor(q)) - 0.5) * 0.07 * (1.0 - smoothstep(0.3, 1.0, fw));
+            base = vC * (1.0 + var);
+            base = mix(base, base * 0.82, joints(q, vec2(0.08)) * (1.0 - smoothstep(0.2, 0.6, fw)));
+            oColor = vec4(mix(base * (0.80 + 0.15 * uAmb), uFog, fog), 1.0);  // binnen: kunstlicht, geen zon
+            return;
+        } else if (vE < -8400.0 && vE > -8600.0) {
+            // tegelvloer 60 x 60 cm (natuursteen/beton), vC = basiskleur
+            vec2 q = vW.xz / 0.6;
+            float fw = max(fwidth(q.x), fwidth(q.y));
+            float var = (hash12(floor(q)) - 0.5) * 0.06 + (vnoise(vW.xz * 9.0) - 0.5) * 0.05;
+            base = vC * (1.0 + var);
+            base = mix(base, base * 0.7, joints(q, vec2(0.012)) * (1.0 - smoothstep(0.1, 0.5, fw)));
+            oColor = vec4(mix(base * (0.80 + 0.15 * uAmb), uFog, fog), 1.0);  // binnen: kunstlicht
+            return;
         } else if (vE < -500.0 && vE > -1500.0 && n.y > 0.3) {
             base = mix(photo(vW) * 1.05, vC, 0.2);   // daken: luchtfoto
         } else if (vE > -500.0 && abs(n.y) < 0.4) {
@@ -348,6 +371,34 @@ unsigned long __stdcall World::threadMain(void* p) {
                     }
                 }
                 r->ok = true;
+                // station Zwolle: BGT-vlakken in de trapgaten en de oude (platte) kappen weglaten; de eigen tunnel en
+                // kappen staan in zwollestation.cpp
+                if (!job.groundOnly && t.detail && Zwolle::isNear(t.x + TILE / 2.0, t.y + TILE / 2.0, TILE)) {
+                    const float sp = (float)TILE / (n - 1);
+                    auto terrainH = [&](double rx, double ry) {
+                        float fx = (float)std::max(0.0, std::min((double)n - 1.001, (rx - t.x) / sp));
+                        float fy = (float)std::max(0.0, std::min((double)n - 1.001, (t.y + TILE - ry) / sp));
+                        int i = (int)fx, j = (int)fy;
+                        float tx = fx - i, ty = fy - j;
+                        auto H = [&](int a, int b2) { return r->h[(size_t)b2 * n + a]; };
+                        return (H(i, j) * (1 - tx) + H(i + 1, j) * tx) * (1 - ty) + (H(i, j + 1) * (1 - tx) + H(i + 1, j + 1) * tx) * ty;
+                    };
+                    for (int g = 0; g < 3; g++)
+                        for (size_t k = 0; k < r->mv[g].size(); k++) {
+                            const std::vector<Vertex>& vv = r->mv[g][k];
+                            std::vector<uint32_t>& ix = r->mi[g][k];
+                            std::vector<uint32_t> keep;
+                            keep.reserve(ix.size());
+                            for (size_t q = 0; q + 2 < ix.size(); q += 3) {
+                                const Vertex &a = vv[ix[q]], &b2 = vv[ix[q + 1]], &c = vv[ix[q + 2]];
+                                float cx = (a.px + b2.px + c.px) / 3, cy = (a.py + b2.py + c.py) / 3, cz = (a.pz + b2.pz + c.pz) / 3;
+                                const double trx[3] = {rdX(a.px), rdX(b2.px), rdX(c.px)}, tryy[3] = {rdY(a.pz), rdY(b2.pz), rdY(c.pz)};
+                                if (Zwolle::cutTriangle(trx, tryy, cy - terrainH(rdX(cx), rdY(cz)))) continue;
+                                keep.insert(keep.end(), {ix[q], ix[q + 1], ix[q + 2]});
+                            }
+                            ix.swap(keep);
+                        }
+                }
                 if (!job.groundOnly) {
                     // ---- terreinmesh (met gaten en randschort) ----
                     const float sp = (float)TILE / (n - 1);
@@ -367,10 +418,12 @@ unsigned long __stdcall World::threadMain(void* p) {
                             r->tv.push_back(vx);
                         }
                     const int Q = n - 1;
+                    const bool zw = detail && Zwolle::isNear(t.x + TILE / 2.0, t.y + TILE / 2.0, TILE);  // station Zwolle: tunnelgaten
                     for (int j = 0; j < Q; j++)
                         for (int i = 0; i < Q; i++) {
                             size_t b = (size_t)j * Q + i;
                             if (!holes.empty() && b / 8 < holes.size() && (holes[b / 8] >> (b % 8) & 1)) continue;
+                            if (zw && Zwolle::cut(t.x + (i + 0.5) * sp, t.y + TILE - (j + 0.5) * sp, 0.0f)) continue;
                             uint32_t a = j * n + i, bb = a + 1, c = a + n, d = c + 1;
                             r->ti.insert(r->ti.end(), {a, c, bb, bb, c, d});
                         }
@@ -678,6 +731,8 @@ const World::HeightTile* World::heightTile(int idx) const {
 
 float World::heightAt(float x, float z) const {
     double rx = rdX(x), ry = rdY(z);
+    // Zwolle: in de trapgaten en opgangen is geen terrein (daar lopen trappen en roltrappen naar de tunnel)
+    if (Zwolle::isNear(rx, ry, 0) && Zwolle::cut(rx, ry, 0.0f)) return -10.0f;
     int idx = findTile(rx, ry);
     if (idx < 0) return 17.0f;
     const HeightTile* ht = heightTile(idx);

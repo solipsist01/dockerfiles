@@ -4,6 +4,7 @@
 #include <vector>
 #include "../engine/meshbuilder.h"
 #include "collision.h"
+#include "escalator.h"
 #include "signs.h"
 #include "world.h"
 
@@ -59,8 +60,11 @@ public:
     // Utrecht Centraal (utrechtstation.cpp): startpunten in de hal en op perron 18/19, hoogte van de halvloer
     Vec3 utrechtHall, utrechtPlatform;
     float utrechtHallY = 0;
+    // Zwolle (zwollestation.cpp): startpunt in de reizigerstunnel
+    Vec3 zwolleTunnel;
 
 private:
     std::vector<Mesh> opaque_, glass_;
     std::vector<StationDoor> doors_;
+    Escalators escalators_;  // roltrappen met bewegende treden (Eindhoven Centraal, Zwolle)
 };

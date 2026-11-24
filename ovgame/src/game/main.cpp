@@ -159,6 +159,7 @@ static const Spawn SPAWNS[] = {
     {"Castricum - Perron", 0, 0, 1, 0, 4},
     {"Heiloo - Perron", 0, 0, 1, 0, 4},
     {"Alkmaar - Perron", 0, 0, 1, 0, 4},
+    {"Zwolle - Reizigerstunnel", 0, 0, 0, 0, 6},
 };
 static const int NSPAWN = sizeof(SPAWNS) / sizeof(SPAWNS[0]);
 
@@ -538,6 +539,11 @@ int main(int argc, char** argv) {
             Vec3 q = s.level == 0 ? stations.utrechtHall : stations.utrechtPlatform;
             x = q.x; z = q.z; y = q.y;
             p.yaw = s.level == 0 ? -2.62f : 0.52f;
+        } else if (s.frame == 6) {
+            // Zwolle: in de reizigerstunnel (zwollestation.cpp), kijkend naar het zuiden
+            Vec3 q = stations.zwolleTunnel;
+            x = q.x; z = q.z; y = q.y;
+            p.yaw = 210.0f * PI / 180.0f;
         } else if (s.frame == 4) {
             // station langs de lijn: op het grootste perron, bij het punt dat het dichtst bij het stationsmidden ligt
             std::string st = std::string(s.name).substr(0, std::string(s.name).find(" - "));

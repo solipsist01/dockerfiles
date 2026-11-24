@@ -42,6 +42,9 @@ struct BusRoute { std::string ref, name; std::vector<BusRoutePoint> pts; std::ve
 constexpr float EX_PLAIN = -2000.0f;
 constexpr float EX_GLASS = -5000.0f;
 constexpr float EX_LIGHT = -6000.0f;
+constexpr float EX_MOSAIC = -8000.0f;   // mozaiektegeltjes 2,5 cm (wanden), vC = kleur
+constexpr float EX_TILEFLOOR = -8500.0f;  // vloertegels 60 cm, vC = kleur (binnen: kunstlicht)
+constexpr float EX_INDOOR = -8800.0f;     // egaal kunstlicht (tunnelplafonds, trappen binnen)
 constexpr float EX_SIGN = 5000.0f;     // kleur = (u, v, 0) in de tekstatlas
 constexpr float EX_BOARD = 7000.0f;    // kleur = (u, v, 0) in de bordenatlas (dynamisch: vertrekborden, binnenschermen), zelf-oplichtend
 constexpr float EX_TRACKBED = 10000.0f; // + afstand langs het spoor

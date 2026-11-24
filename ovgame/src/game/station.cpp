@@ -10,11 +10,14 @@
 #include <algorithm>
 #include <array>
 #include "../third_party/earcut.hpp"
+#include "zwolle.h"
 
 using namespace WorldFormat;
 
 void buildUtrechtCentraal(const World& world, Collision& col, SignAtlas& atlas, MeshBuilder& op, MeshBuilder& gl,
                           std::vector<Elevator>& elevators, Vec3& hallSpawn, Vec3& platformSpawn, float& hallY);
+void buildZwolle(const World& world, Collision& col, SignAtlas& atlas, MeshBuilder& op, MeshBuilder& gl, std::vector<Elevator>& elevators,
+                 Escalators& esc, std::vector<BoardSpot>& boards, Vec3& tunnelSpawn);
 void buildBestStation(const World& world, Collision& col, SignAtlas& atlas, MeshBuilder& op, MeshBuilder& gl,
                       std::vector<Elevator>& elevators, Vec3& center, float& platformY, float& hallY);
 
@@ -47,7 +50,7 @@ const float TRACK_V[7] = {0, -30.68f, -11.73f, -7.23f, 7.99f, 12.94f, 30.37f};
 
 // Openingen in een perron (trappen, roltrappen, lift)
 const float STAIR_U0 = -10.2f, STAIR_U1 = -0.6f, STAIR_W = 2.6f, STAIR_OFF = 3.1f, STAIR_HOLE_U0 = -8.2f;
-const float ESC_U0 = 6.0f, ESC_U1 = 15.6f, ESC_HOLE_U0 = 8.0f;
+const float ESC_U1 = 15.6f, ESC_HOLE_U0 = 6.5f, ESC_HALF = 1.75f;  // roltrappen: bovenste kam op ESC_U1
 const float LIFT_U0 = -14.6f, LIFT_U1 = -12.2f;
 
 struct Rect { float u0, u1, v0, v1; };
@@ -390,6 +393,13 @@ void platformDetails(SB& s, const World& world, const OsmPlatform& p, const std:
     };
     // Strijp-S: niet bij de trapgaten
     auto nearStairs = [&](Vec3 c) {
+        if (station == "Zwolle") {
+            float u, v;
+            Zwolle::local(rdX(c.x), rdY(c.z), u, v);
+            for (float du : {-2.5f, 0.0f, 2.5f})
+                if (Zwolle::inOpening(u + du, v) || Zwolle::inOpening(u + du, v - 1.5f) || Zwolle::inOpening(u + du, v + 1.5f)) return true;
+            return false;
+        }
         if (station != "Eindhoven Strijp-S") return false;
         float u, v;
         strijpsLocal(rdX(c.x), rdY(c.z), u, v);
@@ -476,7 +486,7 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
         float c = (is.v0 + is.v1) / 2;
         holes.push_back({STAIR_HOLE_U0, STAIR_U1, c - STAIR_OFF - STAIR_W / 2, c - STAIR_OFF + STAIR_W / 2});
         holes.push_back({STAIR_HOLE_U0, STAIR_U1, c + STAIR_OFF - STAIR_W / 2, c + STAIR_OFF + STAIR_W / 2});
-        holes.push_back({ESC_HOLE_U0, ESC_U1, c - 1.4f, c + 1.4f});
+        holes.push_back({ESC_HOLE_U0, ESC_U1, c - ESC_HALF, c + ESC_HALF});
         holes.push_back({LIFT_U0, LIFT_U1, c - 1.2f, c + 1.2f});
     }
     // lichtgevend folieplafond: lichte vlakken met donkere naden
@@ -575,34 +585,16 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
             // dicht onder de trap (berging)
             s.box(-6.7f, STAIR_U1, va, vb, F, F + 2.0f, WALL_PANEL, EX_PLAIN, true);
         }
-        // -- roltrappen (op = -0,65, af = +0,65) --
+        // -- roltrappen (links omhoog, rechts omlaag): echte roltrappen met bewegende treden (escalator.cpp) --
         for (int dir = -1; dir <= 1; dir += 2) {
-            float ve = c + dir * 0.65f;
-            float va = ve - 0.55f, vb = ve + 0.55f;
-            const int N = 24;
-            for (int st = 0; st < N; st++) {
-                float u0 = ESC_U0 + (ESC_U1 - ESC_U0) * st / N, u1 = ESC_U0 + (ESC_U1 - ESC_U0) * (st + 1) / N;
-                float y1 = F + (P - F) * (st + 1) / N;
-                s.box(u0, u1 + 0.01f, va, vb, y1 - 0.25f, y1, st % 2 ? Vec3(0.25f, 0.25f, 0.27f) : Vec3(0.35f, 0.35f, 0.37f));
-            }
-            // landingsplaten
-            s.box(ESC_U0 - 1.2f, ESC_U0, va, vb, F, F + 0.03f, STEEL_GREY);
-            s.box(ESC_U1, ESC_U1 + 1.2f, va, vb, P, P + 0.03f, STEEL_GREY);
-            Vec3 cc = s.P((ESC_U0 + ESC_U1) / 2, ve, 0);
-            col.addFloor({cc.x, cc.z, s.U.x, s.U.z, (ESC_U1 - ESC_U0) / 2, 0.55f, F, P, dir < 0 ? 0.55f : -0.55f});
-            // zijpanelen (staal) met glazen balustrade
-            for (float side : {va - 0.1f, vb + 0.1f}) {
-                for (int seg = 0; seg < 8; seg++) {
-                    float ua = ESC_U0 + (ESC_U1 - ESC_U0) * seg / 8, ub = ESC_U0 + (ESC_U1 - ESC_U0) * (seg + 1) / 8;
-                    float ya = F + (P - F) * seg / 8, yb = F + (P - F) * (seg + 1) / 8;
-                    s.box(ua, ub, side - 0.08f, side + 0.08f, ya - 0.5f, yb + 0.05f, STEEL_GREY);
-                    s.glassBox(ua, ub, side - 0.02f, side + 0.02f, ya, yb + 0.95f, false);
-                    s.addBoxCollision(ua, ub, side - 0.08f, side + 0.08f, F, yb + 1.0f);
-                }
-                Vec3 a = s.P(ESC_U0 - 0.5f, side, F + 0.95f), b2 = s.P(ESC_U1 + 0.5f, side, P + 0.95f);
-                s.op.tube(a, b2, 0.04f, 6, Vec3(0.08f, 0.08f, 0.08f), EX_PLAIN);
-            }
-            s.box(9.7f, ESC_U1, va, vb, F, F + 2.0f, WALL_PANEL, EX_PLAIN, true);  // onder de roltrap dicht (waar hij hoger is dan 2 m)
+            float ve = c + dir * 0.86f;
+            float L = Escalators::length(P - F);
+            EscalatorDef d;
+            d.base = s.P(ESC_U1 - L, ve, F);
+            d.heading = std::atan2(s.U.x, s.U.z);
+            d.rise = P - F;
+            d.up = dir < 0;
+            escalators_.add(d, s.op, s.gl, col);
         }
         // -- lift (glazen schacht) --
         s.glassBox(LIFT_U0, LIFT_U1, c - 1.2f, c + 1.2f, F, P + 2.6f, true);
@@ -736,7 +728,7 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
         for (float v = roof.v0 + 3; v < roof.v1; v += 6) s.lightBox(roof.u0 + 1, roof.u1 - 1, v, v + 0.3f, RY - 0.05f, RY - 0.01f);
         for (int k = 0; k < 3; k++) {
             float c = (ISLANDS[k].v0 + ISLANDS[k].v1) / 2;
-            for (float u : {-3.0f, 13.0f, 27.5f}) {
+            for (float u : {-3.0f, 18.0f, 27.5f}) {  // niet tussen de roltrappen (kop tot u 16,9)
                 Vec3 base = s.P(u, c, P);
                 s.op.tube(base, base + Vec3(0, RY - P, 0), 0.3f, 12, Vec3(0.85f, 0.85f, 0.85f), EX_PLAIN);
                 s.addBoxCollision(u - 0.3f, u + 0.3f, c - 0.3f, c + 0.3f, P, RY);
@@ -976,6 +968,13 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
                 bool overStair = false;
                 for (const SSStair& st : ssStairs)
                     if (mu > st.top - 0.3f && mu < SS_TUN_U0 + 0.5f && std::fabs(mv - st.vc) < SS_STAIR_W / 2 + 0.35f) overStair = true;
+                {
+                    float zu, zv;  // Zwolle: de trappenhuizen hebben eigen wanden
+                    Zwolle::local(rdX(m.x), rdY(m.z), zu, zv);
+                    if (Zwolle::inOpening(zu, zv) || Zwolle::inOpening(zu + 0.4f, zv) || Zwolle::inOpening(zu - 0.4f, zv) ||
+                        Zwolle::inOpening(zu, zv + 0.4f) || Zwolle::inOpening(zu, zv - 0.4f))
+                        overStair = true;
+                }
                 if (!overStair) s.op.quad(pa - Vec3(0, 1.4f, 0), pb - Vec3(0, 1.4f, 0), pb, pa, n, CONCRETE, EX_PLAIN);
             }
         }
@@ -1087,6 +1086,13 @@ void Stations::build(const World& world, Collision& col, SignAtlas& atlas) {
         if (!uo.v.empty()) split(uo, opaque_);
         if (!ug.v.empty()) split(ug, glass_);
     }
+    {
+        MeshBuilder zo, zg;  // Zwolle: tunnel, opgangen, kappen (zwollestation.cpp)
+        buildZwolle(world, col, atlas, zo, zg, elevators, escalators_, boards, zwolleTunnel);
+        if (!zo.v.empty()) split(zo, opaque_);
+        if (!zg.v.empty()) split(zg, glass_);
+    }
+    escalators_.finish();
     split(s.gl, glass_);
     split(ss.op, opaque_);
     split(ss.gl, glass_);
@@ -1114,6 +1120,7 @@ bool Stations::nearCentraal(Vec3 p) const {
 }
 
 void Stations::update(float dt, Vec3 player, Collision& col) {
+    escalators_.update(dt);
     col.clearDynamic();
     for (StationDoor& d : doors_) {
         float dx = player.x - d.center.x, dz = player.z - d.center.z;
@@ -1134,6 +1141,7 @@ void Stations::drawOpaque(World& world) const {
     Vec3 cam = world.camPos();
     for (const Mesh& m : opaque_)
         if (World::boxDistance(cam, m.bmin, m.bmax) < std::min(2500.0f, world.drawDistance + 1000.0f) && world.visible(m.bmin, m.bmax)) drawMesh(m);
+    escalators_.draw(world);
 }
 
 void Stations::drawGlass(World& world) const {
