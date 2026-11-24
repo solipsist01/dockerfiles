@@ -112,7 +112,7 @@ void Railways::build(const World& world) {
                 }
             }
             along += len;
-            if (mb.v.size() > 400000) { meshes_.push_back(mb.upload()); mb.v.clear(); mb.i.clear(); }
+            if (mb.v.size() > 400000) { pending_.push_back(std::move(mb)); mb = MeshBuilder(); }
         }
         // ---- graaf ----
         int prev = -1;
@@ -131,7 +131,7 @@ void Railways::build(const World& world) {
             prev = idx;
         }
     }
-    if (!mb.v.empty()) meshes_.push_back(mb.upload());
+    if (!mb.v.empty()) pending_.push_back(std::move(mb));
     // kaartfoutjes herstellen: een spoor dat doodloopt vlak vóór een ander spoor (binnen 3 m, in het verlengde)
     // hoort daar in werkelijkheid met een wissel op aan te sluiten (bijv. ten noorden van Amsterdam Muiderpoort)
     {
@@ -285,10 +285,15 @@ void Railways::buildCatenary(const World& world) {
                 nextMast += 55.0f;
             }
             along += len;
-            if (mb.v.size() > 400000) { meshes_.push_back(mb.upload()); mb.v.clear(); mb.i.clear(); }
+            if (mb.v.size() > 400000) { pending_.push_back(std::move(mb)); mb = MeshBuilder(); }
         }
     }
-    if (!mb.v.empty()) meshes_.push_back(mb.upload());
+    if (!mb.v.empty()) pending_.push_back(std::move(mb));
+}
+
+void Railways::upload() {
+    for (MeshBuilder& mb : pending_) meshes_.push_back(mb.upload());
+    pending_.clear();
 }
 
 void Railways::draw(World& world) const {

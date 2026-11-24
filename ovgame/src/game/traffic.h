@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <cstdint>
 // Treinverkeer volgens de dienstregeling (NS, dienstregeling 2026, OV in Nederland Wiki en GTFS) op Eindhoven Centraal -
 // Strijp-S - Best - Boxtel - Vught - 's-Hertogenbosch - Zaltbommel - Geldermalsen - Culemborg - Houten Castellum -
 // Houten - Utrecht Lunetten - Utrecht Vaartsche Rijn - Utrecht Centraal, met de aftakkingen Boxtel - Tilburg en
@@ -42,6 +43,15 @@ class Traffic {
 public:
     ~Traffic();
     bool setup(const World& world, const Railways& rail, const Stations& stations, SignAtlas& atlas, std::string& err);
+    // In twee stappen (zodat de dienstregeling in de achtergrond kan worden opgebouwd):
+    //  prepare: materieel, bestemmingsborden en de serietabel (hoofdthread: tekstatlas/OpenGL)
+    //  build:   routes en tijden per serie (of uit de cache: cacheIn, gecontroleerd met inputKey) en alle ritten; alleen
+    //           rekenwerk, mag in een andere thread. cacheOut: opgebouwde patronen daarheen schrijven ("" = niet).
+    void prepare(SignAtlas& atlas);
+    bool build(const World& world, const Railways& rail, const Stations& stations, std::string& err, const std::string& cacheIn,
+               const std::string& cacheOut);
+    // Controlegetal van alles waar de dienstregeling van afhangt (spoor, perrons, sporen in de stations, serietabel, versie)
+    uint64_t inputKey(const World& world, const Stations& stations) const;
     // Alle treinen weg, klok zetten en de wereld tot nu laten doorlopen (treinen die al onderweg zijn).
     void reset(double clock, const Collision& col);
     void update(float dt, const Collision& col);
@@ -103,6 +113,7 @@ private:
         Vec3 terminal;                  // spoorpunt van de laatste halte (kopmaken)
         Vec3 linkTerminal;              // kopmaken: eindpunt van de aansluitende rit (hier begint deze rit)
         int linkDef = -1;               // def-index van linkFrom (wordt na het opbouwen van alle series omgezet)
+        int defIdx = -1;                // index in de serietabel (cache)
         std::string info;
     };
     struct Run {
@@ -124,6 +135,9 @@ private:
     std::vector<std::string> names_;
     std::string warnings_;  // overgeslagen series (debugInfo)
 
+    std::vector<Def> defs_;  // serietabel (prepare)
+    bool loadCache(const std::string& file, uint64_t key);
+    bool saveCache(const std::string& file, uint64_t key) const;
     bool buildPattern(Pattern& p, const World& world, const Railways& rail, const Stations& st, std::string& err);
     void timetable(Pattern& p, std::string& log);
     int patternOf(const Service* s) const { return serviceOf_[s - services_.data()]; }

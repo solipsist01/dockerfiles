@@ -1,4 +1,6 @@
+#include <atomic>
 #include <chrono>
+#include <thread>
 // OV Game - Eindhoven
 // Hoofdprogramma: opstarten, hoofdmenu, game-loop, interactie, kaart en HUD.
 //
@@ -184,6 +186,12 @@ static int guessQuality(std::string gpu) {
         has("radeon(tm) graphics") || has("radeon graphics") || has("mali") || has("adreno"))
         return 1;
     return 2;
+}
+
+static const auto g_t0 = std::chrono::steady_clock::now();  // opstarttijd ([tijd]-regels)
+static void tlog(const char* what) {
+    printf("[tijd] %s: %.2f s sinds start\n", what, std::chrono::duration<double>(std::chrono::steady_clock::now() - g_t0).count());
+    fflush(stdout);
 }
 
 int main(int argc, char** argv) {
@@ -387,18 +395,23 @@ int main(int argc, char** argv) {
         if (DataStore::remote() && st.active > 0)
             loadingScreen(fmt("Omgeving wordt gedownload...  %.1f MB", st.bytes / 1048576.0));
     };
+    tlog("voor wereld");
     if (!world.load(dataDir, err)) { Platform::showError(err.c_str()); return 1; }
+    tlog("wereld geladen");
 
     Collision collision;
     SignAtlas atlas;
     atlas.begin();
     auto tStart = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - tStart).count(); };
+    // spoornet (alleen rekenwerk) in een tweede thread, tegelijk met de stations (OpenGL: hoofdthread)
+    Railways railways;
+    std::thread railThread([&]() { railways.build(world); });
     Stations stations;
     stations.build(world, collision, atlas);
     printf("[tijd] stations %.1f s\n", since());
-    Railways railways;
-    railways.build(world);
+    railThread.join();
+    railways.upload();
     printf("[tijd] spoor %.1f s\n", since());
     BusStation busStation;
     busStation.build(world);
@@ -443,22 +456,63 @@ int main(int argc, char** argv) {
             }
             return 0;
         }
-    loadingScreen("Dienstregeling wordt opgebouwd...");
     for (int i = 1; i < argc; i++)
         if (!strcmp(argv[i], "--dumprail") || !strcmp(argv[i], "--trafficlog")) Traffic::verbose = true;
+    // Dienstregeling: materieel en borden nu (hoofdthread); de routes en tijden komen uit de vooraf berekende cache
+    // (data/world/timetable.bin, meegeleverd en voor elke release opnieuw gemaakt met --buildtimetable) of, als die er niet
+    // is of niet bij deze spoordata hoort, worden ze in de achtergrond uitgerekend terwijl het menu al te zien is.
     Traffic traffic;
+    traffic.prepare(atlas);
+    const std::string ttFile = dataDir + "\\world\\timetable.bin", ttLocal = dataDir + "\\world\\timetable.local.bin";
+    bool buildTT = false;
+    bool asyncTT = !shotPath && !direct;  // gewoon opstarten naar het menu; tests en directe starts wachten
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--buildtimetable")) buildTT = true;
+        static const char* OK[] = {"--server", "--password", "--connect", "--windowmode", "--quality"};
+        if (argv[i][0] == '-' && argv[i][1] == '-') {
+            bool ok = false;
+            for (const char* o : OK) if (!strcmp(argv[i], o)) ok = true;
+            if (!ok) asyncTT = false;
+        }
+    }
     printf("[tijd] voor dienstregeling %.1f s\n", since());
-    bool trainOk = traffic.setup(world, railways, stations, atlas, err);
-    printf("[tijd] dienstregeling klaar %.1f s\n", since());
+    bool trainOk = false;
+    std::atomic<bool> ttDone{false};
+    bool ttResult = false;
+    std::thread ttThread;
+    auto ttWork = [&]() {
+        // eerst de meegeleverde cache, dan een eigen (lokaal opgebouwde); anders uitrekenen en lokaal bewaren
+        std::string e;
+        bool ok = traffic.build(world, railways, stations, e, buildTT ? "" : ttFile + "|" + ttLocal, buildTT ? ttFile : ttLocal);
+        if (!ok) err = e;
+        ttResult = ok;
+        ttDone = true;
+    };
+    if (asyncTT && !buildTT) {
+        ttThread = std::thread(ttWork);
+    } else {
+        loadingScreen("Dienstregeling wordt opgebouwd...");
+        ttWork();
+        trainOk = ttResult;
+        printf("[tijd] dienstregeling klaar %.1f s\n", since());
+        if (buildTT) {
+            printf("%s\n", trainOk ? "Dienstregeling opgebouwd." : ("FOUT: " + err).c_str());
+            return trainOk ? 0 : 1;
+        }
+        if (!trainOk && !shotPath) Platform::showError(err.c_str());
+    }
     fflush(stdout);
-    if (!trainOk && !shotPath) Platform::showError(err.c_str());
     world.setSignTexture(atlas.finish());
+    tlog("bordenatlas");
     Boards boards;  // elektronische NS-borden en binnenschermen (dynamische textuur)
     if (!boards.init()) printf("Borden: framebuffer niet compleet\n");
     world.setBoardTexture(boards.texture());
+    tlog("lcd-borden");
     MapView map;
     map.init(dataDir, world);
+    tlog("kaart init");
     map.addPlatforms(stations.centraalPlatforms());
+    tlog("dienstregeling + borden + kaart");
     loadingScreen("Personages worden gemaakt...");
     People people;
     people.init(64);
@@ -472,6 +526,14 @@ int main(int argc, char** argv) {
     bool navLine = true;
     DutyStats trainDuty;
 
+    for (int i = 1; i < argc; i++)
+        if (strcmp(argv[i], "--dumppaths") == 0 && i + 1 < argc) {  // test: paden en tijden (cache of berekend)
+            if (FILE* df = fopen(argv[i + 1], "w")) {
+                fputs(traffic.pathsInfo().c_str(), df);
+                for (const Traffic::DutyOption& o : traffic.dutyOptions(0, 2 * 86400.0)) fprintf(df, "%d %d %.1f %.1f %s\n", o.serviceId, o.stop, o.arr, o.dep, o.label.c_str());
+                fclose(df);
+            }
+        }
     for (int i = 1; i < argc; i++)
         if (strcmp(argv[i], "--dumprail") == 0 && i + 1 < argc) {
             FILE* df = fopen(argv[i + 1], "w");
@@ -659,6 +721,17 @@ int main(int argc, char** argv) {
     GetLocalTime(&nowSt);
     int defaultMinutes = startMinutes >= 0 ? startMinutes : nowSt.wHour * 60 + nowSt.wMinute;
     double fallbackClock = defaultMinutes * 60.0;  // klok voor de bussen als er geen treinen zijn
+    // dienstregeling uit de achtergrond overnemen (wait: erop wachten, bijv. bij het starten van het spel)
+    auto ttFinish = [&](bool wait) {
+        if (!ttThread.joinable()) return;
+        if (!wait && !ttDone) return;
+        if (!ttDone) loadingScreen("Dienstregeling wordt opgebouwd...");
+        ttThread.join();
+        trainOk = ttResult;
+        if (trainOk) traffic.reset(fallbackClock, collision);
+        else printf("Dienstregeling: %s\n", err.c_str());
+        tlog("dienstregeling (achtergrond) klaar");
+    };
 
     // verkeerstest: veel uren simuleren en de beveiliging controleren
     for (int i = 1; i < argc; i++)
@@ -779,9 +852,12 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i], "--dutymenu") == 0) { menu.screen = Menu::DUTY; menu.dutyKind = i + 1 < argc && strcmp(argv[i + 1], "trein") == 0 ? 1 : 0; }
         if (strcmp(argv[i], "--cam") == 0 && i + 1 < argc) camMode = atoi(argv[i + 1]) % 3;
     }
+    tlog("voor traffic.reset");
     if (trainOk) traffic.reset(defaultMinutes * 60.0, collision);
+    tlog("na traffic.reset");
 
     auto startGame = [&](int spawnNo, int minutes, double clockSec = -1) {
+        ttFinish(true);
         double c0 = clockSec >= 0 ? clockSec : minutes * 60.0;
         if (trainOk) traffic.reset(c0, collision);
         fallbackClock = c0;
@@ -799,6 +875,7 @@ int main(int argc, char** argv) {
     // lijst met ritten voor het scherm "Dienst rijden"
     auto hm = [](double t) { return hhmm(t); };
     auto fillDuty = [&]() {
+        ttFinish(true);
         menu.dutyItems.clear();
         double t0 = menu.minutes * 60.0, t1 = t0 + 3 * 3600.0;
         if (menu.dutyKind == 0) {
@@ -850,6 +927,7 @@ int main(int argc, char** argv) {
     };
     // dienst beginnen: bus of trein klaarzetten, jij achter het stuur / de lessenaar
     auto startDuty = [&](int kind, int id, int stopIdx, double dep) {
+        ttFinish(true);
         player.vehicle = nullptr; player.seat = -1; player.driving = false; player.fly = false;
         tpeople.reset();
         trainDuty = DutyStats();
@@ -1232,8 +1310,10 @@ int main(int argc, char** argv) {
         // menu-achtergrond: rondvlucht boven Eindhoven Centraal
         float x, z;
         stationToGame(40, 0, x, z);
-        loadingScreen("Omgeving wordt geladen...");
-        world.preload(Vec3(x, 80, z));
+        if (shotPath) {  // normaal niet wachten: de tegels komen tijdens de rondvlucht vanzelf binnen
+            loadingScreen("Omgeving wordt geladen...");
+            world.preload(Vec3(x, 80, z));
+        }
     }
 
     double last = Platform::time();
@@ -1326,7 +1406,9 @@ int main(int argc, char** argv) {
     int lastPCar = 0;
 
     double prevNow = Platform::time();
+    tlog("hoofdlus (menu)");
     while (Platform::pump()) {
+        ttFinish(false);
         double now = Platform::time();
         float dt = (float)std::min(0.05, now - last);
         last = now;

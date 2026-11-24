@@ -5,6 +5,7 @@
 #include "sprinter.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <map>
 
 using namespace WorldFormat;
@@ -967,7 +968,11 @@ void Traffic::timetable(Pattern& p, std::string& log) {
 }
 
 bool Traffic::setup(const World& world, const Railways& rail, const Stations& st, SignAtlas& atlas, std::string& err) {
-    auto tSetup = std::chrono::steady_clock::now();
+    prepare(atlas);
+    return build(world, rail, st, err, "", "");
+}
+
+void Traffic::prepare(SignAtlas& atlas) {
     stock_.emplace_back(makeFlirt());
     stock_.emplace_back(makeVirm());
     stock_.emplace_back(makeIcng());  // 2
@@ -1158,6 +1163,33 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
         {"4800", "Hoorn", 3, 0, BVW, AKN, {{UTG, true, 70, 71, "4b"}, {CAS, true, -1, 75.5, "1"}, {HLO, true, -1, 81.5, "1"}, {AMR, true, 86, 91, "2"}}},  // 32
         {"4800", "Amsterdam Centraal", 3, 0, AKN, BVW, {{AMR, true, 29, 34, "4"}, {HLO, true, -1, 39.5, "2"}, {CAS, true, -1, 44.5, "2"}, {UTG, true, -1, 49.5, "4b"}}},  // 33
     };
+    // namen (bestemmingsborden) en materieel: alles wat de treinen kunnen tonen is hier al bekend
+    for (const char* n : {CS, ES, BE, BX, VU, DB, ZB, GM, CL, HC, HT, UL, UV, UT}) nameIndex(n);
+    for (const char* n : {UO, BH, DD, AMF, AS, AV, NK, PT, EM, HD, NS, TH, WZ, ZL}) nameIndex(n);
+    for (const char* n : {HBV, HTH, HM, HBW}) nameIndex(n);
+    for (const char* n : LINE_AK) nameIndex(n);
+    for (const Def& d : defs) nameIndex(d.dest);
+    for (auto& sk : stock_) sk->build(atlas, names_);
+    defs_ = std::move(defs);
+}
+
+bool Traffic::build(const World& world, const Railways& rail, const Stations& st, std::string& err, const std::string& cacheIn, const std::string& cacheOut) {
+    auto tSetup = std::chrono::steady_clock::now();
+    const std::vector<Def>& defs = defs_;
+    // cacheIn: een of meer bestanden ("a|b"), het eerste dat klopt wordt gebruikt
+    bool cacheOk = false;
+    if (!cacheIn.empty() && !verbose) {
+        uint64_t key = inputKey(world, st);
+        for (size_t q = 0, e; q <= cacheIn.size() && !cacheOk; q = e + 1) {
+            e = cacheIn.find('|', q);
+            if (e == std::string::npos) e = cacheIn.size();
+            std::string f = cacheIn.substr(q, e - q);
+            if (!f.empty() && loadCache(f, key)) { cacheOk = true; printf("Dienstregeling uit %s\n", f.c_str()); }
+        }
+    }
+    if (!cacheOk) {
+    patterns_.clear();
+    warnings_.clear();
     std::string log;
     // Een serie zonder route (bijv. een gat in de spoordata) wordt overgeslagen; de rest rijdt gewoon.
     std::vector<int> patOf(defs.size(), -1);  // def-index -> patroon-index
@@ -1171,6 +1203,7 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
         const Def& d = defs[di];
         auto p = std::make_unique<Pattern>();
         p->def = d;
+        p->defIdx = (int)di;
         if (d.linkFrom >= 0) {
             p->linkDef = d.linkFrom;
             if (d.linkFrom < (int)di) jobs[di].level = jobs[d.linkFrom].level + 1;
@@ -1312,14 +1345,9 @@ bool Traffic::setup(const World& world, const Railways& rail, const Stations& st
             p->info += t + "\n";
         }
     }
-    for (const char* n : {CS, ES, BE, BX, VU, DB, ZB, GM, CL, HC, HT, UL, UV, UT}) nameIndex(n);
-    for (const char* n : {UO, BH, DD, AMF, AS, AV, NK, PT, EM, HD, NS, TH, WZ, ZL}) nameIndex(n);
-    for (const char* n : {HBV, HTH, HM, HBW}) nameIndex(n);
-    for (const char* n : LINE_AK) nameIndex(n);
-    for (auto& p : patterns_) nameIndex(p->dest);
-    for (auto& s : stock_) s->build(atlas, names_);
-
-    printf("[tijd] setup: na materieel %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - tSetup).count());
+    }  // !cacheOk
+    if (!cacheOk && !cacheOut.empty() && !verbose) saveCache(cacheOut, inputKey(world, st));
+    printf("[tijd] setup: patronen klaar %.2f s\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - tSetup).count());
     // ritten: dag 0 en dag 1, halfuren van 05:30 tot 00:30
     int id = 1;
     struct Inst { double entry; int pat; double base; };
@@ -1681,4 +1709,196 @@ std::string Traffic::trainsInfo() const {
         s += buf;
     }
     return s;
+}
+
+// ============================ cache (vooraf berekende dienstregeling) ============================
+// data/world/timetable.bin: de routes en tijden per serie, zodat het spel bij het opstarten niet hoeft te rekenen.
+// Wordt vóór elke release opnieuw gemaakt (OVGame.exe --buildtimetable). Het controlegetal (inputKey) dekt de spoordata,
+// de perrons, de sporen in de stations en de serietabel; TIMETABLE_VERSION ophogen als de routeberekening zelf verandert.
+namespace {
+const uint32_t TT_MAGIC = 0x3154544F;  // "OTT1"
+const uint32_t TIMETABLE_VERSION = 1;
+struct Hasher {
+    uint64_t h = 1469598103934665603ull;
+    void bytes(const void* p, size_t n) {
+        const unsigned char* c = (const unsigned char*)p;
+        for (size_t k = 0; k < n; k++) { h ^= c[k]; h *= 1099511628211ull; }
+    }
+    void f(float v) { bytes(&v, 4); }
+    void d(double v) { bytes(&v, 8); }
+    void i(int64_t v) { bytes(&v, 8); }
+    void s(const char* v) { if (v) bytes(v, strlen(v) + 1); else i(-7); }
+    void s(const std::string& v) { bytes(v.data(), v.size()); i((int64_t)v.size()); }
+};
+struct Out {
+    FILE* f;
+    void raw(const void* p, size_t n) { fwrite(p, 1, n, f); }
+    void u32(uint32_t v) { raw(&v, 4); }
+    void i32(int32_t v) { raw(&v, 4); }
+    void f32(float v) { raw(&v, 4); }
+    void f64(double v) { raw(&v, 8); }
+    void str(const std::string& v) { u32((uint32_t)v.size()); raw(v.data(), v.size()); }
+    void v3(const Vec3& v) { f32(v.x); f32(v.y); f32(v.z); }
+};
+struct In {
+    const std::vector<char>& b;
+    size_t o = 0;
+    bool bad = false;
+    void raw(void* p, size_t n) {
+        if (bad || o + n > b.size()) { bad = true; memset(p, 0, n); return; }
+        memcpy(p, b.data() + o, n);
+        o += n;
+    }
+    uint32_t u32() { uint32_t v; raw(&v, 4); return v; }
+    int32_t i32() { int32_t v; raw(&v, 4); return v; }
+    float f32() { float v; raw(&v, 4); return v; }
+    double f64() { double v; raw(&v, 8); return v; }
+    std::string str() {
+        uint32_t n = u32();
+        if (bad || o + n > b.size()) { bad = true; return {}; }
+        std::string s(b.data() + o, n);
+        o += n;
+        return s;
+    }
+    Vec3 v3() { float x = f32(), y = f32(), z = f32(); return Vec3(x, y, z); }
+    bool count(uint32_t n, size_t each) { if (bad || (size_t)n * each > b.size() - o) bad = true; return !bad; }
+};
+}  // namespace
+
+uint64_t Traffic::inputKey(const World& world, const Stations& st) const {
+    Hasher h;
+    h.i(TT_MAGIC);
+    h.i(TIMETABLE_VERSION);
+    for (const RailLine& r : world.rails) {
+        h.i(r.main * 4 + r.tunnel * 2 + r.sunken);
+        h.i((int64_t)r.pts.size());
+        for (const RailPoint& p : r.pts) { h.f(p.x); h.f(p.y); h.f(p.z); h.i(p.node); }
+    }
+    for (const OsmPlatform& p : world.platforms) {
+        h.s(p.name);
+        h.f(p.height);
+        for (auto& q : p.pts) { h.f(q.first); h.f(q.second); }
+    }
+    for (const PlatformInfo& t : st.tracks) { h.s(t.station); h.i(t.track); h.f(t.x); h.f(t.z); }
+    for (const Def& d : defs_) {
+        h.s(d.number); h.s(d.dest); h.i(d.stock); h.i(d.csTrack); h.i(d.origin); h.i(d.exit);
+        h.i(d.linkFrom); h.i(d.linkBase); h.i(d.hourly);
+        for (const StopDef& s : d.stops) { h.s(s.station); h.i(s.stop); h.d(s.arr); h.d(s.dep); h.s(s.track); }
+    }
+    return h.h;
+}
+
+bool Traffic::saveCache(const std::string& file, uint64_t key) const {
+    std::string tmp = file + ".tmp";
+    FILE* f = fopen(tmp.c_str(), "wb");
+    if (!f) return false;
+    Out o{f};
+    o.u32(TT_MAGIC);
+    o.u32(TIMETABLE_VERSION);
+    o.raw(&key, 8);
+    o.str(warnings_);
+    o.u32((uint32_t)patterns_.size());
+    for (const auto& pp : patterns_) {
+        const Pattern& p = *pp;
+        o.i32(p.defIdx);
+        o.i32(p.def.linkFrom);
+        o.i32(p.linkDef);
+        o.u32(p.north ? 1 : 0);
+        o.u32((uint32_t)p.path.pts.size());
+        for (const Vec3& v : p.path.pts) o.v3(v);
+        o.u32((uint32_t)p.contested.size());
+        for (auto& c : p.contested) { o.i32(c.first); o.i32(c.second); }
+        o.u32((uint32_t)p.stops.size());
+        for (const StopTime& t : p.stops) {
+            o.str(t.station); o.i32(t.track); o.f32(t.d); o.f64(t.arr); o.f64(t.dep); o.u32(t.stop ? 1 : 0); o.f32(t.vcruise);
+        }
+        o.u32((uint32_t)p.zones.size());
+        for (const SpeedZone& z : p.zones) { o.f32(z.d0); o.f32(z.d1); o.f32(z.v); }
+        o.f64(p.entryRel);
+        o.f32(p.entrySpeed);
+        o.v3(p.terminal);
+        o.v3(p.linkTerminal);
+        o.str(p.info);
+    }
+    o.u32(TT_MAGIC);  // eindmarkering
+    bool ok = ferror(f) == 0;
+    ok = (fclose(f) == 0) && ok;
+    if (!ok) { remove(tmp.c_str()); return false; }
+    remove(file.c_str());
+    if (rename(tmp.c_str(), file.c_str()) != 0) { remove(tmp.c_str()); return false; }
+    printf("Dienstregeling opgeslagen: %s (%zu series)\n", file.c_str(), patterns_.size());
+    return true;
+}
+
+bool Traffic::loadCache(const std::string& file, uint64_t key) {
+    std::vector<char> buf;
+    {
+        FILE* f = fopen(file.c_str(), "rb");
+        if (!f) return false;
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (sz > 16) {
+            buf.resize((size_t)sz);
+            if (fread(buf.data(), 1, buf.size(), f) != buf.size()) buf.clear();
+        }
+        fclose(f);
+    }
+    if (buf.empty()) return false;
+    In in{buf};
+    uint64_t k = 0;
+    if (in.u32() != TT_MAGIC || in.u32() != TIMETABLE_VERSION) return false;
+    in.raw(&k, 8);
+    if (k != key) { printf("Dienstregeling-cache %s hoort bij andere spoordata of een andere serietabel\n", file.c_str()); return false; }
+    std::string warn = in.str();
+    uint32_t np = in.u32();
+    std::vector<std::unique_ptr<Pattern>> pats;
+    for (uint32_t q = 0; q < np && !in.bad; q++) {
+        auto p = std::make_unique<Pattern>();
+        int di = in.i32();
+        if (di < 0 || di >= (int)defs_.size()) return false;
+        const Def& d = defs_[di];
+        p->def = d;
+        p->defIdx = di;
+        p->def.linkFrom = in.i32();
+        p->linkDef = in.i32();
+        p->north = in.u32() != 0;
+        p->number = d.number;
+        p->dest = d.dest;
+        if (d.stock < 0 || d.stock >= (int)stock_.size()) return false;
+        p->rs = stock_[d.stock].get();
+        uint32_t n = in.u32();
+        if (!in.count(n, 12)) return false;
+        p->path.pts.resize(n);
+        for (Vec3& v : p->path.pts) v = in.v3();
+        p->path.build();
+        p->samples.clear();
+        for (float dd = 0; dd <= p->path.length; dd += SAMPLE) p->samples.push_back(p->path.pos(dd));
+        n = in.u32();
+        if (!in.count(n, 8)) return false;
+        p->contested.resize(n);
+        for (auto& c : p->contested) { c.first = in.i32(); c.second = in.i32(); }
+        n = in.u32();
+        if (!in.count(n, 30)) return false;
+        p->stops.resize(n);
+        for (StopTime& t : p->stops) {
+            t.station = in.str(); t.track = in.i32(); t.d = in.f32(); t.arr = in.f64(); t.dep = in.f64(); t.stop = in.u32() != 0; t.vcruise = in.f32();
+        }
+        n = in.u32();
+        if (!in.count(n, 12)) return false;
+        p->zones.resize(n);
+        for (SpeedZone& z : p->zones) { z.d0 = in.f32(); z.d1 = in.f32(); z.v = in.f32(); }
+        p->entryRel = in.f64();
+        p->entrySpeed = in.f32();
+        p->terminal = in.v3();
+        p->linkTerminal = in.v3();
+        p->info = in.str();
+        pats.push_back(std::move(p));
+    }
+    if (in.bad || in.u32() != TT_MAGIC || pats.empty()) return false;
+    for (auto& p : pats)
+        if (p->def.linkFrom >= (int)pats.size()) return false;
+    patterns_ = std::move(pats);
+    warnings_ = warn;
+    return true;
 }

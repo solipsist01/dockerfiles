@@ -735,6 +735,7 @@ float World::heightAt(float x, float z) const {
     if (Zwolle::isNear(rx, ry, 0) && Zwolle::cut(rx, ry, 0.0f)) return -10.0f;
     int idx = findTile(rx, ry);
     if (idx < 0) return 17.0f;
+    std::lock_guard<std::mutex> lock(heightMx_);
     const HeightTile* ht = heightTile(idx);
     if (!ht || ht->n < 2) return 17.0f;
     const Tile& t = tiles_[idx];
@@ -792,6 +793,7 @@ void World::finishLoad(TileLoad* r) {
     float* L = &lookup_[((size_t)row * gcols_ + c) * 4];
     if (r->ok && r->n > 1) {
         // hoogtes meteen in de cache
+        std::lock_guard<std::mutex> lock(heightMx_);
         if (!heights_.count(r->idx)) {
             if (lru_.size() >= 160) { heights_.erase(lru_.back()); lru_.pop_back(); }
             lru_.push_front(r->idx);

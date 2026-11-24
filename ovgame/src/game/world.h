@@ -1,4 +1,5 @@
 #pragma once
+#include <mutex>
 // De wereld: globale gegevens (spoor, perrons, wegen, haltes) en tegels van 500 m die rond de camera worden
 // geladen en weer opgeruimd (streaming). Geheugen en videogeheugen blijven zo begrensd, hoe groot de wereld ook is.
 #include <algorithm>
@@ -118,6 +119,13 @@ public:
         return std::sqrt(dx * dx + dz * dz);
     }
     int drawnChunks = 0;
+    // alle tegels uit world.bin (RD zuidwesthoek + detail), bijv. voor de kaart
+    std::vector<WorldFormat::TileId> tileList() const {
+        std::vector<WorldFormat::TileId> out;
+        out.reserve(tiles_.size());
+        for (const Tile& t : tiles_) out.push_back({t.x, t.y, t.detail});
+        return out;
+    }
 
     // Laadafstanden (m, tot de rand van een tegel)
     static constexpr float DETAIL_RADIUS = 1500.0f;
@@ -144,6 +152,7 @@ private:
     struct HeightTile { int n = 0; std::vector<float> h; };
     mutable std::unordered_map<int, HeightTile> heights_;
     mutable std::list<int> lru_;
+    mutable std::mutex heightMx_;  // heightAt mag uit meerdere threads (spoornet en stations worden tegelijk opgebouwd)
     const HeightTile* heightTile(int tile) const;
 
     // GPU-slots

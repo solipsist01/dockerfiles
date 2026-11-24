@@ -1,4 +1,7 @@
 ﻿#include "mapview.h"
+#include <cstring>
+#include <chrono>
+#include <cstdio>
 #include "datastore.h"
 #include <algorithm>
 #include <array>
@@ -105,29 +108,50 @@ bool MapView::init(const std::string& dataDir, const World& world) {
     uScreen_ = glGetUniformLocation(prog_, "uScreen");
     uTex_ = glGetUniformLocation(prog_, "uTex");
     uUseTex_ = glGetUniformLocation(prog_, "uUseTex");
-    for (const TileId& t : planTiles()) tiles_.push_back({t.x, t.y, t.detail});
+    // tegellijst uit world.bin (planTiles() opnieuw uitrekenen kostte ~15 s: elk vak van het gebied tegen alle lijnen)
+    for (const TileId& t : world.tileList()) tiles_.push_back({t.x, t.y, t.detail});
 
     // ---- OSM-kaartdata ----
     std::vector<std::vector<std::pair<float, float>>> byKind[7];
-    FILE* f = fopen((dataDir + "\\world\\map.bin").c_str(), "rb");
-    if (f) {
-        auto r32 = [&]() { uint32_t v = 0; fread(&v, 4, 1, f); return v; };
-        auto rf = [&]() { float v = 0; fread(&v, 4, 1, f); return v; };
+    // in een keer inlezen en uit het geheugen ontleden (70 MB; losse fread's van 4 bytes kostten ~15 s)
+    std::vector<char> buf;
+    if (FILE* f = fopen((dataDir + "\\world\\map.bin").c_str(), "rb")) {
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (sz > 0) {
+            buf.resize((size_t)sz);
+            if (fread(buf.data(), 1, buf.size(), f) != buf.size()) buf.clear();
+        }
+        fclose(f);
+    }
+    if (buf.size() >= 8) {
+        size_t o = 0;
+        bool bad = false;
+        auto take = [&](void* dst, size_t n) {
+            if (o + n > buf.size()) { bad = true; memset(dst, 0, n); return; }
+            memcpy(dst, buf.data() + o, n);
+            o += n;
+        };
+        auto r32 = [&]() { uint32_t v = 0; take(&v, 4); return v; };
+        auto rf = [&]() { float v = 0; take(&v, 4); return v; };
         if (r32() == 0x314D564F && r32() == 1) {
             uint32_t nl = r32();
-            for (uint32_t k = 0; k < nl; k++) {
+            for (uint32_t k = 0; k < nl && !bad; k++) {
                 uint8_t kind = 0;
-                fread(&kind, 1, 1, f);
+                take(&kind, 1);
                 uint32_t n = r32();
+                if (bad || o + (size_t)n * 8 > buf.size()) { bad = true; break; }
                 std::vector<std::pair<float, float>> pts(n);
                 for (auto& p : pts) { p.first = rf(); p.second = rf(); }
                 if (kind < 7) byKind[kind].push_back(std::move(pts));
             }
-            uint32_t na = r32();
-            for (uint32_t k = 0; k < na; k++) {
+            uint32_t na = bad ? 0 : r32();
+            for (uint32_t k = 0; k < na && !bad; k++) {
                 uint8_t kind = 0;
-                fread(&kind, 1, 1, f);
+                take(&kind, 1);
                 uint32_t nv = r32();
+                if (bad || o + (size_t)nv * 8 > buf.size()) { bad = true; break; }
                 uint32_t base = (uint32_t)areaV_.size();
                 uint32_t c = C_AREA[kind < 7 ? kind : 2];
                 for (uint32_t j = 0; j < nv; j++) {
@@ -135,23 +159,23 @@ bool MapView::init(const std::string& dataDir, const World& world) {
                     areaV_.push_back({x, z, 0, 0, 0, 0, c, 0, 0});
                 }
                 uint32_t ni = r32();
-                std::vector<uint32_t> idx(ni);
-                if (ni) fread(idx.data(), 4, ni, f);
-                for (uint32_t i : idx) areaI_.push_back(base + i);
+                if (bad || o + (size_t)ni * 4 > buf.size()) { bad = true; break; }
+                const uint32_t* ip = (const uint32_t*)(buf.data() + o);
+                for (uint32_t i = 0; i < ni; i++) areaI_.push_back(base + ip[i]);
+                o += (size_t)ni * 4;
             }
-            uint32_t nn = r32();
-            for (uint32_t k = 0; k < nn; k++) {
+            uint32_t nn = bad ? 0 : r32();
+            for (uint32_t k = 0; k < nn && !bad; k++) {
                 uint8_t kind = 0;
-                fread(&kind, 1, 1, f);
+                take(&kind, 1);
                 float x = rf(), z = rf();
                 uint16_t len = 0;
-                fread(&len, 2, 1, f);
-                std::string s(len, ' ');
-                if (len) fread(&s[0], 1, len, f);
-                labels_.push_back({kind, x, z, s});
+                take(&len, 2);
+                if (bad || o + len > buf.size()) break;
+                labels_.push_back({kind, x, z, std::string(buf.data() + o, len)});
+                o += len;
             }
         }
-        fclose(f);
     }
     // wegen: per soort eerst alle randen, dan alle vullingen (soort 6 .. 0, belangrijkste bovenop)
     lineStart_.assign(16, 0);

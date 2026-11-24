@@ -1,6 +1,7 @@
 #pragma once
 #include <unordered_map>
 #include <vector>
+#include "../engine/meshbuilder.h"
 #include "../engine/renderer.h"
 #include "world.h"
 
@@ -17,7 +18,10 @@ struct TrackPath {
 
 class Railways {
 public:
+    // Spoornet en meshes opbouwen (alleen rekenwerk: mag in een andere thread); upload() zet de meshes daarna op de GPU
+    // (hoofdthread, OpenGL)
     void build(const World& world);
+    void upload();
     void draw(World& world) const;
     // Route over het spoornet van (x0,z0) met beginrichting (dx,dz) naar het spoor dichtbij (x1,z1).
     // extend: pad voorbij de bestemming doortrekken (zodat een hele trein erop past).
@@ -40,6 +44,7 @@ public:
 
 private:
     std::vector<Mesh> meshes_;
+    std::vector<MeshBuilder> pending_;  // nog niet geuploade meshes (build in een andere thread)
     struct Vtx { Vec3 p; std::vector<int> nb; bool main = true; };
     std::vector<Vtx> graph_;
     // ruimtelijk raster over de knopen (cellen van CELL m): zoeken in de buurt zonder alle knopen langs te gaan
