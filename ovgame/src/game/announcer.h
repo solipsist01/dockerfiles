@@ -39,3 +39,6 @@ private:
     float gain_ = 1.0f;
     void* cs_ = nullptr;  // CRITICAL_SECTION
 };
+
+// WAV-bestand (16 bit, mono of stereo, elke samplerate) -> 44,1 kHz mono
+bool loadWav(const std::string& path, std::vector<float>& out);

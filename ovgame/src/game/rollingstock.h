@@ -43,6 +43,7 @@ public:
     virtual ~RollingStock() {}
     std::string product = "Sprinter";  // getoond op displays en in de HUD
     std::string typeName = "FLIRT";
+    std::string soundSet;              // opgenomen geluid in data/audio/<soundSet> (leeg = gesynthetiseerd, TrainSound)
     int cars = 4;
     std::vector<float> len;                    // lengte per rijtuig
     std::vector<std::array<float, 2>> doorZ;   // deurposities per rijtuig (lokale z)

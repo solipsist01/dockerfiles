@@ -381,6 +381,7 @@ SprinterStock::SprinterStock(const SprinterSpec* s) : S_(*s) {
     pr_.S = s;
     product = S_.product;
     typeName = S_.typeName;
+    if (S_.soundSet) soundSet = S_.soundSet;
     cars = (int)S_.cars.size();
     halfW = pr_.outerX(1.5f);
     gap = S_.gap;
@@ -865,6 +866,7 @@ const SprinterSpec& sngSpec() {
     static SprinterSpec s = [] {
         SprinterSpec p;
         p.typeName = "SNG";
+        p.soundSet = "sng";  // opnames van een echte SNG (sound/sng)
         // profiel: mtr-sng-hd PROFILE (x, y boven de vloer) + 0,80 m
         const float prof[][2] = {{1.32f, -0.70f}, {1.39f, -0.30f}, {1.43f, -0.05f}, {1.43f, 2.20f}, {1.415f, 2.44f}, {1.36f, 2.68f},
                                  {1.24f, 2.92f}, {1.04f, 3.10f}, {0.74f, 3.22f}, {0.38f, 3.28f}, {0.0f, 3.30f}};

@@ -456,6 +456,51 @@ int main(int argc, char** argv) {
             }
             return 0;
         }
+    for (int i = 1; i < argc; i++)  // test: treingeluid van een rit (staan, deuren dicht, optrekken, remmen) naar WAV
+        if (strcmp(argv[i], "--dumptrainsound") == 0 && i + 3 < argc) {
+            // --dumptrainsound SET|synth in|out bestand.wav
+            const SoundSet* rec = strcmp(argv[i + 1], "synth") ? SoundSet::loadNow(argv[i + 1]) : nullptr;
+            if (strcmp(argv[i + 1], "synth") && !rec) { fprintf(stderr, "geluidsset %s niet gevonden\n", argv[i + 1]); return 1; }
+            bool in = !strcmp(argv[i + 2], "in");
+            TrainSound ts;
+            TrainSoundState st;
+            st.id = 1;
+            st.soundSet = argv[i + 1];
+            st.doors = 1;
+            float v = 0;
+            const int BLK = 1024;
+            std::vector<float> buf, blk(2 * BLK);
+            double t = 0;
+            for (int b = 0; t < 132.0; b++, t += (double)BLK / 44100) {
+                float dt = (float)BLK / 44100;
+                if (t < 15) { st.effort = 0; v = 0; }
+                else if (t < 58) { st.effort = 1; v = std::min(38.9f, v + 0.9f * dt); }
+                else if (t < 75) st.effort = 0.12f;
+                else if (v > 0) { st.effort = v > 0.3f ? -0.8f : -0.3f; v = std::max(0.0f, v - 0.8f * dt); if (v <= 0) st.effort = 0; }
+                st.speed = v;
+                if (t >= 9 && st.whistleEvents == 0) st.whistleEvents = 1;
+                st.beeping = t >= 8 && t < 13.3;
+                if (t >= 10.5 && t < 15) st.doors = std::max(0.0f, st.doors - dt / 2.8f);
+                if (t >= 125) st.doors = std::min(1.0f, st.doors + dt / 2.5f);
+                st.doorMove = st.doors > 0 && st.doors < 1 ? 1.0f : 0.0f;
+                ts.set(st, in ? 1.0f : 0.45f, 0.0f, in, rec);
+                std::fill(blk.begin(), blk.end(), 0.0f);
+                ts.mix(blk.data(), BLK);
+                buf.insert(buf.end(), blk.begin(), blk.end());
+            }
+            FILE* wf = fopen(argv[i + 3], "wb");
+            if (wf) {
+                uint32_t n = (uint32_t)buf.size(), bytes = n * 2, v32;
+                uint16_t v16;
+                fwrite("RIFF", 1, 4, wf); v32 = 36 + bytes; fwrite(&v32, 4, 1, wf); fwrite("WAVEfmt ", 1, 8, wf);
+                v32 = 16; fwrite(&v32, 4, 1, wf); v16 = 1; fwrite(&v16, 2, 1, wf); v16 = 2; fwrite(&v16, 2, 1, wf);
+                v32 = 44100; fwrite(&v32, 4, 1, wf); v32 = 44100 * 4; fwrite(&v32, 4, 1, wf); v16 = 4; fwrite(&v16, 2, 1, wf); v16 = 16; fwrite(&v16, 2, 1, wf);
+                fwrite("data", 1, 4, wf); fwrite(&bytes, 4, 1, wf);
+                for (float x : buf) { int16_t s = (int16_t)std::max(-32767.0f, std::min(32767.0f, x * 32767.0f)); fwrite(&s, 2, 1, wf); }
+                fclose(wf);
+            }
+            return 0;
+        }
     for (int i = 1; i < argc; i++)
         if (!strcmp(argv[i], "--dumprail") || !strcmp(argv[i], "--trafficlog")) Traffic::verbose = true;
     // Dienstregeling: materieel en borden nu (hoofdthread); de routes en tijden komen uit de vooraf berekende cache
@@ -1542,6 +1587,7 @@ int main(int argc, char** argv) {
 
         // ---------- geluid: dichtstbijzijnde treinen ----------
         if (audioOn && trainOk) {
+            SoundSet::updateAll();  // opgenomen treingeluid: binnengekomen WAV's laden
             std::vector<std::pair<float, const Train*>> nearT;
             for (const Train* t : traffic.trains()) {
                 float best = 1e9f;
@@ -1578,7 +1624,8 @@ int main(int argc, char** argv) {
                     Vec3 rightV(std::cos(player.yaw), 0, std::sin(player.yaw));
                     pan = clampf(dot(to, rightV), -1, 1) * 0.7f;
                 }
-                trainSound[k].set(tr.sound(), gain * 0.9f, pan, inside);
+                const SoundSet* rec = tr.sound().soundSet ? SoundSet::get(tr.sound().soundSet) : nullptr;
+                trainSound[k].set(tr.sound(), gain * 0.9f, pan, inside, rec);
             }
         }
 

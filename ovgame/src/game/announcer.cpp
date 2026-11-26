@@ -244,3 +244,5 @@ void Announcer::mix(float* out, int frames) {
     }
     LeaveCriticalSection((CRITICAL_SECTION*)cs_);
 }
+
+bool loadWav(const std::string& path, std::vector<float>& out) { return readWav(path, out); }

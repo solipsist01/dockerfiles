@@ -37,6 +37,8 @@ void Train::start(const Service* s, const Collision& col) {
     }
     snd_ = TrainSoundState();
     snd_.id = s->id;
+    snd_.doors = doorOpen_;
+    snd_.soundSet = rs_->soundSet.empty() ? nullptr : rs_->soundSet.c_str();
     gang_.assign(std::max(0, rs_->cars - 1), 0.0f);  // tussendeuren dicht
     gangTarget_ = gang_;
     gangTimer_ = gang_;
@@ -120,6 +122,7 @@ void Train::dwellStep(float dt, double clock, float authority, const Collision& 
     doorOpen_ = clampf(doorOpen_ + (wantOpen ? dt / 2.5f : -dt / 2.8f), 0, 1);
     if (before > 0 && doorOpen_ <= 0) snd_.doorClosedEvents++;
     snd_.doorMove = (doorOpen_ > 0 && doorOpen_ < 1) ? 1.0f : 0.0f;
+    snd_.doors = doorOpen_;
     snd_.effort = 0;
     bool lastStop = at_ == (int)svc_->stops.size() - 1;
     if (manual_) {
@@ -196,6 +199,7 @@ void Train::update(float dt, double clock, float authority, const Collision& col
     const RollingStock& rs = *rs_;
     snd_.beeping = false;
     snd_.doorMove = 0;
+    snd_.doors = doorOpen_;
     // doorkomsten bijhouden
     while (at_ + 1 < (int)svc_->stops.size() && !svc_->stops[at_ + 1].stop && svc_->stops[at_ + 1].d <= d_) {
         at_++;
@@ -325,6 +329,7 @@ void Train::updateManual(float dt, double clock, float authority, const Collisio
     ctl_.doorRelease = ctl_.doorLeft = ctl_.doorRight = ctl_.ack = ctl_.emergency = ctl_.activate = ctl_.panto = false;
     snd_.beeping = false;
     snd_.doorMove = 0;
+    snd_.doors = doorOpen_;
     // ---- cabine in bedrijf nemen (zo echt mogelijk) ----
     if (realism_ >= 2) {
         if (c.activate) { cabActive_ = !cabActive_; cabMsg(cabActive_ ? "Cabine in dienst genomen" : "Cabine buiten dienst", false); }

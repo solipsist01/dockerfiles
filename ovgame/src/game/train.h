@@ -48,6 +48,8 @@ struct TrainSoundState {
     float speed = 0;       // m/s
     float effort = 0;      // -1 (remmen) .. 1 (optrekken)
     float doorMove = 0;    // 0..1: deuren in beweging
+    float doors = 0;       // 0 dicht .. 1 open
+    const char* soundSet = nullptr;  // opgenomen geluid (RollingStock::soundSet) of nullptr
     bool beeping = false;  // deursluitsignaal
     int doorOpenEvents = 0, whistleEvents = 0, airEvents = 0, doorClosedEvents = 0;
 };

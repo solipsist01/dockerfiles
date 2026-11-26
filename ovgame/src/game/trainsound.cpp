@@ -1,15 +1,17 @@
 #include "trainsound.h"
+#include <algorithm>
 #include <cmath>
 #include "../engine/audio.h"
 
 static const double TAU = 6.283185307179586;
 
-void TrainSound::set(const TrainSoundState& s, float gain, float pan, bool inside) {
+void TrainSound::set(const TrainSoundState& s, float gain, float pan, bool inside, const SoundSet* rec) {
     std::lock_guard<std::mutex> lk(m_);
     s_ = s;
     gain_ = gain;
     pan_ = pan;
     inside_ = inside;
+    rec_ = rec;
 }
 
 float TrainSound::noise() {
@@ -29,9 +31,10 @@ void TrainSound::mix(float* out, int frames) {
     TrainSoundState s;
     float gain, pan;
     bool inside;
+    const SoundSet* rec;
     {
         std::lock_guard<std::mutex> lk(m_);
-        s = s_; gain = gain_; pan = pan_; inside = inside_;
+        s = s_; gain = gain_; pan = pan_; inside = inside_; rec = rec_;
     }
     // ander treinstel op dit kanaal: oude gebeurtenissen niet afspelen, snelheid direct overnemen
     if (s.id != seenId_) {
@@ -41,7 +44,9 @@ void TrainSound::mix(float* out, int frames) {
         eff_ = s.effort;
         g_ = 0;
         tOpen_ = tWhistle_ = tAir_ = tClosed_ = -1;
+        recorded_.reset();
     }
+    if (rec != lastRec_) { lastRec_ = rec; recorded_.reset(); }
     // nieuwe gebeurtenissen
     if (s.doorOpenEvents != seenOpen_) { seenOpen_ = s.doorOpenEvents; tOpen_ = 0; }
     if (s.whistleEvents != seenWhistle_) { seenWhistle_ = s.whistleEvents; tWhistle_ = 0; }
@@ -49,6 +54,25 @@ void TrainSound::mix(float* out, int frames) {
     if (s.doorClosedEvents != seenClosed_) { seenClosed_ = s.doorClosedEvents; tClosed_ = 0; }
 
     const float dt = 1.0f / Audio::SAMPLE_RATE;
+    if (rec && rec->parsed()) {
+        // opgenomen geluid; alleen het fluitje van de conducteur blijft gesynthetiseerd
+        recorded_.mix(out, frames, *rec, s, gain, pan, inside);
+        if (s.id < 0) return;
+        for (int i = 0; i < frames && tWhistle_ >= 0; i++) {
+            g_ += (gain - g_) * 0.001f;
+            p_ += (pan - p_) * 0.001f;
+            inside_f_ += ((inside ? 1.0f : 0.0f) - inside_f_) * 0.002f;
+            float e = tWhistle_ < 1.1f ? std::min(1.0f, tWhistle_ / 0.03f) * std::min(1.0f, (1.1f - tWhistle_) / 0.08f) : 0.0f;
+            float trill = 0.65f + 0.35f * (float)std::sin(TAU * 31.0 * tWhistle_);
+            phE_ += TAU * (3150.0 + 40.0 * std::sin(TAU * 31.0 * tWhistle_)) * dt;
+            float w = (float)std::sin(phE_) * e * trill * 0.16f * 3.0f * g_ * (1.0f - 0.35f * inside_f_);
+            out[i * 2] += w * std::sqrt(0.5f * (1.0f - p_));
+            out[i * 2 + 1] += w * std::sqrt(0.5f * (1.0f + p_));
+            tWhistle_ += dt;
+            if (tWhistle_ > 1.2f) tWhistle_ = -1;
+        }
+        return;
+    }
     for (int i = 0; i < frames; i++) {
         // parameters vloeiend volgen
         spd_ += (s.speed - spd_) * 0.0005f;
