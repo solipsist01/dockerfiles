@@ -56,6 +56,7 @@ struct TrainSoundState {
 
 class Train : public Vehicle {
 public:
+    bool playerInside = false;  // speler zit erin: eigen model (interieur), anders het Train Simulator-model
     bool richScreens = false;  // speler zit erin: de binnenschermen tekent de game (Boards), niet de vaste "Volgende station"
     void start(const Service* s, const Collision& col);
     // Een stap: authority = maximale positie van de kop langs het pad (beveiliging); clock = huidige tijd.
@@ -63,6 +64,7 @@ public:
     void addCollision(Collision& col) const;   // wanden als botsingsblokken (met open deuren)
     void drawOpaque(World& world) const;
     void drawGlass(World& world) const;
+    bool drawTs(World& world, int pass) const;  // model uit Train Simulator (tsmodel.h); false = niet beschikbaar
 
     // rijtuigen (Vehicle)
     int carCount() const override { return rs_->cars; }

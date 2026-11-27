@@ -12,6 +12,7 @@
 #include "bus.h"
 #include "cabin.h"
 #include "rollingstock.h"
+#include "tslayout.h"
 
 using namespace WorldFormat;
 
@@ -439,6 +440,8 @@ RollingStock* makeFlirt() { return new FlirtStock(); }
 FlirtStock::FlirtStock() {
     product = "Sprinter";
     typeName = "FLIRT";
+    tsModel = "flirt";
+    soundSet = "flirt";  // opnames (Train Simulator, tools/ts/trains.py)
     cars = CARS;
     halfW = HW;
     gap = GAP;
@@ -450,7 +453,9 @@ FlirtStock::FlirtStock() {
     vmax = 44.4f;  // 160 km/u (materieel); op dit traject begrensd door de baanvaksnelheid
     acc = 1.2f;    // aanzetversnelling FLIRT (Stadler: 1,2 m/s2)
     dec = 0.9f;
-    const float LE = 20.85f, LM = 18.6f;
+    float LE = 20.85f, LM = 18.6f;
+    const TsLayout* ts = tsLayout("flirt");  // maten van het Train Simulator-model (tslayout.h)
+    if (ts && ts->cars == CARS) { LE = ts->car[0].pitch - GAP; LM = ts->car[1].pitch - GAP; }
     const float L[CARS] = {LE, LM, LM, LE};
     for (int i = 0; i < CARS; i++) len.push_back(L[i]);
     // deuren: eindrijtuig (cabine aan +z) bij de koppeling en voor de hogevloer; middenrijtuig bij beide uiteinden
@@ -458,6 +463,9 @@ FlirtStock::FlirtStock() {
     doorC_[1][0] = -LM / 2 + 3.0f;  doorC_[1][1] = LM / 2 - 3.0f;
     doorC_[2][0] = doorC_[1][0];    doorC_[2][1] = doorC_[1][1];
     doorC_[3][0] = doorC_[0][0];    doorC_[3][1] = doorC_[0][1];
+    if (ts && ts->cars == CARS)
+        for (int i = 0; i < CARS; i++)
+            if (ts->car[i].doors == 2) { doorC_[i][0] = ts->car[i].doorZ[0]; doorC_[i][1] = ts->car[i].doorZ[1]; }
     for (int i = 0; i < CARS; i++) {
         if (cabSign(i) < 0) doorZ.push_back({-doorC_[i][1], -doorC_[i][0]});
         else doorZ.push_back({doorC_[i][0], doorC_[i][1]});
@@ -682,6 +690,7 @@ void FlirtStock::buildCar(int i, SignAtlas& atlas) {
 }
 
 void FlirtStock::build(SignAtlas& atlas, const std::vector<std::string>& names) {
+    if (!tsModel.empty()) buildTsSigns(atlas, names);  // bestemmingsborden op het Train Simulator-model
     car_.resize(CARS);
     carInt_.resize(CARS);
     carGlass_.resize(CARS);

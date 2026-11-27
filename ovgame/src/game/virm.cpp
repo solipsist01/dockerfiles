@@ -12,6 +12,7 @@
 #include "bus.h"
 #include "cabin.h"
 #include "rollingstock.h"
+#include "tslayout.h"
 
 using namespace WorldFormat;
 
@@ -51,9 +52,9 @@ const float DD_BOTTOM = 0.24f;    // onderkant dubbeldeks deel
 const float END_BOTTOM = 0.95f;   // onderkant boven de draaistellen
 const float DOOR_W = 1.30f;
 const float DOOR_TOP = 3.12f;
-const float BALCONY = 3.0f;       // lengte balkon (rijtuigeinde tot dubbeldeks deel)
+const float BALCONY = 4.3f;       // lengte balkon (rijtuigeinde tot dubbeldeks deel); deuren zoals in het TS-model, 3,3 m van het einde
 const float NOSE = 2.6f;          // neus (front)
-const float CAB = 3.4f;           // neus + cabine
+const float CAB = 2.9f;           // neus + cabine
 const float STAIR = 1.7f;         // lengte trappartij in het dubbeldeks deel
 const float WALL = 0.10f;         // wanddikte
 const float WIN_PITCH = 1.85f;    // raamsteek (= zitcoupe)
@@ -515,7 +516,7 @@ struct CarSpec {
 
 class VirmStock : public RollingStock {
 public:
-    VirmStock();
+    explicit VirmStock(bool ddz = false);
     float floorAt(int car, float lz) const override { return floorAt3(car, 0, lz, BAL_Y); }
     bool walkable(int car, float lx, float lz) const override { return walkable3(car, lx, lz, BAL_Y); }
     float floorAt3(int car, float lx, float lz, float curY) const override;
@@ -543,10 +544,14 @@ private:
 };
 
 RollingStock* makeVirm() { return new VirmStock(); }
+// DDZ (NID): dubbeldekker op hetzelfde interieur als de VIRM, maten en model uit Train Simulator
+RollingStock* makeDdz() { return new VirmStock(true); }
 
-VirmStock::VirmStock() {
+VirmStock::VirmStock(bool ddz) {
     product = "Intercity";
-    typeName = "VIRMm";
+    typeName = ddz ? "DDZ" : "VIRMm";
+    tsModel = ddz ? "ddz" : "virm";
+    soundSet = ddz ? "ddz" : "virm";  // opnames (Train Simulator, tools/ts/trains.py)
     gap = 0.80f;
     gangwayDoors = true;  // schuifdeuren in de kopwanden tussen de rijtuigen
     halfW = HW;
@@ -567,13 +572,24 @@ VirmStock::VirmStock() {
         {"ABv4", 26.46f - 0.67f, false, true, 0, false, true},
         {"mBvk2", 27.26f - 0.67f, true, false, -1, false, false},
     };
+    if (ddz)  // DDZ-IV: mBk - Bv - ABv - ABvk (motorrijtuig zonder benedendek, maar voor het interieur gelijk)
+        spec_ = {
+            {"mBk", 21.2f - 0.8f, true, false, -1, true, false},
+            {"Bv", 26.62f - 0.8f, false, false, 0, false, true},
+            {"ABv", 26.62f - 0.8f, false, true, 0, false, true},
+            {"ABvk", 27.15f - 0.8f, true, true, 0, false, false},
+        };
     cars = (int)spec_.size();
+    const TsLayout* ts = tsLayout(tsModel.c_str());  // maten van het Train Simulator-model (tslayout.h)
+    if (ts && ts->cars != cars) ts = nullptr;
     for (int i = 0; i < cars; i++) {
-        const CarSpec& c = spec_[i];
+        CarSpec& c = spec_[i];
+        if (ts) c.len = ts->car[i].pitch - gap;
         len.push_back(c.len);
         std::array<float, 2> d;
         d[0] = -c.len / 2 + 1.25f;
         d[1] = c.cab ? c.len / 2 - CAB - 0.95f : c.len / 2 - 1.25f;
+        if (ts && ts->car[i].doors == 2) { d[0] = ts->car[i].doorZ[0]; d[1] = ts->car[i].doorZ[1]; }
         doorC_.push_back(d);
         // lokale deur-z: laatste rijtuig is gespiegeld
         if (cabSign(i) < 0) doorZ.push_back({-d[1], -d[0]});
@@ -915,6 +931,7 @@ void VirmStock::buildCar(int i, SignAtlas& atlas) {
 }
 
 void VirmStock::build(SignAtlas& atlas, const std::vector<std::string>& names) {
+    if (!tsModel.empty()) buildTsSigns(atlas, names);  // bestemmingsborden op het Train Simulator-model
     car_.resize(cars);
     carInt_.resize(cars);
     carGlass_.resize(cars);

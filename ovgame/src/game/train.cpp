@@ -1,4 +1,6 @@
 ﻿#include "train.h"
+#include "tslayout.h"
+#include "tsmodel.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -523,7 +525,53 @@ void Train::addCollision(Collision& col) const {
     }
 }
 
+// Model uit Train Simulator: buiten de trein waar de speler in zit en binnen 900 m; anders het eigen model
+bool Train::drawTs(World& world, int pass) const {
+    if (rs_->tsModel.empty() || playerInside) return false;
+    Vec3 cam = world.camPos();
+    CarPose c0 = carPose(0);
+    if (std::hypot(c0.x - cam.x, c0.z - cam.z) > 900.0f) return false;
+    TsModel* tm = tsModel(rs_->tsModel);
+    if (!tm->ready() || tm->cars() != rs_->cars) return false;
+    TsModel::DrawState st;
+    st.wheel = d_ / 0.43f;
+    for (int i = 0; i < rs_->cars; i++) {
+        CarPose c = carPose(i);
+        int cs = rs_->cabSign(i);
+        Vec3 p(c.x, c.y, c.z);
+        float r = rs_->len[i] * 0.5f + 3.0f;
+        if (!world.visible(p - Vec3(r, r, r), p + Vec3(r, r, r))) continue;
+        // deuren: zijde in het model (+x / -x) -> wereldzijde zoals bij de eigen modellen
+        for (int side = 0; side < 2; side++) {
+            int meshSide = side == 0 ? 1 : -1;
+            int worldSide = cs < 0 ? -meshSide : meshSide;
+            st.doorOpen[side] = worldSide == doorSide_ ? doorOpen_ : 0.0f;
+        }
+        bool leading = cs != 0 && (cs > 0) == !flipped_;
+        st.head = cs != 0 && leading;
+        st.tail = cs != 0 && !leading;
+        Mat4 m = Mat4::pose(c.x, c.y, c.z, cs < 0 ? c.h + PI : c.h);
+        tm->drawCar(world, i, m, st, pass);
+        // bestemmingsborden (tekstatlas, wereldshader)
+        const TsLayout* lay = tsLayout(rs_->tsModel.c_str());
+        int dest = svc_->destIdx;
+        if (pass == 0 && lay && i < lay->cars && dest >= 0 && dest < (int)rs_->tsSignFront.size() &&
+            std::hypot(c.x - cam.x, c.z - cam.z) < 250.0f) {
+            world.setMode(MODE_OBJECT);
+            for (int k = 0; k < lay->car[i].signs; k++) {
+                const TsSign& sg = lay->car[i].sign[k];
+                if (sg.kind == 0 && !leading) continue;  // achterkant: geen bestemming
+                world.setModel(m * Mat4::translation(sg.x + sg.nx * 0.035f, sg.y, sg.z + sg.nz * 0.035f));
+                drawMesh(sg.kind == 0 ? rs_->tsSignFront[dest] : rs_->tsSignSide[dest]);
+            }
+            world.setMode(MODE_VEHICLE);
+        }
+    }
+    return true;
+}
+
 void Train::drawOpaque(World& world) const {
+    if (drawTs(world, 0)) return;
     int next = -1;
     if (state_ == DWELL) {
         for (int k = at_ + 1; k < (int)svc_->stops.size(); k++)
@@ -540,6 +588,7 @@ void Train::drawOpaque(World& world) const {
 }
 
 void Train::drawGlass(World& world) const {
+    if (drawTs(world, 1)) return;
     StockDraw sd{this, doorOpen_, doorSide_, svc_->destIdx, 0, flipped_ ? 1 : 0};
     rs_->drawGlass(world, sd);
 }

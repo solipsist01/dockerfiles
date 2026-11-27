@@ -24,6 +24,7 @@ struct StockDraw {
     const float* gang = nullptr;  // tussendeuren per doorloop i (tussen rijtuig i en i+1): 0 dicht .. 1 open
     float cabDoor[2] = {0, 0};    // cabinedeuren (rijtuig 0 / laatste rijtuig): 0 dicht .. 1 open
     float lever = 0;              // rijremschakelaar in de voorste cabine: -1 (snelrem) .. 1 (vol vermogen)
+    float travel = 0;             // afgelegde weg (m), voor draaiende wielen
 };
 
 // Cabine in canonieke coordinaten van een eindrijtuig (cabine aan +z)
@@ -44,6 +45,10 @@ public:
     std::string product = "Sprinter";  // getoond op displays en in de HUD
     std::string typeName = "FLIRT";
     std::string soundSet;              // opgenomen geluid in data/audio/<soundSet> (leeg = gesynthetiseerd, TrainSound)
+    std::string tsModel;               // model uit Train Simulator in data/trains/<tsModel> (leeg = alleen het eigen model)
+    // bestemmingsborden op het TS-model (per naam: voor en zijkant), zie buildTsSigns (tsmodel.cpp)
+    std::vector<Mesh> tsSignFront, tsSignSide;
+    void buildTsSigns(SignAtlas& atlas, const std::vector<std::string>& names);
     int cars = 4;
     std::vector<float> len;                    // lengte per rijtuig
     std::vector<std::array<float, 2>> doorZ;   // deurposities per rijtuig (lokale z)
@@ -79,3 +84,4 @@ public:
 RollingStock* makeFlirt();
 RollingStock* makeVirm();
 RollingStock* makeIcng();
+RollingStock* makeDdz();

@@ -2,6 +2,7 @@
 // Maten, raamindeling en livrei uit mijn eerdere modellen (Mods/mtr-sng-hd, Mods/mtr-slt-hd: gemeten van vrije foto's
 // op Wikimedia Commons), hier omgezet naar spoorstaafhoogte (+0,80 m) en canonieke richting (cabine aan +z).
 #include "sprinter.h"
+#include "tslayout.h"
 #include <algorithm>
 #include <cmath>
 #include "../engine/meshbuilder.h"
@@ -354,7 +355,7 @@ public:
     void drawGlass(World& world, const StockDraw& s) const override;
 
 private:
-    const SprinterSpec& S_;
+    SprinterSpec S_;  // kopie: lengtes en deuren kunnen uit het TS-model komen (tslayout.h)
     Prof pr_;
     std::vector<Mesh> car_, carInt_, carGlass_, leaf_;
     Mesh motor_, jacobs_, panto_, gangway_, headlight_, taillight_, cabDoor_, lever_;
@@ -378,10 +379,23 @@ private:
 };
 
 SprinterStock::SprinterStock(const SprinterSpec* s) : S_(*s) {
-    pr_.S = s;
+    pr_.S = &S_;
+    // maten van het Train Simulator-model (tslayout.h): lengte en deuren; ramen schalen mee, cabinewand schuift mee
+    if (const TsLayout* ts = tsLayout(S_.tsModel))
+        if (ts->cars == (int)S_.cars.size()) {
+            for (size_t i = 0; i < S_.cars.size(); i++) {
+                SprinterSpec::Car& c = S_.cars[i];
+                float nl = ts->car[i].pitch - S_.gap, k = nl / c.len;
+                if (i == 0) S_.cabWall += (nl - c.len) / 2;
+                for (auto& w : c.windows) { w.first *= k; w.second *= k; }
+                c.len = nl;
+                if (ts->car[i].doors > 0) c.doors.assign(ts->car[i].doorZ, ts->car[i].doorZ + ts->car[i].doors);
+            }
+        }
     product = S_.product;
     typeName = S_.typeName;
     if (S_.soundSet) soundSet = S_.soundSet;
+    if (S_.tsModel) tsModel = S_.tsModel;
     cars = (int)S_.cars.size();
     halfW = pr_.outerX(1.5f);
     gap = S_.gap;
@@ -686,6 +700,7 @@ void SprinterStock::buildCar(int i, SignAtlas& atlas) {
 }
 
 void SprinterStock::build(SignAtlas& atlas, const std::vector<std::string>& names) {
+    if (!tsModel.empty()) buildTsSigns(atlas, names);  // bestemmingsborden op het Train Simulator-model
     car_.resize(cars);
     carInt_.resize(cars);
     carGlass_.resize(cars);
@@ -909,6 +924,8 @@ const SprinterSpec& sltSpec() {
     static SprinterSpec s = [] {
         SprinterSpec p;
         p.typeName = "SLT";
+        p.soundSet = "slt";
+        p.tsModel = "slt";
         const float prof[][2] = {{1.30f, -0.75f}, {1.37f, -0.32f}, {1.42f, -0.05f}, {1.42f, 2.05f}, {1.405f, 2.30f}, {1.35f, 2.54f},
                                  {1.24f, 2.76f}, {1.05f, 2.94f}, {0.76f, 3.07f}, {0.40f, 3.14f}, {0.0f, 3.16f}};
         for (auto& q : prof) { p.py.push_back(q[1] + SF); p.px.push_back(q[0]); }
@@ -944,6 +961,8 @@ const SprinterSpec& icmSpec() {
     static SprinterSpec s = [] {
         SprinterSpec p;
         p.typeName = "ICMm";
+        p.soundSet = "icm";
+        p.tsModel = "icm";
         p.product = "Intercity";
         p.jacobs = false;
         p.steps = true;

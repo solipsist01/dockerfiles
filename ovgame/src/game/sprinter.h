@@ -9,6 +9,7 @@ struct SprinterSpec {
     const char* typeName;
     const char* product = "Sprinter";      // "Intercity" voor de ICM
     const char* soundSet = nullptr;         // opgenomen geluid (data/audio/<naam>, tools/make_train_sound.py)
+    const char* tsModel = nullptr;          // model uit Train Simulator (data/trains/<naam>, tools/ts/trains.py)
     bool jacobs = true;                     // Jacobs-draaistellen tussen de rijtuigen; anders twee per rijtuig
     float cabFloor = 0;                     // cabinevloer (0 = vloer + 0,40; ICM: hoog boven de doorloop)
     bool steps = false;                     // hoge vloer: opstap onder de deur

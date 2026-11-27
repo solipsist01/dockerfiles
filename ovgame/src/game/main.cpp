@@ -202,6 +202,7 @@ int main(int argc, char** argv) {
     float mapScale = 0, forceY = -1e9f;
     float tv[6] = {-1, 0, 0, 10, 0, 2};  // --tv trein rijtuig lz afstand hoek hoogte (testcamera)
     std::string tvType;
+    bool tvIn = false;
     Train* tvTrain = nullptr;            // testcamera: deze trein krijgt de binnenschermen (alsof de speler erin zit)
     const char* shotPath = nullptr;
     const char* rideDest = nullptr;
@@ -241,6 +242,7 @@ int main(int argc, char** argv) {
         else if (arg("--y")) forceY = (float)atof(argv[++i]);
         else if (strcmp(argv[i], "--tv") == 0 && i + 6 < argc) { for (int k = 0; k < 6; k++) tv[k] = (float)atof(argv[++i]); direct = true; }
         else if (arg("--tvtype")) { tvType = argv[++i]; direct = true; }
+        else if (strcmp(argv[i], "--tvin") == 0) tvIn = true;  // met --tvtype/--tv: in de trein (rijtuig, lz), kijkhoek = hoek
     }
     if (shotPath && !shotMenu) direct = true;
 
@@ -1316,6 +1318,18 @@ int main(int argc, char** argv) {
             if (pick >= 0) tv[0] = (float)pick;
             if (tv[0] < 0) printf("Geen trein van type %s gevonden\n", tvType.c_str());
         }
+        if (tvIn && tv[0] >= 0 && (int)tv[0] < (int)traffic.trains().size()) {
+            // in de trein: instappen bij (rijtuig, lz) en kijken in richting 'hoek' (graden t.o.v. de rijrichting)
+            Train* t = traffic.trains()[(int)tv[0]];
+            tvTrain = t;
+            int car = std::min((int)tv[1], t->carCount() - 1);
+            player.board(t, car, 0.0f, tv[2]);
+            CarPose cp = t->carPose(car);
+            float a = cp.h + tv[4] * PI / 180;
+            player.yaw = std::atan2(std::sin(a), -std::cos(a));
+            player.pitch = (tv[5] - 2.0f) * 0.1f;
+            tv[0] = -1;
+        }
         if (tv[0] >= 0 && (int)tv[0] < (int)traffic.trains().size()) {
             // testcamera: kijk op punt (rijtuig, lz) van trein tv[0], vanaf afstand/hoek/hoogte
             Train* t = traffic.trains()[(int)tv[0]];
@@ -1816,7 +1830,7 @@ int main(int argc, char** argv) {
             railways.draw(world);
             if (!noStations) stations.drawOpaque(world);
             if (!noStations) boards.draw(world);
-            for (Train* t : traffic.trains()) t->richScreens = t == screenTrain;
+            for (Train* t : traffic.trains()) { t->richScreens = t == screenTrain; t->playerInside = t == inTrain; }
             if (screenTrain) boards.drawRide(world, *screenTrain);
             busStation.draw(world);
             buses.drawOpaque(world, eye, trainOk ? traffic.clock() : fallbackClock);

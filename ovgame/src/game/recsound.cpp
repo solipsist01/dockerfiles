@@ -25,6 +25,17 @@ int ctrlId(const std::string& s) {
     if (s == "Doors") return SoundSet::DOORS;
     if (s == "JointCount") return SoundSet::JOINT;
     if (s == "DoorBell") return SoundSet::DOORBELL;
+    if (s == "Kph") return SoundSet::KPH;
+    if (s == "Throttle") return SoundSet::THROTTLE;
+    if (s == "Effort") return SoundSet::EFFORT;
+    if (s == "BrakeCtl") return SoundSet::BRAKECTL;
+    if (s == "Ammeter") return SoundSet::AMMETER;
+    if (s == "Accel") return SoundSet::ACCEL;
+    if (s == "Decel") return SoundSet::DECEL;
+    if (s == "BrakeBar") return SoundSet::BRAKEBAR;
+    if (s == "Distance") return SoundSet::DIST;
+    if (s == "One") return SoundSet::ONE;
+    if (s == "Zero") return SoundSet::ZERO;
     return -1;
 }
 int kindId(const std::string& s) {
@@ -76,6 +87,9 @@ bool SoundSet::parse(const std::string& path) {
         std::istringstream ss(line);
         std::string w;
         ss >> w;
+        if (w == "current") { ss >> curMax >> curMin; continue; }
+        if (w == "ammeter") { ss >> ampMax >> ampMin; continue; }
+        if (w == "gain") { ss >> gainIn >> gainOut; continue; }
         if (w == "loop" || w == "shot") {
             Item it;
             std::string where, fl, ctrl, kind;
@@ -209,6 +223,8 @@ void RecordedSound::mix(float* out, int frames, const SoundSet& set, const Train
     eff_ += (s.effort - eff_) * std::min(1.0f, dtB * 2.5f);
     in_ += ((inside ? 1.0f : 0.0f) - in_) * std::min(1.0f, dtB * 6.0f);
     float aspd = std::fabs(spd_);
+    if (!reset_) acc_ += ((std::fabs(spd_) - lastSpd_) / std::max(1e-3f, dtB) - acc_) * std::min(1.0f, dtB * 3.0f);
+    lastSpd_ = std::fabs(spd_);
     // stilstand: de rem blijft aan tot de trein weer trekt (dan "remmen los")
     if (s.effort > 0.02f) hold_ = 0;
     else if (aspd < 0.1f && s.effort <= 0) hold_ = 0.3f;
@@ -227,13 +243,25 @@ void RecordedSound::mix(float* out, int frames, const SoundSet& set, const Train
     }
     float* v = v_;
     v[SoundSet::SPEED] = aspd;
-    v[SoundSet::CURRENT] = eff_ > 0 ? eff_ * 200.0f : eff_ * 50.0f;  // tractiestroom (A); negatief = elektrisch remmen
+    // tractiestroom (A); negatief = elektrisch remmen (alleen als de set daar geluid voor heeft)
+    v[SoundSet::CURRENT] = eff_ > 0 ? eff_ * set.curMax : -eff_ * set.curMin;
+    v[SoundSet::AMMETER] = eff_ > 0 ? eff_ * set.ampMax : -eff_ * set.ampMin;
+    v[SoundSet::KPH] = aspd * 3.6f;
+    v[SoundSet::THROTTLE] = std::max(0.0f, eff_);
+    v[SoundSet::EFFORT] = eff_;
+    v[SoundSet::BRAKECTL] = std::max(0.0f, -eff_);
+    v[SoundSet::ACCEL] = std::max(0.0f, acc_);
+    v[SoundSet::DECEL] = std::max(0.0f, -acc_);
+    v[SoundSet::DIST] = (float)dist_;
+    v[SoundSet::ONE] = 1;
+    v[SoundSet::ZERO] = 0;
     v[SoundSet::BRAKE] = eff_ < -0.01f ? -eff_ : hold_;
     v[SoundSet::ACTIVE] = 1;
     v[SoundSet::STARTUP] = 1;
     v[SoundSet::DOORS] = s.doors;
     v[SoundSet::JOINT] = joints;
     v[SoundSet::DOORBELL] = s.beeping ? 1.0f : 0.0f;
+    v[SoundSet::BRAKEBAR] = v[SoundSet::BRAKE] * 3.8f;
     if (reset_) {
         std::memcpy(prev_, v, sizeof(prev_));
         reset_ = false;
@@ -252,7 +280,7 @@ void RecordedSound::mix(float* out, int frames, const SoundSet& set, const Train
             case SoundSet::CHANGING_UP: fire = b > a; break;
             default: break;
         }
-        float where = it.where == 0 ? in_ : it.where == 1 ? (1.0f - in_) * OUTSIDE : in_ + (1.0f - in_) * OUTSIDE;
+        float where = it.where == 0 ? in_ * set.gainIn : it.where == 1 ? (1.0f - in_) * OUTSIDE * set.gainOut : in_ * set.gainIn + (1.0f - in_) * OUTSIDE * set.gainOut;
         if (fire && where > 0.05f) trigger(set, (int)i);
     }
     std::memcpy(prev_, v, sizeof(prev_));
@@ -268,7 +296,7 @@ void RecordedSound::mix(float* out, int frames, const SoundSet& set, const Train
         bool on = it.kind != SoundSet::IN_RANGE || (x >= it.a && x <= it.b);
         float mv, mp;
         it.eval(v, mv, mp);
-        float where = it.where == 0 ? in_ : it.where == 1 ? (1.0f - in_) * OUTSIDE : in_ + (1.0f - in_) * OUTSIDE;
+        float where = it.where == 0 ? in_ * set.gainIn : it.where == 1 ? (1.0f - in_) * OUTSIDE * set.gainOut : in_ * set.gainIn + (1.0f - in_) * OUTSIDE * set.gainOut;
         float target = on ? it.vol * mv * where : 0.0f;
         double step = std::max(0.05f, it.pitch * mp);
         const std::vector<float>* smp = set.sample(it.samples.empty() ? -1 : it.samples[0]);
@@ -300,7 +328,7 @@ void RecordedSound::mix(float* out, int frames, const SoundSet& set, const Train
         const std::vector<float>* smp = set.sample(vo.sample);
         float mv, mp;
         it.eval(v, mv, mp);
-        float where = it.where == 0 ? in_ : it.where == 1 ? (1.0f - in_) * OUTSIDE : in_ + (1.0f - in_) * OUTSIDE;
+        float where = it.where == 0 ? in_ * set.gainIn : it.where == 1 ? (1.0f - in_) * OUTSIDE * set.gainOut : in_ * set.gainIn + (1.0f - in_) * OUTSIDE * set.gainOut;
         float target = it.vol * mv * where;
         if (vo.fresh) { vo.vol = target; vo.fresh = false; }
         double step = std::max(0.05f, it.pitch * mp);

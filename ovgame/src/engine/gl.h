@@ -32,6 +32,11 @@ typedef ptrdiff_t GLintptr;
 #define GL_R8 0x8229
 #define GL_TEXTURE_2D_ARRAY 0x8C1A
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#define GL_TEXTURE6 0x84C6
+#define GL_CURRENT_PROGRAM 0x8B8D
 #define GL_RGB8 0x8051
 #define GL_RGBA8 0x8058
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
@@ -86,6 +91,7 @@ typedef ptrdiff_t GLintptr;
     X(void, glTexImage3D, (GLenum t, GLint level, GLint ifmt, GLsizei w, GLsizei h, GLsizei d, GLint border, GLenum fmt, GLenum type, const void* px)) \
     X(void, glTexSubImage3D, (GLenum t, GLint level, GLint x, GLint y, GLint z, GLsizei w, GLsizei h, GLsizei d, GLenum fmt, GLenum type, const void* px)) \
     X(void, glGenerateMipmap, (GLenum t)) \
+    X(void, glCompressedTexImage2D, (GLenum t, GLint level, GLenum ifmt, GLsizei w, GLsizei h, GLint border, GLsizei size, const void* data)) \
     X(void, glCompressedTexSubImage3D, (GLenum t, GLint level, GLint x, GLint y, GLint z, GLsizei w, GLsizei h, GLsizei d, GLenum fmt, GLsizei size, const void* data)) \
     X(void, glGenFramebuffers, (GLsizei n, GLuint* f)) \
     X(void, glBindFramebuffer, (GLenum t, GLuint f)) \

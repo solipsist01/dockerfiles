@@ -16,7 +16,8 @@
 
 class SoundSet {
 public:
-    enum Ctrl { SPEED, CURRENT, BRAKE, ACTIVE, STARTUP, DOORS, JOINT, DOORBELL, NCTRL };
+    enum Ctrl { SPEED, CURRENT, BRAKE, ACTIVE, STARTUP, DOORS, JOINT, DOORBELL, KPH, THROTTLE, EFFORT, BRAKECTL, AMMETER, ACCEL,
+                DECEL, BRAKEBAR, DIST, ONE, ZERO, NCTRL };
     enum Kind { IN_RANGE, INCREASE_PAST, DECREASE_PAST, CHANGING, CHANGING_UP };
     struct Curve {
         std::vector<std::pair<float, float>> pts;
@@ -36,6 +37,9 @@ public:
     };
     std::vector<Item> items;
     std::vector<std::string> files;           // relatief aan data/, met .wav
+    float curMax = 200, curMin = -50;          // tractiestroom bij vol vermogen / vol elektrisch remmen (Current)
+    float ampMax = 1000, ampMin = 0;           // idem voor Ammeter
+    float gainIn = 1, gainOut = 1;             // sterkte binnen / buiten (sound.txt "gain")
     // geladen geluid (44,1 kHz mono) of nullptr; wordt eenmaal gezet en daarna niet meer veranderd
     const std::vector<float>* sample(int i) const { return i >= 0 && i < (int)files.size() ? data_[i].load(std::memory_order_acquire) : nullptr; }
     bool parsed() const { return parsed_; }
@@ -65,7 +69,7 @@ public:
 private:
     bool reset_ = true;
     float v_[SoundSet::NCTRL] = {}, prev_[SoundSet::NCTRL] = {};
-    float spd_ = 0, eff_ = 0, in_ = 0, g_ = 0, p_ = 0, hold_ = 0;
+    float spd_ = 0, eff_ = 0, in_ = 0, g_ = 0, p_ = 0, hold_ = 0, acc_ = 0, lastSpd_ = 0;
     double dist_ = 0, nextJoint_ = 40;
     std::vector<double> axles_;               // nog te passeren assen (afstand) over de laatste lasnaad
     uint32_t rng_ = 987654;

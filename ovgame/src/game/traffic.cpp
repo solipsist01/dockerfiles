@@ -979,10 +979,11 @@ void Traffic::prepare(SignAtlas& atlas) {
     stock_.emplace_back(makeSng());   // 3
     stock_.emplace_back(makeSlt());   // 4
     stock_.emplace_back(makeIcm());   // 5
+    stock_.emplace_back(makeDdz());   // 6
     // Dienstregeling 2026 (OV in Nederland Wiki; 's-Hertogenbosch - Utrecht uit de GTFS van OVapi, november 2026), vertrektijden
     // per station. Minuten na het begin van het halfuur (de rit een halfuur later rijdt 30 minuten later; tijden > 30 lopen
     // door in het volgende halfuur). -1 = uitrekenen uit de rijtijd. Sporen in Den Bosch en Utrecht zoals in de GTFS.
-    // Materieel: Intercity's VIRM, IC 1100 en 3000 ICNG; IC 500/600/1700 ICMm; Sprinters in Brabant (6400, 6500) FLIRT, 5600/4800/8800/6900 SNG,
+    // Materieel: Intercity's VIRM, IC 1100 ICNG, IC 3000 DDZ; IC 500/600/1700 ICMm; Sprinters in Brabant (6400, 6500) FLIRT, 5600/4800/8800/6900 SNG,
     // 7300/4000 SLT.
     // Utrecht: de IC 3500 naar Dordrecht (via Woerden/Gouda) vertrekt van spoor 8 - in de spoordata sluiten alleen 8/9/11/12
     // en 20/21 aan op de lijn naar Woerden (in werkelijkheid spoor 7). De 3500 naar Venlo komt van de kant van Amsterdam
@@ -1135,10 +1136,10 @@ void Traffic::prepare(SignAtlas& atlas) {
         // ---- Utrecht - Amsterdam - Zaandam - Alkmaar ----
         // IC 3000 Den Helder (in de GTFS overdag tot Heerhugowaard) - Utrecht - Arnhem - Nijmegen: van/naar Bunnik (de mist in).
         // Utrecht noordwaarts van spoor 7 (in werkelijkheid 5; dat is hier bezet door de IC 1700)
-        {"3000", "Heerhugowaard", 2, 0, UTO, AKN, akFill({{UV, false, -1, -1}, {UT, true, 6, 9, "7"}, {ASA, true, -1, 28.5, "1"}, {ASDC, true, 35, 39, "7a"},
+        {"3000", "Heerhugowaard", 6, 0, UTO, AKN, akFill({{UV, false, -1, -1}, {UT, true, 6, 9, "7"}, {ASA, true, -1, 28.5, "1"}, {ASDC, true, 35, 39, "7a"},
                                                           {ASS, true, -1, 44.5, "3"}, {ZD, true, -1, 52.5, "1"}, {CAS, true, -1, 64.5, "1"}, {HLO, true, -1, 70.5, "1"},
                                                           {AMR, true, 76, 79, "2"}})},  // 26
-        {"3000", "Nijmegen", 2, 0, AKN, UTO, akFill({{AMR, true, 10, 13, "5"}, {HLO, true, -1, 19.5, "2"}, {CAS, true, -1, 25.5, "2"}, {ZD, true, -1, 38.5, "4"},
+        {"3000", "Nijmegen", 6, 0, AKN, UTO, akFill({{AMR, true, 10, 13, "5"}, {HLO, true, -1, 19.5, "2"}, {CAS, true, -1, 25.5, "2"}, {ZD, true, -1, 38.5, "4"},
                                                      {ASS, true, -1, 45.5, "5"}, {ASDC, true, 51, 54, "4b"}, {ASA, true, 61, 62, "4"}, {UT, true, 81, 84, "19"},
                                                      {UV, false, -1, -1}})},  // 27
         // SPR 4000 Uitgeest - Breukelen - (Woerden - Rotterdam): kopmaken in Uitgeest (spoor 1b)
@@ -1717,7 +1718,7 @@ std::string Traffic::trainsInfo() const {
 // de perrons, de sporen in de stations en de serietabel; TIMETABLE_VERSION ophogen als de routeberekening zelf verandert.
 namespace {
 const uint32_t TT_MAGIC = 0x3154544F;  // "OTT1"
-const uint32_t TIMETABLE_VERSION = 1;
+const uint32_t TIMETABLE_VERSION = 2;  // 2: DDZ (materieel 6) op de IC 3000
 struct Hasher {
     uint64_t h = 1469598103934665603ull;
     void bytes(const void* p, size_t n) {

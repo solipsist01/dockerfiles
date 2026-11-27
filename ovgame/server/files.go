@@ -166,6 +166,8 @@ func (s *FileStore) streamSources() []source {
 		{"raw/luchtfoto_lo/", filepath.Join(gd, "raw", "luchtfoto_lo"), ext(".jpg")},
 		// omroep (bus, trein, station): niet vooraf, de game haalt een fragment pas op als het omgeroepen wordt
 		{"audio/", filepath.Join(gd, "audio"), ext(".wav", ".txt")},
+		// treinmodellen (tools/ts/trains.py): pas als er een trein van dat type in de buurt is
+		{"trains/", filepath.Join(gd, "trains"), ext(".bin", ".tex")},
 	}
 }
 
