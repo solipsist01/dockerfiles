@@ -1170,7 +1170,7 @@ void Traffic::prepare(SignAtlas& atlas) {
     for (const char* n : {HBV, HTH, HM, HBW}) nameIndex(n);
     for (const char* n : LINE_AK) nameIndex(n);
     for (const Def& d : defs) nameIndex(d.dest);
-    for (auto& sk : stock_) { sk->build(atlas, names_); sk->applyTsSeats(); }
+    for (auto& sk : stock_) { sk->applyTsCab(); sk->build(atlas, names_); sk->applyTsSeats(); }
     defs_ = std::move(defs);
 }
 

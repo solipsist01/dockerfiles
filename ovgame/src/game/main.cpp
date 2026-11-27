@@ -59,6 +59,7 @@
 #include "traffic.h"
 #include "train.h"
 #include "trainsound.h"
+#include "tslayout.h"
 #include "world.h"
 
 using namespace WorldFormat;
@@ -569,7 +570,13 @@ int main(int argc, char** argv) {
     buses.setLookCount(people.poolSize());
     TrainPeople tpeople;
     CharModel preview;  // voorbeeld in de personage-editor
-    int camMode = 0;    // F5: 0 eerste persoon, 1 achter je, 2 voor je
+    int camMode = 0;    // F5: 0 eerste persoon, 1 achter je, 2 voor je, 3 reizigerscamera, 4 raamcamera (trein)
+    bool passCamOk = false;  // reizigers-/raamcamera mogelijk (in een trein met TS-interieur)
+    float passYaw0 = 0;      // kijkrichting bij het kiezen van de camera (de muis draait vanaf daar)
+    Vec3 swayP, swayV;       // meedeinen in de trein (rijtuigassen: x opzij, y omhoog, z vooruit)
+    float swayLastV = 0, swayLastH = 0, swayNextJ = 20;
+    double swayDist = 0;
+    const Train* swayTrain = nullptr;
     bool navLine = true;
     DutyStats trainDuty;
 
@@ -897,7 +904,7 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i], "--options") == 0) menu.screen = Menu::OPTIONS;  // test: opties-scherm
         if (strcmp(argv[i], "--charmenu") == 0) { menu.screen = Menu::CHARACTER; menu.editIndex = menu.activeChar; menu.edit = chars[activeChar]; }
         if (strcmp(argv[i], "--dutymenu") == 0) { menu.screen = Menu::DUTY; menu.dutyKind = i + 1 < argc && strcmp(argv[i + 1], "trein") == 0 ? 1 : 0; }
-        if (strcmp(argv[i], "--cam") == 0 && i + 1 < argc) camMode = atoi(argv[i + 1]) % 3;
+        if (strcmp(argv[i], "--cam") == 0 && i + 1 < argc) camMode = atoi(argv[i + 1]) % 5;
     }
     tlog("voor traffic.reset");
     if (trainOk) traffic.reset(defaultMinutes * 60.0, collision);
@@ -1328,6 +1335,19 @@ int main(int argc, char** argv) {
             float a = cp.h + tv[4] * PI / 180;
             player.yaw = std::atan2(std::sin(a), -std::cos(a));
             player.pitch = (tv[5] - 2.0f) * 0.1f;
+            passYaw0 = player.yaw;
+            for (int k = 1; k < argc; k++)
+                if (!strcmp(argv[k], "--tvdrive")) {  // test: achter de lessenaar (cabinezicht)
+                    int lc = t->leadCar();
+                    float ex, ey, ez;
+                    t->driverEye(ex, ey, ez);
+                    player.board(t, lc, ex, ez);
+                    player.driving = true;
+                    t->setDriver(true);
+                    player.pos = t->carToWorld(lc, ex, ey - player.eyeH, ez);
+                    player.yaw = PI - (t->carPose(lc).h + (t->stock().cabSign(lc) < 0 ? PI : 0.0f));
+                    player.pitch = -0.10f;
+                }
             tv[0] = -1;
         }
         if (tv[0] >= 0 && (int)tv[0] < (int)traffic.trains().size()) {
@@ -1531,7 +1551,9 @@ int main(int argc, char** argv) {
                 map.open(c);
                 Platform::setCapture(false);
             } else {
-                if (in.pressed[VK_F5]) camMode = (camMode + 1) % 3;  // zoals Minecraft: eerste persoon, achter je, voor je
+                // zoals Minecraft: eerste persoon, achter je, voor je; in een trein met een Train Simulator-interieur ook de
+                // reizigerscamera en de raamcamera (zoals in Train Simulator)
+                if (in.pressed[VK_F5]) { camMode = (camMode + 1) % (passCamOk ? 5 : 3); passYaw0 = player.yaw; }
                 if (in.pressed['N']) navLine = !navLine;
                 if (in.pressed[VK_RETURN] && (buses.duty.finished || trainDuty.finished)) { buses.duty.active = false; trainDuty.active = false; buses.duty.finished = trainDuty.finished = false; }
                 if (!player.driving)
@@ -1703,7 +1725,72 @@ int main(int argc, char** argv) {
 
         // ---------- camera ----------
         Vec3 eye = player.eye(), fwd = player.forward();
-        if (camMode != 0 && menu.gameRunning) {
+        {
+            // trein: reizigerscamera beschikbaar? en het meedeinen (optrekken, remmen, bochten, lasnaden)
+            const Train* rt = nullptr;
+            for (Train* t : traffic.trains()) if (player.vehicle == t) rt = t;
+            const TsLayout* lay = rt ? tsLayout(rt->stock().tsModel.c_str()) : nullptr;
+            passCamOk = rt && lay && !player.driving && lay->cars == rt->carCount();
+            if (!passCamOk && camMode >= 3) camMode = 0;
+            if (rt && dt > 0) {
+                CarPose cp = rt->carPose(player.car);
+                float v = rt->speed();
+                if (rt != swayTrain) { swayTrain = rt; swayLastV = v; swayLastH = cp.h; swayP = swayV = Vec3(); }
+                float acc = (v - swayLastV) / dt, hr = wrapAngle(cp.h - swayLastH) / dt;
+                swayLastV = v;
+                swayLastH = cp.h;
+                if (std::fabs(acc) > 4) acc = 0;
+                if (std::fabs(hr) > 0.5f) hr = 0;
+                Vec3 target(-v * hr * 0.012f, 0, -acc * 0.035f);   // het lichaam blijft achter bij de bak
+                for (int k = 0; k < 4; k++) {  // veer met demping (stabiel bij lage fps)
+                    float h = dt / 4;
+                    Vec3 f = (target - swayP) * 45.0f - swayV * 8.0f;
+                    swayV += f * h;
+                    swayP += swayV * h;
+                }
+                swayDist += v * dt;
+                if (swayDist > swayNextJ) {  // lasnaad/wissel: kort stootje
+                    swayV.y -= 0.035f * std::min(1.0f, v / 20.0f);
+                    swayV.x += 0.012f * std::min(1.0f, v / 20.0f) * ((rand() & 1) ? 1.0f : -1.0f);
+                    swayNextJ = (float)swayDist + 12.0f + (rand() % 400) / 10.0f;
+                }
+                float vib = 0.0012f * std::min(1.0f, v / 25.0f);
+                Vec3 local = swayP + Vec3(std::sin((float)swayDist * 2.1f) * vib, std::sin((float)swayDist * 3.7f) * vib, 0);
+                float k = camMode >= 3 ? 1.0f : (player.seat >= 0 ? 0.6f : 0.3f);
+                Vec3 ax(std::cos(cp.h), 0, -std::sin(cp.h)), az(std::sin(cp.h), 0, std::cos(cp.h));
+                if (camMode == 0 || camMode >= 3) eye = eye + (ax * local.x + az * local.z + Vec3(0, local.y, 0)) * k;
+            } else {
+                swayTrain = nullptr;
+            }
+            if (camMode >= 3 && rt && lay) {
+                // camera zoals Train Simulator (PassCam): vaste plek in het passagiersinterieur van dit rijtuig of van een
+                // gelijk rijtuig; de muis kijkt rond binnen grenzen
+                int car = player.car;
+                const TsCam* cam = nullptr;
+                if (lay->car[car].pass.ok) cam = &lay->car[car].pass;
+                for (int k = 0; k < lay->cars && !cam; k++)
+                    if (lay->car[k].pass.ok && std::fabs(lay->car[k].pitch - lay->car[car].pitch) < 1.1f && lay->car[k].doors == lay->car[car].doors)
+                        cam = &lay->car[k].pass;
+                if (cam) {
+                    int cs = rt->stock().cabSign(car);
+                    float s = cs < 0 ? -1.0f : 1.0f;
+                    bool win = camMode == 4;
+                    float x = (win ? cam->wx : cam->x) * s, y = win ? cam->wy : cam->y, z = (win ? cam->wz : cam->z) * s;
+                    float dx = (win ? cam->wdx : cam->dx) * s, dz = (win ? cam->wdz : cam->dz) * s;
+                    CarPose cp = rt->carPose(car);
+                    Vec3 sway = eye - player.eye();
+                    eye = rt->carToWorld(car, x, y, z) + sway;
+                    Vec3 ax(std::cos(cp.h), 0, -std::sin(cp.h)), az(std::sin(cp.h), 0, std::cos(cp.h));
+                    Vec3 base = normalize(ax * dx + az * dz);
+                    float off = clampf(wrapAngle(player.yaw - passYaw0), -1.5f, 1.5f);
+                    float ca = std::cos(off), sa = std::sin(off);
+                    Vec3 d(base.x * ca - base.z * sa, 0, base.x * sa + base.z * ca);
+                    float p = clampf(player.pitch, -0.8f, 0.6f);
+                    fwd = normalize(Vec3(d.x * std::cos(p), std::sin(p), d.z * std::cos(p)));
+                }
+            }
+        }
+        if ((camMode == 1 || camMode == 2) && menu.gameRunning) {
             if (player.driving && player.vehicle) {
                 // zelf rijden: volgcamera buiten het voertuig (achter of voor), gericht op de bestuurdersplek
                 Vehicle* v = player.vehicle;
@@ -1901,7 +1988,7 @@ int main(int argc, char** argv) {
                             pd.anim.phase = playerPhase;
                         }
                     }
-                    if (camMode != 0) persons.push_back(pd);
+                    if (camMode == 1 || camMode == 2) persons.push_back(pd);
                     // multiplayer: dit van jezelf naar de anderen sturen
                     if (net.connected() && state == PLAYING) {
                         NetPose np;
@@ -1954,6 +2041,8 @@ int main(int argc, char** argv) {
                     Vec3 to = p.pos - eye;
                     if (dot(to, fwd) < -2.0f && length(to) > 4.0f) continue;  // achter de camera
                     if (length(to) > world.nearDistance && p.look != LOOK_PLAYER) continue;  // verder weg: niet tekenen (framerate)
+                    // reizigers-/raamcamera: wie op de plek van de camera zit, niet tekenen (jij zit daar)
+                    if (camMode >= 3 && std::hypot(to.x, to.z) < 0.55f && std::fabs(to.y) < 1.6f) continue;
                     const CharModel& m = p.model ? *p.model : people.model(p.look);
                     CharPose pose;
                     AnimState an = p.anim;

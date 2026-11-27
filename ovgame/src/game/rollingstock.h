@@ -51,6 +51,8 @@ public:
     void buildTsSigns(SignAtlas& atlas, const std::vector<std::string>& names);
     // zitplaatsen uit het TS-interieur (tslayout.h) in plaats van de eigen stoelen (na build)
     void applyTsSeats();
+    // cabine zoals in het TS-cabine-interieur: wand, vloer, oog en lessenaar van de machinist (na de constructor)
+    void applyTsCab();
     int cars = 4;
     std::vector<float> len;                    // lengte per rijtuig
     std::vector<std::array<float, 2>> doorZ;   // deurposities per rijtuig (lokale z)

@@ -510,3 +510,19 @@ void RollingStock::applyTsSeats() {
         }
     }
 }
+
+void RollingStock::applyTsCab() {
+    const TsLayout* L = tsLayout(tsModel.c_str());
+    if (!L || L->cars != cars || !L->car[0].cab.ok || cab.deskZ <= 0) return;
+    const TsCab& c = L->car[0].cab;
+    cab.wallZ = c.wallZ + 0.04f;
+    cab.floorY = c.floorY;
+    cab.seatX = c.x;
+    cab.seatZ = c.z - 0.05f;
+    cab.seatTop = c.y - 0.80f;          // Train::driverEye: oog = zitting + 0,80
+    cab.deskZ = c.z + 0.55f;
+    cab.leverX = c.x + 0.32f;
+    cab.leverY = c.y - 0.72f;
+    cab.leverZ = c.z + 0.42f;
+    cab.doorX = std::max(-0.5f, std::min(0.5f, cab.doorX));
+}
