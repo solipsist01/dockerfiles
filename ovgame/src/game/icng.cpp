@@ -11,6 +11,7 @@
 #include "bus.h"
 #include "cabin.h"
 #include "rollingstock.h"
+#include "tslayout.h"
 
 using namespace WorldFormat;
 
@@ -441,6 +442,8 @@ RollingStock* makeIcng() { return new IcngStock(); }
 IcngStock::IcngStock() {
     product = "Intercity";
     typeName = "ICNG";
+    tsModel = "icng";
+    soundSet = "icng";  // opnames (Train Simulator, tools/ts/trains.py)
     cars = CARS;
     halfW = HW;
     gap = GAP;
@@ -452,8 +455,15 @@ IcngStock::IcngStock() {
     vmax = 55.6f;  // 200 km/u (materieel); op dit traject begrensd door de baanvaksnelheid
     acc = 1.0f;
     dec = 0.9f;
-    const float LE = 23.0f, LM = 21.2f;
-    const float L[CARS] = {LE, LM, LM, LM, LE};
+    float LE = 23.0f, LM = 21.2f;
+    float L[CARS] = {LE, LM, LM, LM, LE};
+    const TsLayout* ts = tsLayout("icng");  // maten van het Train Simulator-model (tslayout.h)
+    if (ts && ts->cars != CARS) ts = nullptr;
+    if (ts) {
+        for (int i = 0; i < CARS; i++) L[i] = ts->car[i].pitch - GAP;
+        LE = L[0];
+        LM = L[1];
+    }
     for (int i = 0; i < CARS; i++) len.push_back(L[i]);
     // deuren: eindrijtuig (cabine aan +z) bij de koppeling en voor de hogevloer; middenrijtuig bij beide uiteinden
     doorC_[0][0] = -LE / 2 + 3.0f;  doorC_[0][1] = LE / 2 - CAB - HF_LEN - 1.4f;
@@ -461,6 +471,12 @@ IcngStock::IcngStock() {
     doorC_[2][0] = doorC_[1][0];    doorC_[2][1] = doorC_[1][1];
     doorC_[3][0] = doorC_[1][0];    doorC_[3][1] = doorC_[1][1];
     doorC_[4][0] = doorC_[0][0];    doorC_[4][1] = doorC_[0][1];
+    if (ts)
+        for (int i = 0; i < CARS; i++) {
+            const TsCarLayout& c = ts->car[i];
+            if (c.doors >= 2) { doorC_[i][0] = c.doorZ[0]; doorC_[i][1] = c.doorZ[c.doors - 1]; }
+            else if (c.doors == 1) { doorC_[i][0] = doorC_[i][1] = c.doorZ[0]; }
+        }
     for (int i = 0; i < CARS; i++) {
         if (cabSign(i) < 0) doorZ.push_back({-doorC_[i][1], -doorC_[i][0]});
         else doorZ.push_back({doorC_[i][0], doorC_[i][1]});
@@ -685,6 +701,7 @@ void IcngStock::buildCar(int i, SignAtlas& atlas) {
 }
 
 void IcngStock::build(SignAtlas& atlas, const std::vector<std::string>& names) {
+    if (!tsModel.empty()) buildTsSigns(atlas, names);  // bestemmingsborden op het Train Simulator-model
     car_.resize(CARS);
     carInt_.resize(CARS);
     carGlass_.resize(CARS);

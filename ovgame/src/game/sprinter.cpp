@@ -389,7 +389,12 @@ SprinterStock::SprinterStock(const SprinterSpec* s) : S_(*s) {
                 if (i == 0) S_.cabWall += (nl - c.len) / 2;
                 for (auto& w : c.windows) { w.first *= k; w.second *= k; }
                 c.len = nl;
-                if (ts->car[i].doors > 0) c.doors.assign(ts->car[i].doorZ, ts->car[i].doorZ + ts->car[i].doors);
+                if (ts->car[i].doors > 0) {
+                    c.doors.clear();
+                    for (int k = 0; k < ts->car[i].doors; k++)  // cabinedeur (machinist) telt niet mee
+                        if (!c.cab || ts->car[i].doorZ[k] < nl / 2 - 3.5f) c.doors.push_back(ts->car[i].doorZ[k]);
+                    if (c.doors.empty()) c.doors.push_back(ts->car[i].doorZ[0]);
+                }
             }
         }
     product = S_.product;
@@ -882,6 +887,7 @@ const SprinterSpec& sngSpec() {
         SprinterSpec p;
         p.typeName = "SNG";
         p.soundSet = "sng";  // opnames van een echte SNG (sound/sng)
+        p.tsModel = "sng";
         // profiel: mtr-sng-hd PROFILE (x, y boven de vloer) + 0,80 m
         const float prof[][2] = {{1.32f, -0.70f}, {1.39f, -0.30f}, {1.43f, -0.05f}, {1.43f, 2.20f}, {1.415f, 2.44f}, {1.36f, 2.68f},
                                  {1.24f, 2.92f}, {1.04f, 3.10f}, {0.74f, 3.22f}, {0.38f, 3.28f}, {0.0f, 3.30f}};

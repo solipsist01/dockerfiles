@@ -8,6 +8,7 @@
 #include "datastore.h"
 #include "rollingstock.h"
 #include "signs.h"
+#include "tslayout.h"
 #include "world.h"
 
 namespace {
@@ -443,6 +444,7 @@ void TsModel::drawCar(const World& w, int ci, const Mat4& carM, const DrawState&
             glBlendFunc(GL_ONE, GL_ONE);
         }
         if (dist > b.range * 1.5f + 30.0f) continue;
+        if (s.inside ? (b.flags & 8) : (b.flags & 16)) continue;
         if (b.node != lastNode) {
             Mat4 m = modelFor(b.node);
             m.m[12] -= o.x; m.m[13] -= o.y; m.m[14] -= o.z;
@@ -483,6 +485,28 @@ void RollingStock::buildTsSigns(SignAtlas& atlas, const std::vector<std::string>
             float h = 0.17f, w = std::min(1.05f, h * r.aspect);
             SignAtlas::quad(m, r, Vec3(0, 0, 0), Vec3(0, 0, -1), w / std::max(0.1f, r.aspect), true);
             tsSignSide[t] = m.upload();
+        }
+    }
+}
+
+void RollingStock::applyTsSeats() {
+    const TsLayout* L = tsLayout(tsModel.c_str());
+    if (!L || L->cars != cars) return;
+    for (int i = 0; i < cars; i++) {
+        const TsCarLayout& c = L->car[i];
+        if (c.seats < 8 || !c.seat) continue;  // te weinig stoelen herkend: de eigen houden
+        seats.erase(std::remove_if(seats.begin(), seats.end(), [&](const SeatInfo& s) { return s.car == i; }), seats.end());
+        int cs = cabSign(i);
+        for (int k = 0; k < c.seats; k++) {
+            const TsSeat& t = c.seat[k];
+            SeatInfo si;
+            si.car = i;
+            si.lx = cs < 0 ? -t.x : t.x;
+            si.lz = cs < 0 ? -t.z : t.z;
+            si.facing = wrapAngle(t.facing + (cs < 0 ? PI : 0.0f));
+            // vloer zoals de game hem kent (lopen/zitten), op het niveau van de stoel
+            si.y = floorAt3(i, si.lx, si.lz, t.y + 0.4f);
+            seats.push_back(si);
         }
     }
 }

@@ -527,7 +527,7 @@ void Train::addCollision(Collision& col) const {
 
 // Model uit Train Simulator: buiten de trein waar de speler in zit en binnen 900 m; anders het eigen model
 bool Train::drawTs(World& world, int pass) const {
-    if (rs_->tsModel.empty() || playerInside) return false;
+    if (rs_->tsModel.empty()) return false;
     Vec3 cam = world.camPos();
     CarPose c0 = carPose(0);
     if (std::hypot(c0.x - cam.x, c0.z - cam.z) > 900.0f) return false;
@@ -535,6 +535,7 @@ bool Train::drawTs(World& world, int pass) const {
     if (!tm->ready() || tm->cars() != rs_->cars) return false;
     TsModel::DrawState st;
     st.wheel = d_ / 0.43f;
+    st.inside = playerInside;
     for (int i = 0; i < rs_->cars; i++) {
         CarPose c = carPose(i);
         int cs = rs_->cabSign(i);

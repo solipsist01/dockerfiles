@@ -42,13 +42,13 @@ const Vec3 LIGHTC(1.3f, 1.27f, 1.18f);
 // ---------- maten ----------
 const float HW = 1.51f;           // halve breedte (3,02 m)
 const float H = 4.67f;
-const float BAL_Y = 1.163f;       // balkon (instap)
-const float LOW_Y = 0.356f;       // benedendek
-const float UP_Y = 2.444f;        // bovendek
+const float BAL_Y = 0.95f;        // balkon (instap); vloeren zoals in het Train Simulator-interieur
+const float LOW_Y = 0.22f;        // benedendek
+const float UP_Y = 2.50f;         // bovendek
 const float LOW_CEIL = 2.30f;     // plafond benedendek
-const float UP_CEIL = 4.36f;      // plafond bovendek
+const float UP_CEIL = 4.45f;      // plafond bovendek
 const float BAL_CEIL = 3.25f;     // plafond balkon
-const float DD_BOTTOM = 0.24f;    // onderkant dubbeldeks deel
+const float DD_BOTTOM = 0.10f;    // onderkant dubbeldeks deel
 const float END_BOTTOM = 0.95f;   // onderkant boven de draaistellen
 const float DOOR_W = 1.30f;
 const float DOOR_TOP = 3.12f;

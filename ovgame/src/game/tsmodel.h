@@ -27,6 +27,7 @@ public:
         float wheel = 0;             // wielhoek (rad)
         bool lit = false;            // binnenverlichting aan (avond)
         bool head = false, tail = false;  // koplampen / sluitseinen van dit rijtuig aan
+        bool inside = false;         // speler zit in de trein: TS-interieur in plaats van het eenvoudige
     };
     // pass 0: dicht + alfatest, pass 1: glas (mengen; aanroepen tussen beginTransparent/endTransparent)
     void drawCar(const World& w, int car, const Mat4& m, const DrawState& s, int pass) const;

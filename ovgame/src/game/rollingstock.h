@@ -49,6 +49,8 @@ public:
     // bestemmingsborden op het TS-model (per naam: voor en zijkant), zie buildTsSigns (tsmodel.cpp)
     std::vector<Mesh> tsSignFront, tsSignSide;
     void buildTsSigns(SignAtlas& atlas, const std::vector<std::string>& names);
+    // zitplaatsen uit het TS-interieur (tslayout.h) in plaats van de eigen stoelen (na build)
+    void applyTsSeats();
     int cars = 4;
     std::vector<float> len;                    // lengte per rijtuig
     std::vector<std::array<float, 2>> doorZ;   // deurposities per rijtuig (lokale z)
