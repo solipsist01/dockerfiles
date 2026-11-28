@@ -337,11 +337,15 @@ bool TsModel::ready() {
         }
         if (!parse(p)) { state_ = -1; cars_.clear(); return false; }
         for (const Tex& t : tex_) DataStore::peek(dir + t.file);  // downloads starten
+        DataStore::peek(dir + "walk.bin");
         state_ = 1;
         return false;
     }
     for (const Tex& t : tex_)
         if (DataStore::peek(dir + t.file).empty() && DataStore::known(dir + t.file)) return false;
+    std::string wp = DataStore::peek(dir + "walk.bin");
+    if (wp.empty() && DataStore::known(dir + "walk.bin")) return false;
+    if (!wp.empty()) parseWalk(wp);
     upload();
     state_ = 2;
     return true;
@@ -353,12 +357,69 @@ bool TsModel::loadNow() {
     std::string p = DataStore::fetch(dir + "model.bin");
     if (p.empty() || !parse(p)) { state_ = -1; return false; }
     for (const Tex& t : tex_) DataStore::fetch(dir + t.file);
+    std::string wp = DataStore::fetch(dir + "walk.bin");
+    if (!wp.empty()) parseWalk(wp);
     upload();
     state_ = 2;
     return true;
 }
 
 void TsModel::beginFrame() { frameSet = false; }
+
+// ---------- loopvloer ----------
+void TsModel::parseWalk(const std::string& path) {
+    walk_.clear();
+    std::vector<uint8_t> data;
+    if (!readFile(path, data)) return;
+    Rd r{data.data(), data.data() + data.size()};
+    char magic[4];
+    r.bytes(magic, 4);
+    if (memcmp(magic, "OVWK", 4) || r.get<uint32_t>() != 1) return;
+    uint32_t nc = r.get<uint32_t>();
+    std::vector<Walk> w;
+    for (uint32_t i = 0; i < nc && r.ok; i++) {
+        Walk g;
+        g.x0 = r.get<float>(); g.z0 = r.get<float>(); g.cell = r.get<float>();
+        g.nx = r.get<uint16_t>(); g.nz = r.get<uint16_t>(); g.layers = r.get<uint8_t>();
+        if (g.cell <= 0 || g.layers <= 0) return;
+        g.mm.resize((size_t)g.nx * g.nz * g.layers);
+        r.bytes(g.mm.data(), g.mm.size() * 2);
+        w.push_back(std::move(g));
+    }
+    if (r.ok && w.size() == cars_.size()) walk_ = std::move(w);
+}
+
+float TsModel::Walk::nearest(int ix, int iz, float y, float tol) const {
+    if (ix < 0 || iz < 0 || ix >= nx || iz >= nz) return -1;
+    float best = -1, bd = tol;
+    for (int k = 0; k < layers; k++) {
+        float h = at(ix, iz, k);
+        if (h <= 0) continue;
+        float d = std::fabs(h - y);
+        if (d < bd) { bd = d; best = h; }
+    }
+    return best;
+}
+
+bool TsModel::walkFloor(int car, float x, float z, float curY, float& y, float tol) const {
+    if (!hasWalk(car)) return false;
+    const Walk& g = walk_[car];
+    int ix = (int)std::floor((x - g.x0) / g.cell), iz = (int)std::floor((z - g.z0) / g.cell);
+    float h = g.nearest(ix, iz, curY, tol);
+    if (h < 0) return false;
+    // treden gladstrijken: gemiddelde van dezelfde vloer in de cellen eromheen (voor/achter tot 15 cm)
+    float sum = 0, n = 0;
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            float q = g.nearest(ix + dx, iz + dz, h, 0.33f);
+            if (q < 0) continue;
+            float wgt = (dx == 0 && dz == 0) ? 2.0f : 1.0f;
+            sum += q * wgt;
+            n += wgt;
+        }
+    y = n > 0 ? sum / n : h;
+    return true;
+}
 
 Mat4 TsModel::nodeMatrix(const Car& c, int node, const DrawState& s) const {
     Mat4 m = Mat4::identity();
@@ -505,7 +566,7 @@ void RollingStock::applyTsSeats() {
             si.lz = cs < 0 ? -t.z : t.z;
             si.facing = wrapAngle(t.facing + (cs < 0 ? PI : 0.0f));
             // vloer zoals de game hem kent (lopen/zitten), op het niveau van de stoel
-            si.y = floorAt3(i, si.lx, si.lz, t.y + 0.4f);
+            si.y = tsWalk ? t.y : floorAt3(i, si.lx, si.lz, t.y + 0.4f);
             seats.push_back(si);
         }
     }

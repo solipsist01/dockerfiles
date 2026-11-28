@@ -60,6 +60,7 @@
 #include "train.h"
 #include "trainsound.h"
 #include "tslayout.h"
+#include "tsmodel.h"
 #include "world.h"
 
 using namespace WorldFormat;
@@ -1336,6 +1337,41 @@ int main(int argc, char** argv) {
             player.yaw = std::atan2(std::sin(a), -std::cos(a));
             player.pitch = (tv[5] - 2.0f) * 0.1f;
             passYaw0 = player.yaw;
+            for (int k = 1; k + 2 < argc; k++)
+                if (!strcmp(argv[k], "--walkpath")) {
+                    // test: lopen (W) langs punten "lx,lz lx,lz ..." in dit rijtuig, hoogte in de bak wegschrijven
+                    if (!t->stock().tsModel.empty()) tsModel(t->stock().tsModel)->loadNow();
+                    FILE* wf = fopen(argv[k + 1], "w");
+                    std::vector<std::pair<float, float>> pts;
+                    for (const char* q = argv[k + 2]; *q;) {
+                        float a, b;
+                        int n = 0;
+                        if (sscanf(q, "%f,%f%n", &a, &b, &n) != 2) break;
+                        pts.push_back({a, b});
+                        q += n;
+                        while (*q == ' ') q++;
+                    }
+                    Input fake;
+                    fake.captured = true;
+                    for (size_t w = 0; w < pts.size(); w++) {
+                        float best = 1e9f, stuck = 0;
+                        bool ok = false;
+                        for (float s = 0; s < 20 && player.vehicle; s += 0.05f) {
+                            float dx = pts[w].first - player.lx, dz = pts[w].second - player.lz;
+                            float d = std::hypot(dx, dz);
+                            if (d < 0.12f) { ok = true; break; }
+                            if (d < best - 0.02f) { best = d; stuck = 0; } else if ((stuck += 0.05f) > 1.5f) break;
+                            Vec3 a = t->carToWorld(player.car, player.lx, 0, player.lz), b = t->carToWorld(player.car, pts[w].first, 0, pts[w].second);
+                            player.yaw = std::atan2(b.x - a.x, -(b.z - a.z));
+                            fake.down['W'] = true;
+                            simulate(0.05f, fake);
+                            if (wf) fprintf(wf, "  rijtuig %d lx=%.2f lz=%.2f hoogte=%.2f\n", player.car, player.lx, player.lz, player.pos.y - t->carPose(player.car).y);
+                        }
+                        if (wf) fprintf(wf, "punt %zu (%.2f, %.2f): %s, hoogte %.2f\n", w, pts[w].first, pts[w].second, ok ? "bereikt" : "VAST",
+                                        player.vehicle ? player.pos.y - t->carPose(player.car).y : -1.0f);
+                    }
+                    if (wf) fclose(wf);
+                }
             for (int k = 1; k < argc; k++)
                 if (!strcmp(argv[k], "--tvdrive")) {  // test: achter de lessenaar (cabinezicht)
                     int lc = t->leadCar();

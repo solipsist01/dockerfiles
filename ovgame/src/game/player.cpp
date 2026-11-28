@@ -249,6 +249,16 @@ void Player::update(float dt, const Input& in, const World& world, const Collisi
             if (ok(nlx, nlz)) { lx = nlx; lz = nlz; }
             else if (ok(nlx, lz)) lx = nlx;
             else if (ok(lx, nlz)) lz = nlz;
+            else {
+                // smal gangpad / randje: een stukje opzij schuiven (dwars op de looprichting) en verder
+                float mx = nlx - lx, mz = nlz - lz, ml = std::hypot(mx, mz);
+                if (ml > 1e-5f) {
+                    float px = -mz / ml, pz = mx / ml;
+                    bool moved = false;
+                    for (float o : {0.05f, -0.05f, 0.10f, -0.10f, 0.15f, -0.15f})
+                        if (!moved && ok(nlx + px * o, nlz + pz * o)) { lx = nlx + px * o; lz = nlz + pz * o; moved = true; }
+                }
+            }
         }
         {
             float curY = pos.y - v->carPose(car).y;

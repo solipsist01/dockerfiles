@@ -34,6 +34,12 @@ public:
 
     static void beginFrame();  // shader opnieuw instellen bij de volgende drawCar
 
+    // Loopvloer uit het model (walk.bin, tools/ts/walkgrid.py): per cel van 10 cm de vloeren waarop je kunt staan
+    // (balkons, treden, beide dekken). Alleen als het model getekend wordt (anders de eigen looplogica).
+    // y = vloer die het dichtst bij curY ligt (treden gladgestreken); false = hier geen vloer binnen een stap.
+    bool walkFloor(int car, float x, float z, float curY, float& y, float tol = 0.45f) const;
+    bool hasWalk(int car) const { return state_ == 2 && car >= 0 && car < (int)walk_.size() && walk_[car].nx > 0; }
+
 private:
     struct Node { std::string name; int parent; Mat4 local; };
     struct Batch {
@@ -63,6 +69,15 @@ private:
     std::vector<std::vector<float>> vtx_;     // per rijtuig, tot upload
     std::vector<std::vector<uint32_t>> idx_;
     Mat4 nodeMatrix(const Car& c, int node, const DrawState& s) const;
+    struct Walk {
+        float x0 = 0, z0 = 0, cell = 0.1f;
+        int nx = 0, nz = 0, layers = 0;
+        std::vector<uint16_t> mm;  // [iz][ix][laag] hoogte in mm, 0 = geen
+        float at(int ix, int iz, int k) const { return mm[((size_t)iz * nx + ix) * layers + k] * 0.001f; }
+        float nearest(int ix, int iz, float y, float tol) const;  // laag het dichtst bij y (of -1)
+    };
+    std::vector<Walk> walk_;
+    void parseWalk(const std::string& path);
 };
 
 // alle modellen (een per treintype), op naam

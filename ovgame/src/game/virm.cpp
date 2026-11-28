@@ -13,6 +13,7 @@
 #include "cabin.h"
 #include "rollingstock.h"
 #include "tslayout.h"
+#include "tsmodel.h"
 
 using namespace WorldFormat;
 
@@ -42,9 +43,9 @@ const Vec3 LIGHTC(1.3f, 1.27f, 1.18f);
 // ---------- maten ----------
 const float HW = 1.51f;           // halve breedte (3,02 m)
 const float H = 4.67f;
-const float BAL_Y = 0.95f;        // balkon (instap); vloeren zoals in het Train Simulator-interieur
-const float LOW_Y = 0.22f;        // benedendek
-const float UP_Y = 2.50f;         // bovendek
+const float BAL_Y = 1.12f;        // balkon (instap); vloeren zoals in het Train Simulator-model
+const float LOW_Y = 0.37f;        // benedendek
+const float UP_Y = 2.44f;         // bovendek
 const float LOW_CEIL = 2.30f;     // plafond benedendek
 const float UP_CEIL = 4.45f;      // plafond bovendek
 const float BAL_CEIL = 3.25f;     // plafond balkon
@@ -552,6 +553,7 @@ VirmStock::VirmStock(bool ddz) {
     typeName = ddz ? "DDZ" : "VIRMm";
     tsModel = ddz ? "ddz" : "virm";
     soundSet = ddz ? "ddz" : "virm";  // opnames (Train Simulator, tools/ts/trains.py)
+    tsWalk = true;  // lopen over de loopvloer van het model: zitplaatsen op de vloerhoogte van het model
     gap = 0.80f;
     gangwayDoors = true;  // schuifdeuren in de kopwanden tussen de rijtuigen
     halfW = HW;
@@ -615,15 +617,27 @@ VirmStock::VirmStock(bool ddz) {
 float VirmStock::floorAt3(int car, float lx, float lz, float curY) const {
     float x, z;
     canon(car, lx, lz, x, z);
+    // loopvloer uit het Train Simulator-model (trappen en dekken zoals getekend)
+    TsModel* tm = tsModel.empty() ? nullptr : ::tsModel(tsModel);
+    float ty;
+    if (tm && tm->hasWalk(car)) {
+        if (tm->walkFloor(car, x, z, curY, ty)) return ty;
+        // geen vloer binnen een stap (net ingestapt, of in een wand): de dichtstbijzijnde vloer, anders hier of eromheen
+        for (float r = 0; r <= 0.6f; r += 0.1f)
+            for (float dx : {0.0f, -r, r})
+                for (float dz : {0.0f, -r, r})
+                    if (tm->walkFloor(car, x + dx, z + dz, curY, ty, 100.0f)) return ty;
+        return curY < 1.4f ? LOW_Y : UP_Y;
+    }
     float a = dd0(car), b = dd1(car);
     if (z <= a || z >= b) return BAL_Y;
     // afstand vanaf het dichtstbijzijnde uiteinde van het dubbeldeks deel
     float s = std::min(z - a, b - z);
     bool nearA = (z - a) < (b - z);
-    float side = nearA ? x : -x;  // trap omlaag aan de linkerkant (vanaf het balkon gezien), omhoog rechts
+    float side = nearA ? -x : x;  // >= 0: trap omhoog, < 0: trap omlaag (zelfde kanten als in het TS-model)
     if (s < STAIR) {
         if (side < 0 && curY < 1.9f) return s < 1.35f ? BAL_Y - (BAL_Y - LOW_Y) * s / 1.35f : LOW_Y;
-        if (side >= 0 && curY > 0.95f) return BAL_Y + (UP_Y - BAL_Y) * s / STAIR;
+        if (side >= 0 && curY > BAL_Y - 0.25f) return BAL_Y + (UP_Y - BAL_Y) * s / STAIR;
         return curY < 1.4f ? LOW_Y : UP_Y;
     }
     return curY < 1.4f ? LOW_Y : UP_Y;
@@ -636,13 +650,18 @@ bool VirmStock::walkable3(int car, float lx, float lz, float curY) const {
     float L = c.len, a = dd0(car), b = dd1(car);
     if (std::fabs(z) > L / 2 - 0.25f) return std::fabs(x) < 0.55f;            // overgang
     if (c.cab && z > L / 2 - CAB) return false;                              // cabine
+    TsModel* tm = tsModel.empty() ? nullptr : ::tsModel(tsModel);
+    if (tm && tm->hasWalk(car)) {
+        float ty;
+        return std::fabs(x) < HW - 0.22f && tm->walkFloor(car, x, z, curY, ty);
+    }
     if (z <= a || z >= b) {
         // balkon
         return std::fabs(x) < HW - 0.30f;
     }
     float s = std::min(z - a, b - z);
     bool nearA = (z - a) < (b - z);
-    float side = nearA ? x : -x;
+    float side = nearA ? -x : x;
     if (s < STAIR) {
         if (std::fabs(side) < 0.06f) return false;  // tussenwand tussen de trappen
         return std::fabs(x) < 1.15f;
@@ -788,7 +807,7 @@ void VirmStock::buildCar(int i, SignAtlas& atlas) {
     // trappen bij beide uiteinden
     for (int e = -1; e <= 1; e += 2) {
         float z0 = e < 0 ? a : b, dir = e < 0 ? 1.0f : -1.0f;  // dir: het dubbeldeks deel in
-        float sx = e < 0 ? 1.0f : -1.0f;                        // trap omhoog aan de rechterkant (vanaf het balkon)
+        float sx = e < 0 ? -1.0f : 1.0f;                        // kant van de trap omhoog (zoals in het TS-model)
         // omlaag (linkerhelft): 5 treden
         for (int k = 0; k < 5; k++) {
             float y = BAL_Y - (BAL_Y - LOW_Y) * (k + 1) / 5.0f;

@@ -45,6 +45,7 @@ public:
     std::string product = "Sprinter";  // getoond op displays en in de HUD
     std::string typeName = "FLIRT";
     std::string soundSet;              // opgenomen geluid in data/audio/<soundSet> (leeg = gesynthetiseerd, TrainSound)
+    bool tsWalk = false;               // looplogica volgt de loopvloer van het TS-model (dubbeldekkers)
     std::string tsModel;               // model uit Train Simulator in data/trains/<tsModel> (leeg = alleen het eigen model)
     // bestemmingsborden op het TS-model (per naam: voor en zijkant), zie buildTsSigns (tsmodel.cpp)
     std::vector<Mesh> tsSignFront, tsSignSide;
