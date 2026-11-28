@@ -64,6 +64,8 @@ public:
     void disconnect();
     bool connected() const { return connected_; }
     std::string lostReason;          // waarom de verbinding wegviel ("" = niet weggevallen)
+    bool serverDown = false;         // weggevallen omdat de server niet meer antwoordt (of zomaar weg is): client stopt
+    static constexpr double SERVER_TIMEOUT = 10.0;  // s zonder enig bericht van de server
 
     // Elke frame: berichten verwerken, andere spelers afvlakken. findVehicle: voertuig bij (soort, id) of nullptr.
     void update(double now, float dt, const std::function<Vehicle*(int, int)>& findVehicle);
@@ -94,5 +96,6 @@ private:
     double clock_ = 0, clockAt_ = 0;  // klok van de server en wanneer (Platform::time) die binnenkwam
     int weekday_ = 0;
     double lastSend_ = 0, lastPing_ = 0;
+    double lastRecv_ = -1, lastUpdate_ = -1;  // laatste bericht van de server / laatste update() (Platform::time)
     std::string lastPose_;
 };

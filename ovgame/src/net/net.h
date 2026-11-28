@@ -40,6 +40,7 @@ public:
     bool poll(std::string& msg);   // volgend ontvangen bericht (niet-blokkerend)
     bool open() const;             // nog verbonden
     std::string closeReason() const;
+    bool lostAbruptly() const;  // weggevallen door een netwerkfout of zonder reden gesloten (niet: weggestuurd met reden)
     void close();
 private:
     struct Impl;

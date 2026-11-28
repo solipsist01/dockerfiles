@@ -1610,6 +1610,13 @@ int main(int argc, char** argv) {
         prevNow = now;
         if (net.connected()) {
             net.update(now, dt, findVehicle);
+            if (!net.connected() && net.serverDown) {
+                // server weg: de client stopt (met melding)
+                Platform::setCapture(false);
+                MessageBoxA(nullptr, (net.lostReason + "\n\nOV Game wordt afgesloten. Probeer het later opnieuw.").c_str(), "OV Game - server ligt eruit",
+                            MB_OK | MB_ICONWARNING | MB_SETFOREGROUND);
+                break;
+            }
             if (!net.connected()) {
                 menu.mpConnected = false;
                 notice = "Multiplayer: " + net.lostReason;

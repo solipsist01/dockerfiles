@@ -165,6 +165,7 @@ struct WebSocket::Impl {
     std::deque<std::string> inbox;
     volatile LONG alive = 0;
     std::string reason;
+    volatile LONG abrupt = 0;  // weggevallen zonder reden van de server (netwerkfout, server gestopt)
     Impl() { InitializeCriticalSection(&cs); }
     ~Impl() { DeleteCriticalSection(&cs); }
 
@@ -179,6 +180,7 @@ struct WebSocket::Impl {
             if (e != NO_ERROR) {
                 EnterCriticalSection(&p->cs);
                 if (p->reason.empty()) p->reason = "Verbinding verbroken (fout " + std::to_string(e) + ")";
+                p->abrupt = 1;
                 LeaveCriticalSection(&p->cs);
                 break;
             }
@@ -189,6 +191,7 @@ struct WebSocket::Impl {
                 WinHttpWebSocketQueryCloseStatus(p->ws, &status, rb, sizeof rb, &rl);
                 EnterCriticalSection(&p->cs);
                 if (p->reason.empty()) p->reason = rl ? std::string(rb, rl) : "De server heeft de verbinding gesloten";
+                if (!rl) p->abrupt = 1;  // gesloten zonder reden (server gestopt); met reden = weggestuurd
                 LeaveCriticalSection(&p->cs);
                 break;
             }
@@ -244,6 +247,7 @@ bool WebSocket::connect(const std::string& url, std::string& error) {
     DWORD zero = 0;
     WinHttpSetOption(p_->ws, WINHTTP_OPTION_RECEIVE_TIMEOUT, &zero, sizeof zero);
     p_->reason.clear();
+    p_->abrupt = 0;
     p_->inbox.clear();
     p_->alive = 1;
     p_->thread = CreateThread(nullptr, 0, Impl::reader, p_, 0, nullptr);
@@ -265,6 +269,8 @@ bool WebSocket::poll(std::string& msg) {
 }
 
 bool WebSocket::open() const { return p_->ws && p_->alive; }
+
+bool WebSocket::lostAbruptly() const { return p_->abrupt != 0; }
 
 std::string WebSocket::closeReason() const {
     EnterCriticalSection(&p_->cs);

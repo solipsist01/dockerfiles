@@ -79,6 +79,9 @@ bool NetPlay::connect(const std::string& baseUrl, const std::string& password, c
                 serverName = f[4];
                 motd = f[5];
                 connected_ = true;
+                serverDown = false;
+                lostReason.clear();
+                lastRecv_ = lastUpdate_ = -1;
                 return true;
             }
         } else if (!ws_.open()) {
@@ -190,15 +193,35 @@ void NetPlay::handle(const std::string& raw, double now) {
 void NetPlay::update(double now, float dt, const std::function<Vehicle*(int, int)>& findVehicle) {
     if (!connected_) return;
     if (clockAt_ < 0) clockAt_ = now;  // net verbonden
+    // eigen hapering (laadscherm, venster versleept): die tijd telt niet als stilte van de server
+    if (lastRecv_ < 0 || lastUpdate_ < 0 || now - lastUpdate_ > 2.0) {
+        lastRecv_ = now;
+        lastPing_ = 0;
+    }
+    lastUpdate_ = now;
     std::string m;
-    while (ws_.poll(m)) handle(m, now);
+    while (ws_.poll(m)) {
+        lastRecv_ = now;
+        handle(m, now);
+    }
     if (!ws_.open()) {
         lostReason = ws_.closeReason();
-        if (lostReason.empty()) lostReason = "Verbinding met de server verbroken";
+        if (lostReason.empty() || ws_.lostAbruptly()) {
+            lostReason = "De verbinding met de server is weggevallen (" + (lostReason.empty() ? std::string("geen reden") : lostReason) +
+                         "): de server ligt eruit.";
+            serverDown = true;
+        }
         disconnect();
         return;
     }
-    if (now - lastPing_ > 10) {
+    if (now - lastRecv_ > SERVER_TIMEOUT) {
+        lostReason = "De server heeft al meer dan 10 seconden niets van zich laten horen: de server ligt eruit.";
+        serverDown = true;
+        disconnect();
+        return;
+    }
+    // elke 3 s een ping: de server antwoordt (pong), zo is er altijd verkeer om op te letten
+    if (now - lastPing_ > 3) {
         lastPing_ = now;
         char b[64];
         snprintf(b, sizeof b, "ping\t%.0f", now * 1000.0);
